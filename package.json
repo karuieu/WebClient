@@ -9,7 +9,6 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@lobehub/icons": "^5.23.0",
     "@nearai/inference-sdk": "0.1.0",
     "@phala/aci-verifier": "^0.7.2",
     "cap-widget": "0.1.58",
