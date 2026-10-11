@@ -40,6 +40,9 @@ const RELAY_ORIGIN = new URL(
 ).origin;
 const RELAY_HOST = new URL(RELAY_ORIGIN).hostname;
 const CAP_ENDPOINT = process.env.NEXT_PUBLIC_CAP_ENDPOINT;
+// Next builds request.url from its own listen address, not the Host header, so behind a reverse proxy a redirect
+// would send visitors to localhost. Dev runs without a proxy and without this variable, where request.url is right.
+const REDIRECT_BASE = process.env.NEXT_PUBLIC_SITE_URL;
 
 // Scripts run only with this response's nonce and what they load ('strict-dynamic'), so an injected <script> or
 // on… attribute doesn't; 'self' is the fallback for browsers without 'strict-dynamic'. Styles stay inline because
@@ -99,9 +102,9 @@ export function middleware(request: NextRequest) {
 
   let response: NextResponse;
   if (pathname === "/") {
-    response = NextResponse.redirect(new URL("/new", request.url));
+    response = NextResponse.redirect(new URL("/new", REDIRECT_BASE || request.url));
   } else if (!isLoggedIn && isProtectedRoute(pathname)) {
-    response = NextResponse.redirect(new URL("/login", request.url));
+    response = NextResponse.redirect(new URL("/login", REDIRECT_BASE || request.url));
   } else {
     response = withContentSecurityPolicy(request);
   }
