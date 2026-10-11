@@ -26,8 +26,28 @@ export function isNearAIVerified(): boolean {
   return verified && isSignedIn();
 }
 
+// Gecko (Firefox, LibreWolf) has no Request.body, and the NEAR SDK reads every chat request through it before
+// encrypting, so each call failed before reaching the network. Remove once nearai/inference-sdk reads it another way.
+export function polyfillRequestBody(): void {
+  if (typeof Request === "undefined" || "body" in Request.prototype) return;
+  Object.defineProperty(Request.prototype, "body", {
+    configurable: true,
+    get(this: Request): ReadableStream<Uint8Array> | null {
+      if (this.method === "GET" || this.method === "HEAD") return null;
+      const copy = this.clone();
+      return new ReadableStream({
+        async start(controller) {
+          controller.enqueue(new Uint8Array(await copy.arrayBuffer()));
+          controller.close();
+        },
+      });
+    },
+  });
+}
+
 function getClient(): Promise<InferenceClient> {
   if (!client) {
+    polyfillRequestBody();
     const ready = (async () => {
       // A large bundle, so it loads only when someone uses NEAR AI.
       const [sdk, { createGpuEvidenceVerifier }] = await Promise.all([
