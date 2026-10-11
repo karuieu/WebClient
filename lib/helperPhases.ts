@@ -320,6 +320,9 @@ function preparationTools(opts: PreparationDecisionOptions): ToolDefinition[] {
   ];
 }
 
+const SEARCH_AGAIN_RULE =
+  "If web search results are already in the conversation, choose another search only if information is still missing; otherwise choose no further action.";
+
 function preparationMessages(opts: PreparationDecisionOptions): ModelMessage[] {
   const rules = [
     "Choose the context and searches needed for the user's request before the final answer. " +
@@ -330,6 +333,7 @@ function preparationMessages(opts: PreparationDecisionOptions): ModelMessage[] {
     opts.allowWrites ? MEMORY_WRITE_DECISION_RULES : "",
     opts.library.length > 0 ? LIBRARY_DECISION_RULES : "",
     opts.skills.length > 0 ? SKILL_DECISION_RULES : "",
+    opts.webSearch ? SEARCH_AGAIN_RULE : "",
   ].filter(Boolean).join("\n\n");
   const [first, ...rest] = opts.messages;
   const messages: ModelMessage[] = first?.role === "system" && typeof first.content === "string"
@@ -836,7 +840,11 @@ export interface PreparationPhaseOptions extends PreparationDecisionOptions {
   onSearch: (query: string) => void;
 }
 
-type SearchQuery = { query: string; country: string; key: string };
+export type SearchQuery = { query: string; country: string; key: string };
+
+export function searchQuery(query: string, country = ""): SearchQuery {
+  return { query, country, key: JSON.stringify([query.toLowerCase().replace(/\s+/g, " "), country]) };
+}
 
 function searchQueries(calls: ToolCall[], seen: Set<string>): SearchQuery[] {
   const queries: SearchQuery[] = [];
@@ -845,9 +853,9 @@ function searchQueries(calls: ToolCall[], seen: Set<string>): SearchQuery[] {
       const args = JSON.parse(call.arguments) as { query?: unknown; country?: unknown } | null;
       const query = typeof args?.query === "string" ? args.query.trim() : "";
       const country = typeof args?.country === "string" ? args.country.trim().toUpperCase() : "";
-      const key = JSON.stringify([query.toLowerCase().replace(/\s+/g, " "), country]);
-      if (!query || seen.has(key) || queries.some((q) => q.key === key)) continue;
-      queries.push({ query, country, key });
+      const next = searchQuery(query, country);
+      if (!query || seen.has(next.key) || queries.some((q) => q.key === next.key)) continue;
+      queries.push(next);
       if (queries.length === MAX_SEARCHES_PER_ROUND) break;
     } catch {
     }
@@ -859,7 +867,10 @@ function emitHelperMessage(message: string | undefined, onToken: (token: string)
   if (message) onToken(`<helper_message>${blockJSON({ text: message })}</helper_message>`);
 }
 
-async function searchRound(queries: SearchQuery[], opts: PreparationPhaseOptions): Promise<{ text: string; unavailable: boolean; searched: boolean }> {
+export async function searchRound(
+  queries: SearchQuery[],
+  opts: Pick<PreparationPhaseOptions, "onToken" | "onSearch">
+): Promise<{ text: string; unavailable: boolean; searched: boolean }> {
   let text = "";
   let searched = false;
   for (const { query, country } of queries) {
@@ -889,15 +900,28 @@ function mergeSelection(previous: MemorySelection, next: PreparationDecision, fi
   };
 }
 
-export async function runPreparationPhase(target: HelperTarget, opts: PreparationPhaseOptions): Promise<{ selection: MemorySelection; messages: ModelMessage[]; searched: boolean }> {
+export interface PreparationResult {
+  selection: MemorySelection;
+  messages: ModelMessage[];
+  searched: boolean;
+  queries: SearchQuery[];
+  // False once the search limit or the search provider said no; the answer then doesn't offer search either.
+  searchAvailable: boolean;
+  // The decision failed before any search ran. The answer reports it only if it doesn't search either.
+  searchDecisionFailed: boolean;
+}
+
+export async function runPreparationPhase(target: HelperTarget, opts: PreparationPhaseOptions): Promise<PreparationResult> {
   let selection = { ...EMPTY_SELECTION };
   let baseMessages = opts.messages;
   const extra: ModelMessage[] = [];
   const seenQueries = new Set<string>();
+  const ranQueries: SearchQuery[] = [];
   let contextRounds = 0;
   let searchRounds = 0;
   let searchAvailable = opts.webSearch;
   let searched = false;
+  let searchDecisionFailed = false;
 
   for (let round = 0; round < MAX_CONTEXT_ROUNDS + MAX_SEARCH_ROUNDS + 1; round++) {
     const mayRead = contextRounds < MAX_CONTEXT_ROUNDS;
@@ -911,7 +935,7 @@ export async function runPreparationPhase(target: HelperTarget, opts: Preparatio
     });
     if (decision.skipped || decision.failed) {
       if (round === 0) selection = decision;
-      if (opts.webSearch && !searched) opts.onToken(`<notice>${blockJSON({ kind: SEARCH_UNAVAILABLE_NOTICE_KIND, reason: "decision" })}</notice>`);
+      searchDecisionFailed = opts.webSearch && !searched;
       break;
     }
 
@@ -932,17 +956,17 @@ export async function runPreparationPhase(target: HelperTarget, opts: Preparatio
     if (queries.length > 0) {
       searchRounds++;
       queries.forEach((q) => seenQueries.add(q.key));
+      ranQueries.push(...queries);
       const result = await searchRound(queries, opts);
       searched ||= result.searched;
       searchAvailable &&= !result.unavailable;
-      if (result.text) {
-        extra.push({ role: "user", content: result.text + "Use these sources. Choose another search only if information is still missing; otherwise choose no further action." });
-      }
+      // Results only: these messages also reach the answer, which must not read the decision step's rules.
+      if (result.text) extra.push({ role: "user", content: result.text.trim() });
       if (result.searched) continue;
     }
     if (!readContext || !decision.followUp) break;
   }
-  return { selection, messages: extra, searched };
+  return { selection, messages: extra, searched, queries: ranQueries, searchAvailable, searchDecisionFailed };
 }
 
 const MAX_CONNECTOR_ROUNDS = 3;

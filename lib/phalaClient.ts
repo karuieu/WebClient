@@ -2,7 +2,7 @@ import nacl from "tweetnacl";
 import type { AttestationReport, WorkloadKeyset } from "@phala/aci-verifier";
 import { onSessionCleared } from "./session";
 import { API_URL, apiFetch, assertProxiedAPIURL } from "./api";
-import { createLoopGuard, REPETITION_NOTICE } from "./repetition";
+import { createLoopGuard, REPETITION_NOTICE, type StopAt } from "./repetition";
 import { RateLimitError, StoppedError } from "./errors";
 import { STOPPED_NOTICE } from "./messageBlocks";
 import { parseToolResponse, withToolInstructions, type JsonTool, type ToolResponse } from "./jsonTools";
@@ -258,6 +258,7 @@ export async function streamPhalaChat(
     turns: PhalaTurn[];
     reasoningParams?: Record<string, unknown>;
     signal?: AbortSignal;
+    stopAt?: StopAt;
   },
   onToken: (token: string) => void
 ): Promise<PhalaStreamResult> {
@@ -298,10 +299,11 @@ export async function streamPhalaChat(
   let outputTokens = 0;
   let inReasoning = false;
   let loopStopped = false;
+  let calledTool = false;
   let stopped = false;
   const loopCut = createLoopGuard();
 
-  while (!loopStopped) {
+  while (!loopStopped && !calledTool) {
     let read: ReadableStreamReadResult<Uint8Array>;
     try {
       read = await reader.read();
@@ -368,6 +370,13 @@ export async function streamPhalaChat(
       if (cut !== -1) {
         text = text.slice(0, cut);
         loopStopped = true;
+        await reader.cancel();
+        break;
+      }
+      const call = opts.stopAt?.(text) ?? -1;
+      if (call !== -1) {
+        text = text.slice(0, call);
+        calledTool = true;
         await reader.cancel();
         break;
       }

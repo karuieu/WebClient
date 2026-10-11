@@ -1,7 +1,7 @@
 import type { InferenceClient } from "@nearai/inference-sdk";
 import { isSignedIn, onSessionCleared } from "./session";
 import { API_URL, assertProxiedAPIURL } from "./api";
-import { createLoopGuard, REPETITION_NOTICE } from "./repetition";
+import { createLoopGuard, REPETITION_NOTICE, type StopAt } from "./repetition";
 import { StoppedError } from "./errors";
 import { STOPPED_NOTICE } from "./messageBlocks";
 import { parseToolResponse, withToolInstructions, type JsonTool, type ToolResponse } from "./jsonTools";
@@ -114,6 +114,7 @@ export async function streamNearAIChat(
     turns: NearAITurn[];
     reasoningParams?: Record<string, unknown>;
     signal?: AbortSignal;
+    stopAt?: StopAt;
   },
   onToken: (token: string) => void
 ): Promise<NearAIStreamResult> {
@@ -180,6 +181,11 @@ export async function streamNearAIChat(
       if (cut !== -1) {
         text = text.slice(0, cut);
         loopStopped = true;
+        break;
+      }
+      const call = opts.stopAt?.(text) ?? -1;
+      if (call !== -1) {
+        text = text.slice(0, call);
         break;
       }
     }

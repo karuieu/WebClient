@@ -28,6 +28,9 @@ export function findLoopCut(text: string): number {
   return -1;
 }
 
+// Where a stream client should end the answer (the start of a tool call the model just finished), or -1 to go on.
+export type StopAt = (text: string) => number;
+
 export function createLoopGuard(): (text: string) => number {
   let checkedAt = 0;
   return (text) => {

@@ -5,14 +5,17 @@ import { getArtifactsEnabled } from "./artifacts";
 import { PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
-import { blockJSON } from "./messageBlocks";
+import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
   helperTurnFor,
   runPreparationPhase,
   runConnectorPhase,
+  searchQuery,
+  searchRound,
   type MemorySelection,
+  type PreparationResult,
   type HelperModel,
   type HelperTurn,
   type LibraryIndexEntry,
@@ -28,6 +31,7 @@ import { isNearAIVerified, streamNearAIChat } from "./nearaiClient";
 import { isPhalaVerified, streamPhalaChat } from "./phalaClient";
 import { API_URL, apiFetch } from "./api";
 import { fetchSystemPrompt } from "./systemPrompt";
+import { SEARCH_CALL_CLOSE, SEARCH_CALL_OPEN, createSearchCallFilter, searchCallIndex } from "./streamTags";
 
 export function isProviderVerified(provider: ProviderId): boolean {
   return provider === "nearai" ? isNearAIVerified() : isPhalaVerified();
@@ -114,6 +118,7 @@ async function buildSystemPrompt(opts: {
   generateTitle: boolean;
   generateBrief: boolean;
   webSearch: boolean;
+  answer?: AnswerRound;
   provider: ProviderId;
   providerModelID: string;
 }): Promise<string> {
@@ -187,6 +192,9 @@ async function buildSystemPrompt(opts: {
       "\n</user_memory>";
   }
 
+  // Changes with every answer round, so it sits below memory.
+  if (opts.webSearch && opts.answer) prompt += answerSearchBlock(opts.answer);
+
   // Date and model go at the end: both change mid-conversation, and higher up they would invalidate the prefix cache.
   prompt +=
     "\n\n<current_model>" +
@@ -196,6 +204,34 @@ async function buildSystemPrompt(opts: {
     "</current_model>";
   prompt += "\n\n<current_datetime>" + currentDatetimeForPrompt() + "</current_datetime>";
   return prompt;
+}
+
+const MAX_ANSWER_SEARCHES = 3;
+
+// The answer between its rounds. The model that writes the answer can search too: the decision step before it
+// can't know what the answer will find missing, and a model told it can search but given no way to do it writes fake tool calls.
+interface AnswerRound {
+  searched: string[];
+  searchesLeft: number;
+  titleWritten: boolean;
+}
+
+function answerSearchBlock(round: AnswerRound): string {
+  const searched = round.searched.length > 0
+    ? ` Already searched for this message: ${round.searched.map((q) => JSON.stringify(q)).join(", ")}; the results are in the conversation.`
+    : "";
+  if (round.searchesLeft === 0) {
+    return (
+      `\n\n<web_search_status>Web search for this message is finished.${searched} Answer from the results and what you know, ` +
+      `and say plainly what you couldn't verify. Don't write ${SEARCH_CALL_OPEN} or any other tool call.</web_search_status>`
+    );
+  }
+  return (
+    `\n\n<web_search_status>You can search the web while answering. When you need current or specific information you don't have, ` +
+    `put a short query between ${SEARCH_CALL_OPEN} and ${SEARCH_CALL_CLOSE} on one line and write nothing after it: the results arrive in the next message and you continue from there. ` +
+    `Search before you start writing the answer. Up to ${round.searchesLeft} more ${round.searchesLeft === 1 ? "search" : "searches"}.${searched} ` +
+    `Never write any other tool call syntax.</web_search_status>`
+  );
 }
 
 // Rounded down to the hour: minute precision would change the prompt prefix on every message and defeat the history cache.
@@ -340,7 +376,7 @@ export async function streamE2EChat(
   const emittedSkills = new Set<string>();
   const emptySelection: MemorySelection = { block: "", skipped: false, memoryIds: [], libraryIds: [], skillIds: [] };
 
-  const messagesFor = async (memory: MemorySelection): Promise<ModelMessage[]> => {
+  const messagesFor = async (memory: MemorySelection, answer?: AnswerRound): Promise<ModelMessage[]> => {
     let projectFilesBlock = "";
     const picked = sendWholeLibrary ? library : library.filter((f) => memory.libraryIds.includes(f.id));
     if (opts.project && picked.length > 0) {
@@ -374,9 +410,10 @@ export async function streamE2EChat(
       projectFilesBlock,
       skillsBlock: used.block,
       customInstructions: opts.customInstructions,
-      generateTitle: opts.generateTitle,
-      generateBrief: Boolean(opts.generateBrief),
+      generateTitle: opts.generateTitle && !answer?.titleWritten,
+      generateBrief: Boolean(opts.generateBrief) && !answer?.titleWritten,
       webSearch: opts.webSearch,
+      answer,
       provider: opts.provider,
       providerModelID: enclaveModelID,
     });
@@ -421,15 +458,97 @@ export async function streamE2EChat(
   if (skills.length > 0 && (memory.skipped || memory.failed)) {
     emitPhaseBlock(`<notice>${blockJSON({ kind: "skills_skipped", reason: memory.skipped ? "model_unavailable" : "decision", provider_name: providerName })}</notice>`);
   }
-  const messages = [...await messagesFor(memory), ...preparation.messages];
-
+  const context = [...preparation.messages];
   if (opts.connectors !== false) {
-    messages.push(...(await runConnectorPhase(helperTurn, messages, emitPhaseBlock, preparation.searched, opts.project?.connectorIds)));
+    const messages = [...await messagesFor(memory), ...context];
+    context.push(...(await runConnectorPhase(helperTurn, messages, emitPhaseBlock, preparation.searched, opts.project?.connectorIds)));
   }
 
   if (opts.signal?.aborted) throw new StoppedError();
 
-  const stream = opts.provider === "nearai" ? streamNearAIChat : streamPhalaChat;
-  const result = await stream({ providerModelID: enclaveModelID, turns: messages, reasoningParams, signal: opts.signal }, onToken);
+  const result = await streamAnswer(
+    opts,
+    {
+      model: { providerModelID: enclaveModelID, reasoningParams },
+      buildMessages: async (round) => [...await messagesFor(memory, round), ...context],
+      preparation,
+    },
+    onToken
+  );
   return { ...result, phaseBlocks };
+}
+
+// A <search_query> the model writes ends the round: it is cut from the stream, the search runs, and the model continues with the results.
+async function streamAnswer(
+  opts: E2EStreamOptions,
+  request: { model: HelperModel; buildMessages: (round: AnswerRound) => Promise<ModelMessage[]>; preparation: PreparationResult },
+  onToken: (token: string) => void
+): Promise<Omit<E2EStreamResult, "phaseBlocks">> {
+  const stream = opts.provider === "nearai" ? streamNearAIChat : streamPhalaChat;
+  const { preparation } = request;
+  const round: AnswerRound = {
+    searched: preparation.queries.map((q) => q.query),
+    searchesLeft: opts.webSearch && preparation.searchAvailable ? MAX_ANSWER_SEARCHES : 0,
+    titleWritten: false,
+  };
+  const seen = new Set(preparation.queries.map((q) => q.key));
+  const followUps: ModelMessage[] = [];
+  const total = { text: "", provider: opts.provider as string, inputTokens: 0, outputTokens: 0 };
+  let answerSearched = false;
+  // Blocks go on screen and into the saved answer, in stream order.
+  const emit = (block: string) => {
+    total.text += block;
+    onToken(block);
+  };
+
+  // Returns what the model reads next.
+  const search = async (asked: string): Promise<string> => {
+    const query = searchQuery(asked);
+    if (seen.has(query.key)) return `You already searched for ${JSON.stringify(asked)}; its results are above.`;
+    seen.add(query.key);
+    round.searched.push(asked);
+    answerSearched = true;
+    const result = await searchRound([query], { onToken: emit, onSearch: opts.onSearch ?? (() => {}) });
+    if (result.unavailable) {
+      round.searchesLeft = 0;
+      return "Web search isn't available right now.";
+    }
+    return result.text.trim() || `No web results for ${JSON.stringify(asked)}.`;
+  };
+
+  for (;;) {
+    const call: { query?: string } = {};
+    const filter = round.searchesLeft > 0
+      ? createSearchCallFilter(onToken, (query) => {
+          call.query = query;
+        })
+      : null;
+    const result = await stream(
+      {
+        providerModelID: request.model.providerModelID,
+        turns: [...await request.buildMessages(round), ...followUps],
+        reasoningParams: request.model.reasoningParams,
+        signal: opts.signal,
+        stopAt: filter ? (text) => (call.query === undefined ? -1 : searchCallIndex(text)) : undefined,
+      },
+      filter ? filter.push : onToken
+    );
+    filter?.flush();
+    total.text += result.text;
+    total.provider = result.provider;
+    total.inputTokens += result.inputTokens;
+    total.outputTokens += result.outputTokens;
+    if (call.query === undefined) {
+      if (preparation.searchDecisionFailed && !answerSearched) {
+        emit(`<notice>${blockJSON({ kind: SEARCH_UNAVAILABLE_NOTICE_KIND, reason: "decision" })}</notice>`);
+      }
+      return total;
+    }
+
+    round.searchesLeft--;
+    round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
+    const partial = result.text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "").trim();
+    if (partial) followUps.push({ role: "assistant", content: partial });
+    followUps.push({ role: "user", content: `${await search(call.query)}\n\nContinue your reply.` });
+  }
 }
