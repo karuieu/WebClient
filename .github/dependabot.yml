@@ -4,10 +4,18 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Major versions break things and the test suite doesn't run in CI, so we upgrade them by hand.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    # A package lands in the first group it matches; these pairs must move in lockstep.
     groups:
+      next:
+        patterns: ["next", "eslint-config-next"]
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       npm-deps:
         patterns: ["*"]
-        exclude-patterns: ["next", "react", "react-dom", "eslint-config-next"]
 
   - package-ecosystem: github-actions
     directory: /
