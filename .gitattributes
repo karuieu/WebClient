@@ -1,0 +1,8 @@
+# Normalize line endings; scripts run on Linux, where CRLF in a shebang causes a bad interpreter error.
+* text=auto eol=lf
+
+# Generated lockfiles: keep them out of language stats and review diffs.
+package-lock.json linguist-generated=true
+
+*.png binary
+*.woff2 binary

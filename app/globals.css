@@ -1,0 +1,334 @@
+@import "tailwindcss";
+
+:root {
+  --background: #080808;
+  --surface: #111111;
+  --accent: #ffffff;
+  --accent-hover: #e8e8e8;
+  --accent-subtle: rgba(255, 255, 255, 0.06);
+  --border: #222222;
+  --text-primary: #ffffff;
+  --text-secondary: #666666;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #303030;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out forwards;
+}
+
+@keyframes slide-out {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out {
+  animation: slide-out 0.25s ease-in forwards;
+}
+
+[data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #555555;
+  pointer-events: none;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-step { animation: step-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.reveal {
+  opacity: 0;
+  transform: translateY(34px) scale(0.985);
+  filter: blur(2px);
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.8s ease;
+  will-change: opacity, transform, filter;
+}
+.reveal-in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; filter: none; transition: none; }
+  .animate-rise, .animate-step { animation: none; }
+}
+
+/* Kept in CSS, not Motion: both are infinite loops, and a Motion loop would keep a JS frame alive for each. */
+
+/* The overlay ignores clicks; the parent needs position: relative and overflow: hidden. */
+.kn-shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    var(--kn-shine-color, rgba(255, 255, 255, 0.14)) 50%,
+    transparent 60%
+  );
+  background-size: 250% 100%;
+  animation: kn-shine-sweep var(--kn-shine-duration, 2.4s) ease-in-out infinite;
+}
+
+@keyframes kn-shine-sweep {
+  0%   { background-position: 150% 0; }
+  60%  { background-position: -50% 0; }
+  100% { background-position: -50% 0; }
+}
+
+.kn-type-caret {
+  display: inline-block;
+  margin-left: 0.06em;
+  opacity: 0.85;
+  animation: kn-type-blink 1.05s step-end infinite;
+}
+
+@keyframes kn-type-blink {
+  0%, 50%   { opacity: 0.85; }
+  50.1%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-shine { animation: none; opacity: 0; }
+  .kn-type-caret { animation: none; }
+}
+
+/* The noise layer on top hides gradient banding on dark backgrounds. */
+.kn-glow {
+  --glow-color: rgba(124, 58, 237, 0.16);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"),
+    radial-gradient(closest-side, var(--glow-color), transparent);
+  background-repeat: repeat, no-repeat;
+  background-size: 200px 200px, 100% 100%;
+  background-blend-mode: overlay, normal;
+  -webkit-mask-image: radial-gradient(closest-side, #000, transparent);
+  mask-image: radial-gradient(closest-side, #000, transparent);
+}
+
+/* Ink/violet palette, scoped to .kn-landing; legal and some auth screens still use it. Do not name a color --color-base: it breaks the text-base size utility. */
+/* Contrast is measured against the darkest panel, not the canvas. Keep edge above edge-soft. */
+@theme {
+  --color-canvas: #0a0a0a;
+  --color-panel: #111111;
+  --color-panel-soft: #15131a;
+  --color-panel-raised: #2d2938;
+  --color-edge: #413b50;
+  --color-edge-soft: #34313c;
+  --color-fg: #f4f2f8;
+  --color-muted: #a8a3b4;
+  --color-faint: #817b8f;
+  --color-accent: #7c3aed;
+  --color-accent-soft: #a78bfa;
+}
+
+.kn-landing {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.kn-landing .kn-display { font-family: var(--font-newsreader), Georgia, serif; }
+.kn-landing .kn-mono { font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.kn-landing .kn-chat-text {
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.kn-landing [id] { scroll-margin-top: 5.5rem; }
+.kn-landing a,
+.kn-landing button,
+.kn-landing summary { touch-action: manipulation; }
+.kn-landing ::selection { background: var(--color-accent); color: #ffffff; }
+
+::highlight(karui-quoted) {
+  background: rgba(124, 58, 237, 0.16);
+  color: #f4f2f8;
+  text-decoration: underline;
+  text-decoration-color: rgba(167, 139, 250, 0.7);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+/* One focus rule for the whole app, using :focus-visible. The !important is deliberate: focus:outline-none would otherwise silently remove the focus indicator. */
+:is(
+  a,
+  button,
+  summary,
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  /* Use longhands, not the outline shorthand: Lightning CSS drops the color when a var() sits inside the shorthand. */
+  outline-width: 2px !important;
+  outline-style: solid !important;
+  outline-color: var(--color-accent-soft) !important;
+  outline-offset: 2px !important;
+}
+
+/* Inward outline for controls clipped by an overflow: hidden container. Use only where the outer outline is measured as clipped. */
+/* Repeated on purpose: one class plus a pseudo-class has lower specificity than the general focus rule. */
+.kn-focus-inset.kn-focus-inset:focus-visible {
+  outline-offset: -2px !important;
+}
+
+/* Composer fields draw focus on their card, so they skip the general outline. Do not remove the card's edge indicator. Repeated on purpose, for specificity. */
+.kn-focus-shell.kn-focus-shell:focus-visible {
+  outline-style: none !important;
+}
+
+html:has(.kn-landing) { background-color: #0a0a0a; }
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.kn-landing) { scroll-behavior: smooth; }
+}
+
+.kn-prose h1,
+.kn-prose h2,
+.kn-prose h3 {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-weight: 400;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+.kn-prose h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); margin-bottom: 1rem; }
+.kn-prose h2 { font-size: 1.45rem; margin-top: 2.5rem; margin-bottom: 0.75rem; }
+.kn-prose h3 { font-size: 1.15rem; margin-top: 1.75rem; margin-bottom: 0.5rem; }
+.kn-prose p,
+.kn-prose li {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-muted);
+}
+.kn-prose p { margin-top: 1rem; }
+.kn-prose ul, .kn-prose ol { margin-top: 0.75rem; padding-left: 1.5rem; }
+.kn-prose ul { list-style: disc; }
+.kn-prose ol { list-style: decimal; }
+.kn-prose li { margin-top: 0.4rem; }
+.kn-prose a {
+  color: var(--color-accent-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kn-prose a:hover { color: var(--color-fg); }
+.kn-prose strong { color: var(--color-fg); font-weight: 600; }
+.kn-prose code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 13px;
+  background: var(--color-panel-soft);
+  color: var(--color-muted);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+}
+.kn-prose blockquote {
+  margin-top: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--color-panel-soft);
+  border: 1px solid var(--color-edge-soft);
+  border-radius: 6px;
+}
+.kn-prose blockquote p { margin-top: 0; font-size: 14px; }
+.kn-prose hr { border: 0; border-top: 1px solid var(--color-edge-soft); margin: 2rem 0; }
+.kn-prose table { width: 100%; margin-top: 1rem; border-collapse: collapse; font-size: 14px; }
+.kn-prose th, .kn-prose td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-edge-soft);
+  color: var(--color-muted);
+  vertical-align: top;
+}
+.kn-prose th { color: var(--color-fg); font-weight: 600; background: var(--color-panel-soft); }
+.kn-prose > div { overflow-x: auto; }
+
+/* Hover lift in CSS: Motion would turn these server components into client components. */
+.kn-lift {
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.15s ease;
+}
+.kn-lift:hover {
+  transform: translateY(-3px) scale(1.1);
+}
+.kn-lift:active {
+  transform: translateY(-1px) scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-lift, .kn-lift:hover, .kn-lift:active { transform: none; transition: none; }
+}
+
+/* Details animation in CSS on purpose: the FAQ pages ship zero client JS. interpolate-size: allow-keywords is needed to animate height to auto. */
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+
+  details::details-content {
+    overflow: hidden;
+    block-size: 0;
+    opacity: 0;
+    transition:
+      block-size 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      content-visibility 0.28s allow-discrete,
+      opacity 0.2s ease;
+  }
+
+  details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+}

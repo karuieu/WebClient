@@ -1,0 +1,50 @@
+{
+  "name": "@karui/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@lobehub/icons": "^5.4.0",
+    "@nearai/inference-sdk": "0.1.0",
+    "@phala/aci-verifier": "^0.7.2",
+    "cap-widget": "0.1.58",
+    "geist": "^1.7.2",
+    "jose": "^6.2.12",
+    "motion": "^13.4.0",
+    "next": "15.5.23",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "remark-gfm": "^4.0.1",
+    "tweetnacl": "^1.0.3",
+    "uqr": "0.1.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/ui": "^4.1.10",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.5.23",
+    "jsdom": "^30.0.1",
+    "postcss": "^8",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

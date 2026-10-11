@@ -1,0 +1,173 @@
+// Chooses the inference provider. The model decides it: Light runs only at NEAR AI, Heavy only at Phala, and a model both offer goes to the user's pick. A whole turn, including its helper phases, goes to one provider, with no fallback: a failure is shown as itself. A provider joins only with a browser-driven E2E path that encrypts to its attested key. Settings are local (localStorage, per device).
+
+import { accountSettingKey, getUser } from "./session";
+
+export type ProviderId = "nearai" | "phala";
+
+export interface ProviderModel {
+  name: string;
+  region: string;
+  tier?: "light" | "heavy";
+}
+
+export interface ProviderInfo {
+  id: ProviderId;
+  name: string;
+
+  description: string;
+
+  tag: string;
+
+  models: ProviderModel[];
+  links: string[];
+}
+
+// Adding a provider means an entry here and in ALL_PROVIDERS.
+export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
+  phala: {
+    id: "phala",
+    name: "Phala",
+    description:
+      "Phala's enclave gateway passes each message only to a model host on Phala's own hardware that it has attested. Before sending, your browser checks that the gateway runs on genuine Intel TDX hardware, but it doesn't yet pin which release of the gateway's code that is.",
+    tag: "USA",
+    models: [
+      { name: "GLM 5.3", region: "USA", tier: "heavy" },
+      { name: "Qwen 3.8 27B", region: "USA" },
+    ],
+    links: ["https://phala.com/"],
+  },
+  nearai: {
+    id: "nearai",
+    name: "NEAR AI",
+    description:
+      "Each message is encrypted in your browser to the model's own enclave key. Before sending, your browser checks that NEAR AI's gateway and the model run on genuine Intel TDX hardware, but it doesn't yet pin which release of their code that is.",
+    tag: "USA",
+    models: [
+      { name: "GLM 5.3 Flash", region: "USA", tier: "light" },
+      { name: "Qwen 3.8 27B", region: "USA" },
+    ],
+    links: ["https://near.ai/"],
+  },
+};
+
+export const DEFAULT_PROVIDER: ProviderId = "phala";
+
+export const ALL_PROVIDERS: ProviderId[] = ["phala", "nearai"];
+
+export const PRO_ONLY_PROVIDERS: ReadonlySet<ProviderId> = new Set<ProviderId>(["phala"]);
+
+// Mirror of the backend's offerings. Drift here sends a model to a provider that does not serve it.
+export const MODEL_PROVIDERS: Record<string, ProviderId[]> = {
+  fast: ["nearai"],
+  smart: ["phala"],
+  "qwen3-8-27b": ["phala", "nearai"],
+};
+
+function providerAllowed(provider: ProviderId): boolean {
+  return !PRO_ONLY_PROVIDERS.has(provider) || getUser()?.tier === "pro";
+}
+
+export function getProvider(): ProviderId {
+  const chosen = getProviderSettings().provider;
+  if (providerAllowed(chosen)) return chosen;
+  return ALL_PROVIDERS.find(providerAllowed) ?? chosen;
+}
+
+export function getModelProvider(modelId: string): ProviderId | null {
+  const offering = (MODEL_PROVIDERS[modelId] ?? []).filter(providerAllowed);
+  if (offering.length === 0) return null;
+  const chosen = getProvider();
+  return offering.includes(chosen) ? chosen : offering[0];
+}
+
+export function isModelAvailable(modelId: string): boolean {
+  return getModelProvider(modelId) !== null;
+}
+
+const STORAGE_KEY = "karui_provider_settings";
+
+// Legacy keys are read once, on the first read per device, so existing settings are not lost.
+const LEGACY_PRIORITY_KEY = "karui_provider_priority";
+const LEGACY_AUTO_SEARCH_KEY = "karui_auto_websearch";
+
+export interface ProviderSettings {
+  provider: ProviderId;
+  helperEnabled: boolean;
+  autoWebSearch: boolean;
+  heavyHelper: HeavyHelperMode;
+}
+
+export type HeavyHelperMode = "hybrid" | "heavy" | "qwen";
+
+const HEAVY_HELPER_MODES: readonly HeavyHelperMode[] = ["hybrid", "heavy", "qwen"];
+
+export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {
+  provider: DEFAULT_PROVIDER,
+  helperEnabled: true,
+  autoWebSearch: true,
+  heavyHelper: "hybrid",
+};
+
+function isProviderId(value: unknown): value is ProviderId {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(PROVIDERS, value);
+}
+
+function readLegacySettings(): Partial<ProviderSettings> {
+  const out: Partial<ProviderSettings> = {};
+  try {
+    const rawPriority = window.localStorage.getItem(LEGACY_PRIORITY_KEY);
+    if (rawPriority) {
+      const parsed: unknown = JSON.parse(rawPriority);
+      if (Array.isArray(parsed)) {
+        const first = parsed.find(isProviderId);
+        if (first) out.provider = first;
+      }
+    }
+  } catch {}
+
+  try {
+    const rawAuto = window.localStorage.getItem(LEGACY_AUTO_SEARCH_KEY);
+    if (rawAuto !== null) out.autoWebSearch = rawAuto === "1";
+  } catch {}
+
+  return out;
+}
+
+function normalizeSettings(raw: unknown): ProviderSettings {
+  const s = { ...DEFAULT_PROVIDER_SETTINGS };
+  if (raw && typeof raw === "object") {
+    const r = raw as Partial<ProviderSettings>;
+    // A stored provider outside the pool falls back to the default; otherwise every turn would go to an enclave that does not exist.
+    if (isProviderId(r.provider)) s.provider = r.provider;
+    if (typeof r.helperEnabled === "boolean") s.helperEnabled = r.helperEnabled;
+    if (typeof r.autoWebSearch === "boolean") s.autoWebSearch = r.autoWebSearch;
+    if (HEAVY_HELPER_MODES.includes(r.heavyHelper as HeavyHelperMode)) s.heavyHelper = r.heavyHelper as HeavyHelperMode;
+  }
+  // autoWebSearch is kept even when the helper is disabled: clearing it would lose the user's preference on a toggle off and on. The dependency is resolved at read time (autoWebSearchActive).
+  return s;
+}
+
+export function getProviderSettings(): ProviderSettings {
+  if (typeof window === "undefined") return { ...DEFAULT_PROVIDER_SETTINGS };
+  try {
+    const raw = window.localStorage.getItem(accountSettingKey(STORAGE_KEY));
+    if (raw) return normalizeSettings(JSON.parse(raw));
+    return normalizeSettings({ ...DEFAULT_PROVIDER_SETTINGS, ...readLegacySettings() });
+  } catch {
+    return { ...DEFAULT_PROVIDER_SETTINGS };
+  }
+}
+
+export function setProviderSettings(patch: Partial<ProviderSettings>): ProviderSettings {
+  const next = normalizeSettings({ ...getProviderSettings(), ...patch });
+  try {
+    window.localStorage.setItem(accountSettingKey(STORAGE_KEY), JSON.stringify(next));
+  } catch {
+  }
+  return next;
+}
+
+export function autoWebSearchActive(): boolean {
+  const s = getProviderSettings();
+  return s.helperEnabled && s.autoWebSearch;
+}
