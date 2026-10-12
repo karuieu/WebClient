@@ -35,3 +35,7 @@ export class StoppedError extends Error {
     this.name = "StoppedError";
   }
 }
+
+export function throwIfStopped(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new StoppedError();
+}

@@ -5,7 +5,7 @@ import { getArtifactsEnabled } from "./artifacts";
 import { PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
-import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND } from "./messageBlocks";
+import { blockJSON, parseMessageBlocks, SEARCH_UNAVAILABLE_NOTICE_KIND, STOPPED_NOTICE } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
@@ -23,7 +23,7 @@ import {
   type ModelMessage,
 } from "./helperPhases";
 import { buildReasoningParams, type ReasoningEffort } from "./reasoning";
-import { StoppedError } from "./errors";
+import { StoppedError, throwIfStopped } from "./errors";
 import { contextBudget, trimTurns } from "./context";
 import { libraryBlock } from "./projectFiles";
 import { skillsPromptBlock, type SkillForChat } from "./skills";
@@ -31,7 +31,7 @@ import { isNearAIVerified, streamNearAIChat } from "./nearaiClient";
 import { isPhalaVerified, streamPhalaChat } from "./phalaClient";
 import { API_URL, apiFetch } from "./api";
 import { fetchSystemPrompt } from "./systemPrompt";
-import { SEARCH_CALL_CLOSE, SEARCH_CALL_OPEN, createSearchCallFilter, searchCallIndex } from "./streamTags";
+import { SEARCH_CALL_CLOSE, SEARCH_CALL_OPEN, createSearchCallFilter, searchCallIndex, stripTitleBlock } from "./streamTags";
 
 export function isProviderVerified(provider: ProviderId): boolean {
   return provider === "nearai" ? isNearAIVerified() : isPhalaVerified();
@@ -303,6 +303,7 @@ async function resolveMemoryWrite(
   request: MemoryWriteRequest,
   lastUserMessage: string
 ): Promise<string> {
+  throwIfStopped(opts.signal);
   const file = request.fileId ? opts.memoryFiles.find((f) => f.id === request.fileId && !f.readOnly) : undefined;
 
   if (!file) {
@@ -312,9 +313,11 @@ async function resolveMemoryWrite(
   let decision;
   try {
     decision = await decideMemoryWrite(helperTurn, file, lastUserMessage, request);
-  } catch {
+  } catch (error) {
+    if (error instanceof StoppedError) throw error;
     return "";
   }
+  throwIfStopped(opts.signal);
   if (!decision) return "";
 
   const target = { file_id: file.id, category: file.category, file: file.name };
@@ -341,16 +344,20 @@ export async function streamE2EChat(
   opts: E2EStreamOptions,
   onToken: (token: string) => void
 ): Promise<E2EStreamResult> {
+  throwIfStopped(opts.signal);
   const lastUserMessage = [...opts.turns].reverse().find((t) => t.role === "user")?.content ?? "";
 
   const tier = getUser()?.tier ?? "free";
   const modelInfoRequest = fetchModelInfo(opts.model, opts.provider);
   // Translate the thinking level here: on this path the backend never builds the request, so its buildReasoning never runs.
   const reasoningParams = buildReasoningParams(opts.model, opts.provider, opts.reasoningEffort ?? null);
-  const helperTurn = helperTurnFor(opts.model, opts.provider, async () => ({
-    providerModelID: (await modelInfoRequest).providerModelID,
-    reasoningParams,
-  }));
+  const helperTurn: HelperTurn = {
+    ...helperTurnFor(opts.model, opts.provider, async () => ({
+      providerModelID: (await modelInfoRequest).providerModelID,
+      reasoningParams,
+    })),
+    signal: opts.signal,
+  };
   const library = opts.project?.files ?? [];
   const skills = opts.skills ?? [];
   let sendWholeLibrary = false;
@@ -377,6 +384,7 @@ export async function streamE2EChat(
   const emptySelection: MemorySelection = { block: "", skipped: false, memoryIds: [], libraryIds: [], skillIds: [] };
 
   const messagesFor = async (memory: MemorySelection, answer?: AnswerRound): Promise<ModelMessage[]> => {
+    throwIfStopped(opts.signal);
     let projectFilesBlock = "";
     const picked = sendWholeLibrary ? library : library.filter((f) => memory.libraryIds.includes(f.id));
     if (opts.project && picked.length > 0) {
@@ -390,6 +398,7 @@ export async function streamE2EChat(
           if (paths.length > 0) emitPhaseBlock(`<library>${blockJSON({ paths })}</library>`);
         } catch {
         }
+        throwIfStopped(opts.signal);
       }
       projectFilesBlock = libraryBlock(picked, libraryContents, contextBudget(tier, modelInfo.contextWindow, "") * LIBRARY_PROMPT_SHARE);
     }
@@ -419,6 +428,7 @@ export async function streamE2EChat(
     });
 
     const budget = contextBudget(tier, modelInfo.contextWindow, systemPrompt);
+    throwIfStopped(opts.signal);
     const turns = trimTurns(opts.turns, budget).map((turn): ModelMessage => ({
         role: turn.role,
         content: turn.images?.length ? [
@@ -448,6 +458,7 @@ export async function streamE2EChat(
       return messagesFor(selection);
     },
   });
+  throwIfStopped(opts.signal);
   const memory = preparation.selection;
   const memoryOffered = opts.memoryFiles.length > 0 || (!sendWholeLibrary && library.length > 0);
   if (memory.skipped && memoryOffered) {
@@ -464,7 +475,7 @@ export async function streamE2EChat(
     context.push(...(await runConnectorPhase(helperTurn, messages, emitPhaseBlock, preparation.searched, opts.project?.connectorIds)));
   }
 
-  if (opts.signal?.aborted) throw new StoppedError();
+  throwIfStopped(opts.signal);
 
   const result = await streamAnswer(
     opts,
@@ -494,6 +505,7 @@ async function streamAnswer(
   const seen = new Set(preparation.queries.map((q) => q.key));
   const followUps: ModelMessage[] = [];
   const total = { text: "", provider: opts.provider as string, inputTokens: 0, outputTokens: 0 };
+  let pendingText = "";
   let answerSearched = false;
   // Blocks go on screen and into the saved answer, in stream order.
   const emit = (block: string) => {
@@ -508,7 +520,7 @@ async function streamAnswer(
     seen.add(query.key);
     round.searched.push(asked);
     answerSearched = true;
-    const result = await searchRound([query], { onToken: emit, onSearch: opts.onSearch ?? (() => {}) });
+    const result = await searchRound([query], { onToken: emit, onSearch: opts.onSearch ?? (() => {}), signal: opts.signal });
     if (result.unavailable) {
       round.searchesLeft = 0;
       return "Web search isn't available right now.";
@@ -516,39 +528,56 @@ async function streamAnswer(
     return result.text.trim() || `No web results for ${JSON.stringify(asked)}.`;
   };
 
-  for (;;) {
-    const call: { query?: string } = {};
-    const filter = round.searchesLeft > 0
-      ? createSearchCallFilter(onToken, (query) => {
-          call.query = query;
-        })
-      : null;
-    const result = await stream(
-      {
-        providerModelID: request.model.providerModelID,
-        turns: [...await request.buildMessages(round), ...followUps],
-        reasoningParams: request.model.reasoningParams,
-        signal: opts.signal,
-        stopAt: filter ? (text) => (call.query === undefined ? -1 : searchCallIndex(text)) : undefined,
-      },
-      filter ? filter.push : onToken
-    );
-    filter?.flush();
-    total.text += result.text;
-    total.provider = result.provider;
-    total.inputTokens += result.inputTokens;
-    total.outputTokens += result.outputTokens;
-    if (call.query === undefined) {
-      if (preparation.searchDecisionFailed && !answerSearched) {
-        emit(`<notice>${blockJSON({ kind: SEARCH_UNAVAILABLE_NOTICE_KIND, reason: "decision" })}</notice>`);
+  try {
+    for (;;) {
+      throwIfStopped(opts.signal);
+      const call: { query?: string } = {};
+      pendingText = "";
+      const forward = (token: string) => {
+        pendingText += token;
+        onToken(token);
+      };
+      const filter = round.searchesLeft > 0
+        ? createSearchCallFilter(forward, (query) => {
+            call.query = query;
+          })
+        : null;
+      const turns = [...await request.buildMessages(round), ...followUps];
+      throwIfStopped(opts.signal);
+      const result = await stream(
+        {
+          providerModelID: request.model.providerModelID,
+          turns,
+          reasoningParams: request.model.reasoningParams,
+          signal: opts.signal,
+          stopAt: filter ? (text) => (call.query === undefined ? -1 : searchCallIndex(text)) : undefined,
+        },
+        filter ? filter.push : forward
+      );
+      filter?.flush();
+      total.text += result.text;
+      pendingText = "";
+      total.provider = result.provider;
+      total.inputTokens += result.inputTokens;
+      total.outputTokens += result.outputTokens;
+      if (call.query === undefined) {
+        if (preparation.searchDecisionFailed && !answerSearched) {
+          emit(`<notice>${blockJSON({ kind: SEARCH_UNAVAILABLE_NOTICE_KIND, reason: "decision" })}</notice>`);
+        }
+        return total;
       }
-      return total;
-    }
 
-    round.searchesLeft--;
-    round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
-    const partial = result.text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "").trim();
-    if (partial) followUps.push({ role: "assistant", content: partial });
-    followUps.push({ role: "user", content: `${await search(call.query)}\n\nContinue your reply.` });
+      round.searchesLeft--;
+      round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
+      const partial = result.text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "").trim();
+      if (partial) followUps.push({ role: "assistant", content: partial });
+      followUps.push({ role: "user", content: `${await search(call.query)}\n\nContinue your reply.` });
+    }
+  } catch (error) {
+    if (!(error instanceof StoppedError)) throw error;
+    total.text += pendingText;
+    if (!parseMessageBlocks(stripTitleBlock(total.text)).answer.trim()) throw error;
+    if (!total.text.includes(STOPPED_NOTICE)) emit(STOPPED_NOTICE);
+    return total;
   }
 }

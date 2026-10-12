@@ -115,10 +115,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   React.useEffect(() => clearSearchTerms, [chatId]);
 
   const send = React.useCallback(
-    (content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean) => {
-      setQuote(null);
-      clearQuoted();
-      clearSearchTerms();
+    (content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean): boolean => {
       const history = visibleMessages(messagesRef.current, selectionRef.current);
 
       const shown = new Set(history.map((m) => m.id));
@@ -133,20 +130,23 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
         created_at: new Date().toISOString(),
         pinned: false,
       };
+      if (!startSendStream({ chatId, content, model, history, webSearch, userMessage, images, files, discard, ready: memorySave.current })) return false;
+      setQuote(null);
+      clearQuoted();
+      clearSearchTerms();
       setMessages((prev) => [...prev, userMessage]);
       setStream({ content: "", search: null });
-      startSendStream({ chatId, content, model, history, webSearch, userMessage, images, files, discard });
+      return true;
     },
     [chatId],
   );
 
   function submit() {
-    if (composer.isEmpty || streaming || loading) return;
+    if (composer.isEmpty || streaming || loading || getChatStream(chatId)?.phase === "streaming") return;
     const typed = composer.text.trim();
     const content = quote ? `${toBlockquote(quote)}\n\n${typed}`.trim() : typed;
     const { images, files, webSearch } = composer;
-    composer.reset();
-    void memorySave.current.then(() => send(content, model, images, files, webSearch));
+    if (send(content, model, images, files, webSearch)) composer.reset();
   }
 
   React.useEffect(() => {
@@ -259,11 +259,11 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     if (!last || (last.id !== target.id && (!target.variant_group || last.variant_group !== target.variant_group))) return;
     const idx = shown.findIndex((m) => m.id === messageId || (!!target.variant_group && m.variant_group === target.variant_group));
     const history = idx >= 0 ? shown.slice(0, idx) : shown;
+    if (!startRetryStream({ chatId, assistantId: target.id, variantGroup: target.variant_group, model, history })) return;
     setStream({ content: "", search: null });
     setMessages((prev) =>
       target.variant_group ? prev.filter((m) => m.variant_group !== target.variant_group) : prev.filter((m) => m.id !== messageId),
     );
-    startRetryStream({ chatId, assistantId: target.id, variantGroup: target.variant_group, model, history });
   };
 
   const [savedSkills, setSavedSkills] = React.useState<Skill[]>([]);
@@ -342,8 +342,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const [dismissedQuestions, setDismissedQuestions] = React.useState<string | null>(null);
   const asking = loading ? null : pendingQuestions(data, dismissedQuestions);
   const answerQuestions = (id: string, answer: string) => {
-    setDismissedQuestions(id);
-    void memorySave.current.then(() => send(answer, model, [], [], composer.webSearch));
+    if (send(answer, model, [], [], composer.webSearch)) setDismissedQuestions(id);
   };
 
   if (missing) notFound();

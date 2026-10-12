@@ -14,6 +14,7 @@ import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND } from "./messageBlocks";
 import { API_URL, apiFetch } from "./api";
 import { lacksBasePrompt } from "./systemPrompt";
 import type { ToolResponse } from "./jsonTools";
+import { StoppedError, throwIfStopped } from "./errors";
 
 // Caps on the search loop. Without them a model will happily search forever.
 const MAX_SEARCH_ROUNDS = 3;
@@ -47,6 +48,7 @@ export interface HelperTurn {
   provider: ProviderId;
   main?: () => Promise<HelperModel>;
   onMain?: boolean;
+  signal?: AbortSignal;
 }
 
 type HelperTarget = ProviderId | HelperTurn;
@@ -95,9 +97,11 @@ async function decide(
   opts: { phase?: "compression"; maxTokens?: number; allowMessage?: boolean; allowFollowUp?: boolean } = {}
 ): Promise<ToolResponse> {
   const turn = typeof target === "string" ? { provider: target } : target;
+  throwIfStopped(turn.signal);
   const helper = turn.onMain ? null : await helperModel(turn.provider);
   const main = turn.main ? await turn.main() : null;
   const canSwitch = main !== null && main.providerModelID !== helper?.providerModelID;
+  throwIfStopped(turn.signal);
 
   if (helper) {
     const offer = canSwitch && tools !== undefined && tools.length > 0;
@@ -105,14 +109,20 @@ async function decide(
       const result = offer
         ? await complete(turn.provider, helper, withHandOffRule(messages), [...tools, HAND_OFF_TOOL], opts)
         : await complete(turn.provider, helper, messages, tools, opts);
+      throwIfStopped(turn.signal);
       if (!offer || !result.toolCalls.some((c) => c.name === HAND_OFF_TOOL.name)) return result;
     } catch (error) {
+      throwIfStopped(turn.signal);
+      if (error instanceof StoppedError) throw error;
       if (!canSwitch) throw error;
     }
     turn.onMain = true;
   }
+  throwIfStopped(turn.signal);
   if (!main) throw new Error("No model for this helper phase");
-  return complete(turn.provider, main, messages, tools, { phase: opts.phase, allowMessage: opts.allowMessage, allowFollowUp: opts.allowFollowUp });
+  const result = await complete(turn.provider, main, messages, tools, { phase: opts.phase, allowMessage: opts.allowMessage, allowFollowUp: opts.allowFollowUp });
+  throwIfStopped(turn.signal);
+  return result;
 }
 
 // Helper calls send the template's "low" explicitly: left unset, Qwen thinks at xhigh and GLM at max, spending a whole answer's worth of tokens on a short decision.
@@ -373,7 +383,8 @@ export async function decidePreparation(target: HelperTarget, opts: PreparationD
       message: result.message,
       followUp: result.followUp,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof StoppedError) throw error;
     return { ...none, failed: true };
   }
 }
@@ -501,7 +512,8 @@ export async function decideMemoryWrite(
       ],
       tools
     ));
-  } catch {
+  } catch (error) {
+    if (error instanceof StoppedError) throw error;
     return null;
   }
 
@@ -869,13 +881,16 @@ function emitHelperMessage(message: string | undefined, onToken: (token: string)
 
 export async function searchRound(
   queries: SearchQuery[],
-  opts: Pick<PreparationPhaseOptions, "onToken" | "onSearch">
+  opts: Pick<PreparationPhaseOptions, "onToken" | "onSearch"> & { signal?: AbortSignal }
 ): Promise<{ text: string; unavailable: boolean; searched: boolean }> {
   let text = "";
   let searched = false;
   for (const { query, country } of queries) {
+    throwIfStopped(opts.signal);
     opts.onSearch(query);
+    throwIfStopped(opts.signal);
     const { results, unavailable } = await runSearch(query, country);
+    throwIfStopped(opts.signal);
     if (unavailable) {
       opts.onToken(`<notice>${blockJSON({ kind: SEARCH_UNAVAILABLE_NOTICE_KIND, ...unavailable })}</notice>`);
       return { text, unavailable: true, searched };
@@ -912,6 +927,8 @@ export interface PreparationResult {
 }
 
 export async function runPreparationPhase(target: HelperTarget, opts: PreparationPhaseOptions): Promise<PreparationResult> {
+  const signal = typeof target === "string" ? undefined : target.signal;
+  throwIfStopped(signal);
   let selection = { ...EMPTY_SELECTION };
   let baseMessages = opts.messages;
   const extra: ModelMessage[] = [];
@@ -924,6 +941,7 @@ export async function runPreparationPhase(target: HelperTarget, opts: Preparatio
   let searchDecisionFailed = false;
 
   for (let round = 0; round < MAX_CONTEXT_ROUNDS + MAX_SEARCH_ROUNDS + 1; round++) {
+    throwIfStopped(signal);
     const mayRead = contextRounds < MAX_CONTEXT_ROUNDS;
     const decision = await decidePreparation(target, {
       messages: [...baseMessages, ...extra],
@@ -950,14 +968,16 @@ export async function runPreparationPhase(target: HelperTarget, opts: Preparatio
     selection = next;
     if (readContext || write) {
       if (readContext) contextRounds++;
+      throwIfStopped(signal);
       baseMessages = await opts.loadSelection(selection);
+      throwIfStopped(signal);
     }
 
     if (queries.length > 0) {
       searchRounds++;
       queries.forEach((q) => seenQueries.add(q.key));
       ranQueries.push(...queries);
-      const result = await searchRound(queries, opts);
+      const result = await searchRound(queries, { onToken: opts.onToken, onSearch: opts.onSearch, signal });
       searched ||= result.searched;
       searchAvailable &&= !result.unavailable;
       // Results only: these messages also reach the answer, which must not read the decision step's rules.
@@ -993,6 +1013,8 @@ export async function runConnectorPhase(
 
   allowedIds?: string[]
 ): Promise<ModelMessage[]> {
+  const signal = typeof target === "string" ? undefined : target.signal;
+  throwIfStopped(signal);
   if ((getUser()?.tier ?? "free") !== "pro") return [];
   const connectors = (await loadConnectors().catch(() => [] as UserConnector[])).filter(
     (c) => c.route === "browser" && (!allowedIds || allowedIds.includes(c.id))
@@ -1022,10 +1044,12 @@ export async function runConnectorPhase(
   let untrusted = untrustedContext;
   const extra: ModelMessage[] = [];
   for (let round = 0; round < MAX_CONNECTOR_ROUNDS; round++) {
+    throwIfStopped(signal);
     let decision: ToolResponse;
     try {
       decision = await decide(target, [...baseMessages, ...extra], tools, { allowMessage: true });
-    } catch {
+    } catch (error) {
+      if (error instanceof StoppedError) throw error;
       break;
     }
     const toolCalls = decision.toolCalls.filter((call) => registry.has(call.name)).slice(0, MAX_CONNECTOR_CALLS_PER_ROUND);
@@ -1035,6 +1059,7 @@ export async function runConnectorPhase(
 
     let results = "";
     for (const call of toolCalls.slice(0, MAX_CONNECTOR_CALLS_PER_ROUND)) {
+      throwIfStopped(signal);
       const entry = registry.get(call.name);
       if (!entry) continue;
       const { connector, tool } = entry;
@@ -1057,6 +1082,7 @@ export async function runConnectorPhase(
         }
       }
       if (status === "ok") {
+        throwIfStopped(signal);
         try {
           const result = await callTool({ url: connector.url, token: connector.token }, tool.name, args);
           text = result.text.slice(0, MAX_TOOL_RESULT_CHARS) || "(no output)";
@@ -1068,6 +1094,7 @@ export async function runConnectorPhase(
       }
 
       onToken(encodeToolBlock(connector.name, label, status));
+      throwIfStopped(signal);
       // A result that closes the tag itself could pass off the rest as our text.
       const body = text.replace(/<\/tool_result/gi, "</ tool_result");
       results += `<tool_result connector="${escapeAttr(connector.name)}" tool="${escapeAttr(tool.name)}" status="${status}">\n${body}\n</tool_result>\n\n`;

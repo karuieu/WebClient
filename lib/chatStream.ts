@@ -11,6 +11,7 @@ import { type HistoryMessage } from "./conversation";
 import { maybeAutoMemory } from "./memory";
 import { type ChatImage, type ChatTextFile } from "./vision";
 import { applyChatTitle, fallbackTitleChat, getChatTitleMode } from "./chatTitle";
+import { throwIfStopped } from "./errors";
 
 export type StreamPhase = "streaming" | "done" | "error";
 
@@ -31,7 +32,7 @@ export interface ChatStreamState {
 const streams = new Map<string, ChatStreamState>();
 const controllers = new Map<string, AbortController>();
 
-// Saves what arrived so far with a 'stopped' notice. The proxy bills an interrupted answer at its full reservation.
+// The turn keeps its lock until in-flight work finishes, even after Stop.
 export function stopChatStream(chatId: string): void {
   controllers.get(chatId)?.abort();
 }
@@ -78,8 +79,10 @@ export function startSendStream(opts: {
   images?: ChatImage[];
   files?: ChatTextFile[];
   discard?: string[];
-}): void {
+  ready?: Promise<void>;
+}): boolean {
   const { chatId } = opts;
+  if (controllers.has(chatId)) return false;
   const state: ChatStreamState = {
     phase: "streaming",
     kind: "send",
@@ -97,14 +100,16 @@ export function startSendStream(opts: {
   const isFirstMessage = opts.history.length === 0;
   const imageNames = (opts.images ?? []).map((i) => i.name);
   const wantAiTitle = isFirstMessage && getChatTitleMode() === "ai";
-  if (isFirstMessage && !wantAiTitle) {
-    void fallbackTitleChat(chatId, opts.content, imageNames);
-  }
   let titleCaptured = false;
   const signal = startController(chatId);
 
   void (async () => {
     try {
+      await opts.ready;
+      throwIfStopped(signal);
+      if (isFirstMessage && !wantAiTitle) {
+        void fallbackTitleChat(chatId, opts.content, imageNames);
+      }
       const saved = await sendMessage(
         chatId,
         opts.content,
@@ -139,7 +144,7 @@ export function startSendStream(opts: {
       state.discarded = opts.discard ?? [];
       // Notify the sidebar even when the chat window is unmounted.
       window.dispatchEvent(new CustomEvent("karui-reload-chats"));
-      void maybeAutoMemory(setChatBrief);
+      if (!signal.aborted) void maybeAutoMemory(setChatBrief);
     } catch (error) {
       state.phase = "error";
       state.error = error;
@@ -147,6 +152,7 @@ export function startSendStream(opts: {
     controllers.delete(chatId);
     notify(chatId);
   })();
+  return true;
 }
 
 export function startRetryStream(opts: {
@@ -155,8 +161,9 @@ export function startRetryStream(opts: {
   variantGroup: string | undefined;
   model: ModelType;
   history: HistoryMessage[];
-}): void {
+}): boolean {
   const { chatId } = opts;
+  if (controllers.has(chatId)) return false;
   const state: ChatStreamState = {
     phase: "streaming",
     kind: "retry",
@@ -195,4 +202,5 @@ export function startRetryStream(opts: {
     controllers.delete(chatId);
     notify(chatId);
   })();
+  return true;
 }
