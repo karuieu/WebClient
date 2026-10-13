@@ -7,7 +7,7 @@ import { decryptField, encryptField, fieldAad, type FieldKind } from "./crypto";
 import { requireAesKey } from "./session";
 
 export const SKILL_LIMITS = { name: 64, description: 200, content: 12_000 } as const;
-// Counted in the browser only: the helper reads the whole index on every message and the user's own plan pays for it.
+// Counted in the browser only: the chat model reads the whole index on every message and the user's own plan pays for it.
 export const SKILL_COUNT_LIMIT = { free: 10, pro: 100 } as const;
 export const SKILLS_UPDATED_EVENT = "karui-skills-updated";
 

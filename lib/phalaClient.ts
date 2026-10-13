@@ -409,19 +409,15 @@ export async function phalaCompletion(opts: {
   phase?: "compression";
   /** Tells our proxy not to discount the base prompt this call doesn't carry. */
   withoutBasePrompt?: boolean;
-  maxTokens?: number;
-  allowMessage?: boolean;
-  allowFollowUp?: boolean;
 }): Promise<ToolResponse> {
   const model = opts.providerModelID;
   const tools = opts.tools ?? [];
   const sealed = await sealRequest(
     model,
-    tools.length > 0 ? withToolInstructions(opts.turns, tools, opts.allowMessage, opts.allowFollowUp) : opts.turns,
+    tools.length > 0 ? withToolInstructions(opts.turns, tools) : opts.turns,
     {
       ...(opts.reasoningParams ?? {}),
       ...(tools.length > 0 ? { response_format: { type: "json_object" } } : {}),
-      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
     },
     opts.phase
   );
@@ -448,5 +444,5 @@ export async function phalaCompletion(opts: {
   }
 
   if (tools.length === 0) return { content, toolCalls: [] };
-  return parseToolResponse(content, tools, opts.allowMessage, opts.allowFollowUp);
+  return parseToolResponse(content, tools);
 }

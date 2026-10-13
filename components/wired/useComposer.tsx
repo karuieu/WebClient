@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { getModelProvider, isModelAvailable, PROVIDERS } from "@/lib/providers";
+import { getModelProvider, getProviderSettings, isModelAvailable, PROVIDERS } from "@/lib/providers";
 import {
   clampReasoningEffort,
   getReasoningEffort,
@@ -12,7 +12,6 @@ import {
   setReasoningEffort,
   type ReasoningEffort,
 } from "@/lib/reasoning";
-import { getAutoWebSearch, isWebSearchAvailable } from "@/lib/websearch";
 import { getMemorySettings } from "@/lib/memory";
 import { IMAGES_UNSUPPORTED_NOTE, MAX_IMAGES_PER_MESSAGE, MAX_TEXT_FILES_PER_MESSAGE, modelSupportsImages } from "@/lib/vision";
 import { TEXT_FILE_ACCEPT, useFileDrop, useImageAttachments, useTextFileAttachments } from "@/lib/attachments";
@@ -60,7 +59,6 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
   const [effort, setEffort] = React.useState<ReasoningEffort | null>(null);
   const [tier, setTier] = React.useState("free");
   const [webSearch, setWebSearch] = React.useState(false);
-  const [searchAvailable, setSearchAvailable] = React.useState(false);
   const [memoryAvailable, setMemoryAvailable] = React.useState(false);
   const [options, setOptions] = React.useState<ModelOption[]>([]);
 
@@ -79,8 +77,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
 
   React.useEffect(() => {
     setEffort(getReasoningEffort());
-    setWebSearch(getAutoWebSearch());
-    setSearchAvailable(isWebSearchAvailable());
+    setWebSearch(getProviderSettings().autoWebSearch);
     setMemoryAvailable(getMemorySettings().enabled);
     setOptions(buildModelOptions());
     const syncTier = () => setTier(getSession()?.user?.tier || "free");
@@ -137,7 +134,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
         addAny(files);
       }
     },
-    webSearch: searchAvailable ? { on: webSearch, onToggle: () => setWebSearch((w) => !w) } : undefined,
+    webSearch: { on: webSearch, onToggle: () => setWebSearch((w) => !w) },
     model: {
       options,
       value: activeModel,

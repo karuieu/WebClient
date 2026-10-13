@@ -1,6 +1,6 @@
 import type { PickedItem, SkipReason, SkippedItem } from "@/components/app/project/Library";
 import { estimateTokens } from "./context";
-import type { LibraryIndexEntry } from "./helperPhases";
+import type { LibraryIndexEntry } from "./answerTools";
 import { extractPdfText } from "./pdfText";
 
 const MB = 1024 * 1024;

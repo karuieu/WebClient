@@ -1,4 +1,4 @@
-// Chooses the inference provider. The model decides it: Light runs only at NEAR AI, Heavy only at Phala, and a model both offer goes to the user's pick. A whole turn, including its helper phases, goes to one provider, with no fallback: a failure is shown as itself. A provider joins only with a browser-driven E2E path that encrypts to its attested key. Settings are local (localStorage, per device).
+// Chooses the inference provider. The model decides it: Light runs only at NEAR AI, Heavy only at Phala, and a model both offer goes to the user's pick. A whole turn, including its memory and compression helpers, goes to one provider, with no fallback: a failure is shown as itself. A provider joins only with a browser-driven E2E path that encrypts to its attested key. Settings are local (localStorage, per device).
 
 import { accountSettingKey, getUser } from "./session";
 
@@ -92,20 +92,12 @@ const LEGACY_AUTO_SEARCH_KEY = "karui_auto_websearch";
 
 export interface ProviderSettings {
   provider: ProviderId;
-  helperEnabled: boolean;
   autoWebSearch: boolean;
-  heavyHelper: HeavyHelperMode;
 }
-
-export type HeavyHelperMode = "hybrid" | "heavy" | "qwen";
-
-const HEAVY_HELPER_MODES: readonly HeavyHelperMode[] = ["hybrid", "heavy", "qwen"];
 
 export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {
   provider: DEFAULT_PROVIDER,
-  helperEnabled: true,
   autoWebSearch: true,
-  heavyHelper: "hybrid",
 };
 
 function isProviderId(value: unknown): value is ProviderId {
@@ -139,11 +131,8 @@ function normalizeSettings(raw: unknown): ProviderSettings {
     const r = raw as Partial<ProviderSettings>;
     // A stored provider outside the pool falls back to the default; otherwise every turn would go to an enclave that does not exist.
     if (isProviderId(r.provider)) s.provider = r.provider;
-    if (typeof r.helperEnabled === "boolean") s.helperEnabled = r.helperEnabled;
     if (typeof r.autoWebSearch === "boolean") s.autoWebSearch = r.autoWebSearch;
-    if (HEAVY_HELPER_MODES.includes(r.heavyHelper as HeavyHelperMode)) s.heavyHelper = r.heavyHelper as HeavyHelperMode;
   }
-  // autoWebSearch is kept even when the helper is disabled: clearing it would lose the user's preference on a toggle off and on. The dependency is resolved at read time (autoWebSearchActive).
   return s;
 }
 
@@ -165,9 +154,4 @@ export function setProviderSettings(patch: Partial<ProviderSettings>): ProviderS
   } catch {
   }
   return next;
-}
-
-export function autoWebSearchActive(): boolean {
-  const s = getProviderSettings();
-  return s.helperEnabled && s.autoWebSearch;
 }

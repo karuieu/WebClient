@@ -1,27 +1,36 @@
-// Inference for the E2E path. The browser builds the whole request (prompt, memory, search results) and encrypts messages to the attested enclave of the turn's provider; the backend only proxies ciphertext. Helper phases use the same provider; see helperPhases.ts.
+// Inference for the E2E path. The browser builds the whole request (prompt, memory, search results) and encrypts messages to the attested enclave of the turn's provider; the backend only proxies ciphertext.
+// The chat's own model answers and calls tools itself (answerTools.ts); the smaller helper model only merges memory notes (helperPhases.ts).
 
 import { getUser, onSessionCleared } from "./session";
 import { getArtifactsEnabled } from "./artifacts";
 import { PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
-import { blockJSON, parseMessageBlocks, SEARCH_UNAVAILABLE_NOTICE_KIND, STOPPED_NOTICE } from "./messageBlocks";
+import { blockJSON, parseMessageBlocks, STOPPED_NOTICE } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
-  helperTurnFor,
-  runPreparationPhase,
-  runConnectorPhase,
-  searchQuery,
-  searchRound,
-  type MemorySelection,
-  type PreparationResult,
   type HelperModel,
   type HelperTurn,
-  type LibraryIndexEntry,
   type MemoryWriteRequest,
   type ModelMessage,
 } from "./helperPhases";
+import {
+  answerStatusBlock,
+  answerToolsBlock,
+  callTags,
+  contextAliases,
+  loadConnectorTools,
+  memoryBlock,
+  parseMemoryNote,
+  runAnswerCall,
+  startAnswerRound,
+  type AnswerCallContext,
+  type AnswerRound,
+  type ConnectorTool,
+  type ContextIndex,
+  type LibraryIndexEntry,
+} from "./answerTools";
 import { buildReasoningParams, type ReasoningEffort } from "./reasoning";
 import { StoppedError, throwIfStopped } from "./errors";
 import { contextBudget, trimTurns } from "./context";
@@ -31,7 +40,16 @@ import { isNearAIVerified, streamNearAIChat } from "./nearaiClient";
 import { isPhalaVerified, streamPhalaChat } from "./phalaClient";
 import { API_URL, apiFetch } from "./api";
 import { fetchSystemPrompt } from "./systemPrompt";
-import { SEARCH_CALL_CLOSE, SEARCH_CALL_OPEN, createSearchCallFilter, searchCallIndex, stripTitleBlock } from "./streamTags";
+import {
+  MEMORY_NOTE_CLOSE,
+  MEMORY_NOTE_OPEN,
+  callIndex,
+  createCallFilter,
+  createTagFilter,
+  stripMemoryNotes,
+  stripTitleBlock,
+  type AnswerCall,
+} from "./streamTags";
 
 export function isProviderVerified(provider: ProviderId): boolean {
   return provider === "nearai" ? isNearAIVerified() : isPhalaVerified();
@@ -118,7 +136,8 @@ async function buildSystemPrompt(opts: {
   generateTitle: boolean;
   generateBrief: boolean;
   webSearch: boolean;
-  answer?: AnswerRound;
+  toolsBlock: string;
+  statusBlock: string;
   provider: ProviderId;
   providerModelID: string;
 }): Promise<string> {
@@ -148,7 +167,7 @@ async function buildSystemPrompt(opts: {
 
   if (!opts.webSearch) {
     prompt +=
-      "\n\n<web_search_status>Web search is currently DISABLED by the user. Do NOT attempt to call any search tool, do NOT output any tool call syntax like [TOOL_CALL] or similar. If the user asks something that clearly needs current information, tell them to enable web search in settings.</web_search_status>";
+      "\n\n<web_search_status>Web search is currently DISABLED by the user. Do NOT try to search. If the user asks something that clearly needs current information, tell them to turn on web search.</web_search_status>";
   }
   if (!getArtifactsEnabled()) {
     prompt +=
@@ -162,6 +181,8 @@ async function buildSystemPrompt(opts: {
     prompt +=
       "\n\n<chat_brief_request>This is the first message of a new conversation. Begin your reply with one sentence of at most 20 words on what this conversation is about, in the SAME language as the user's message, wrapped exactly like this: <chat_brief>Sentence here</chat_brief> — then continue with your normal answer. The tag must appear before any other text and must not be mentioned anywhere else.</chat_brief_request>";
   }
+
+  prompt += opts.toolsBlock;
 
   const files = opts.projectFilesBlock.trim();
   if (files) {
@@ -193,7 +214,7 @@ async function buildSystemPrompt(opts: {
   }
 
   // Changes with every answer round, so it sits below memory.
-  if (opts.webSearch && opts.answer) prompt += answerSearchBlock(opts.answer);
+  prompt += opts.statusBlock;
 
   // Date and model go at the end: both change mid-conversation, and higher up they would invalidate the prefix cache.
   prompt +=
@@ -204,34 +225,6 @@ async function buildSystemPrompt(opts: {
     "</current_model>";
   prompt += "\n\n<current_datetime>" + currentDatetimeForPrompt() + "</current_datetime>";
   return prompt;
-}
-
-const MAX_ANSWER_SEARCHES = 3;
-
-// The answer between its rounds. The model that writes the answer can search too: the decision step before it
-// can't know what the answer will find missing, and a model told it can search but given no way to do it writes fake tool calls.
-interface AnswerRound {
-  searched: string[];
-  searchesLeft: number;
-  titleWritten: boolean;
-}
-
-function answerSearchBlock(round: AnswerRound): string {
-  const searched = round.searched.length > 0
-    ? ` Already searched for this message: ${round.searched.map((q) => JSON.stringify(q)).join(", ")}; the results are in the conversation.`
-    : "";
-  if (round.searchesLeft === 0) {
-    return (
-      `\n\n<web_search_status>Web search for this message is finished.${searched} Answer from the results and what you know, ` +
-      `and say plainly what you couldn't verify. Don't write ${SEARCH_CALL_OPEN} or any other tool call.</web_search_status>`
-    );
-  }
-  return (
-    `\n\n<web_search_status>You can search the web while answering. When you need current or specific information you don't have, ` +
-    `put a short query between ${SEARCH_CALL_OPEN} and ${SEARCH_CALL_CLOSE} on one line and write nothing after it: the results arrive in the next message and you continue from there. ` +
-    `Search before you start writing the answer. Up to ${round.searchesLeft} more ${round.searchesLeft === 1 ? "search" : "searches"}.${searched} ` +
-    `Never write any other tool call syntax.</web_search_status>`
-  );
 }
 
 // Rounded down to the hour: minute precision would change the prompt prefix on every message and defeat the history cache.
@@ -257,10 +250,8 @@ export interface ModelTurn {
 }
 
 export interface E2EStreamResult {
-
+  // The answer with every block it put on screen (searches, files, skills, tools, memory) in stream order. Whoever saves the message saves exactly this.
   text: string;
-  // Helper-phase blocks, emitted before the answer. Whoever saves the message must append them to its content, or the Processing section vanishes after save.
-  phaseBlocks: string;
   provider: string;
   inputTokens: number;
   outputTokens: number;
@@ -296,13 +287,8 @@ export interface E2EStreamOptions {
   signal?: AbortSignal;
 }
 
-// Never throws: a failed memory write must not stop the answer. If the stream fails after the edit is saved, the next send repairs the gap.
-async function resolveMemoryWrite(
-  opts: E2EStreamOptions,
-  helperTurn: HelperTurn,
-  request: MemoryWriteRequest,
-  lastUserMessage: string
-): Promise<string> {
+// Never throws, except on Stop: a failed memory write must not cost the answer.
+async function resolveMemoryWrite(opts: E2EStreamOptions, model: HelperModel, request: MemoryWriteRequest): Promise<string> {
   throwIfStopped(opts.signal);
   const file = request.fileId ? opts.memoryFiles.find((f) => f.id === request.fileId && !f.readOnly) : undefined;
 
@@ -310,6 +296,8 @@ async function resolveMemoryWrite(
     return encodeMemoryWriteBlock({ action: "proposal", file_id: null, category: null, file: null, text: request.note });
   }
 
+  const helperTurn: HelperTurn = { provider: opts.provider, main: async () => model, signal: opts.signal };
+  const lastUserMessage = [...opts.turns].reverse().find((t) => t.role === "user")?.content ?? "";
   let decision;
   try {
     decision = await decideMemoryWrite(helperTurn, file, lastUserMessage, request);
@@ -335,243 +323,169 @@ async function resolveMemoryWrite(
   return encodeMemoryWriteBlock({ action: "proposal", ...target, text: decision.text });
 }
 
-// No fallback to another provider: a failure, including a failed attestation, is shown as itself. A fallback would let the server steer plaintext to a key of its choosing.
 const LIBRARY_WHOLE_SHARE = 0.25;
 const LIBRARY_PROMPT_SHARE = 0.4;
 const SKILLS_PROMPT_SHARE = 0.25;
+const MEMORY_NOTE_MAX_CHARS = 1000;
 
+interface AnswerTurn {
+  model: HelperModel;
+  call: Omit<AnswerCallContext, "emit">;
+  buildMessages: (round: AnswerRound, emit: (block: string) => void) => Promise<ModelMessage[]>;
+}
+
+// No fallback to another provider: a failure, including a failed attestation, is shown as itself. A fallback would let the server steer plaintext to a key of its choosing.
 export async function streamE2EChat(
   opts: E2EStreamOptions,
   onToken: (token: string) => void
 ): Promise<E2EStreamResult> {
   throwIfStopped(opts.signal);
-  const lastUserMessage = [...opts.turns].reverse().find((t) => t.role === "user")?.content ?? "";
-
   const tier = getUser()?.tier ?? "free";
-  const modelInfoRequest = fetchModelInfo(opts.model, opts.provider);
-  // Translate the thinking level here: on this path the backend never builds the request, so its buildReasoning never runs.
-  const reasoningParams = buildReasoningParams(opts.model, opts.provider, opts.reasoningEffort ?? null);
-  const helperTurn: HelperTurn = {
-    ...helperTurnFor(opts.model, opts.provider, async () => ({
-      providerModelID: (await modelInfoRequest).providerModelID,
-      reasoningParams,
-    })),
-    signal: opts.signal,
-  };
+  const [modelInfo, connectorTools] = await Promise.all([
+    fetchModelInfo(opts.model, opts.provider),
+    opts.connectors === false ? new Map<string, ConnectorTool>() : loadConnectorTools(opts.project?.connectorIds),
+  ]);
+  throwIfStopped(opts.signal);
+  const budget = contextBudget(tier, modelInfo.contextWindow, "");
   const library = opts.project?.files ?? [];
   const skills = opts.skills ?? [];
-  let sendWholeLibrary = false;
-  if (library.length > 0) {
-    const budget = contextBudget(tier, (await modelInfoRequest).contextWindow, "");
+  const sendWholeLibrary = library.reduce((n, f) => n + f.size, 0) / 4 <= budget * LIBRARY_WHOLE_SHARE;
+  const index: ContextIndex = { memory: opts.memoryFiles, library: sendWholeLibrary ? [] : library, skills };
+  const aliases = contextAliases(index);
+  const toolsBlock = answerToolsBlock(index, connectorTools, Boolean(opts.memoryWrites));
 
-    sendWholeLibrary = library.reduce((n, f) => n + f.size, 0) / 4 <= budget * LIBRARY_WHOLE_SHARE;
-  }
-  const modelInfo = await modelInfoRequest;
-  const enclaveModelID = modelInfo.providerModelID;
-
-  // If the memory phase did not run, say so in a notice rather than answering quietly without memory.
-  // No suggestion of another provider, on purpose: the helper sees the memory index, so moving it would widen who sees the data.
-  let phaseBlocks = "";
-  const emitPhaseBlock = (block: string) => {
-    phaseBlocks += block;
-    onToken(block);
-  };
-
-  const providerName = PROVIDERS[opts.provider]?.name ?? opts.provider;
   const libraryContents = new Map<string, string>();
   const attemptedFiles = new Set<string>();
   const emittedSkills = new Set<string>();
-  const emptySelection: MemorySelection = { block: "", skipped: false, memoryIds: [], libraryIds: [], skillIds: [] };
 
-  const messagesFor = async (memory: MemorySelection, answer?: AnswerRound): Promise<ModelMessage[]> => {
-    throwIfStopped(opts.signal);
-    let projectFilesBlock = "";
-    const picked = sendWholeLibrary ? library : library.filter((f) => memory.libraryIds.includes(f.id));
-    if (opts.project && picked.length > 0) {
-      const unread = picked.filter((f) => !attemptedFiles.has(f.id));
-      unread.forEach((f) => attemptedFiles.add(f.id));
-      if (unread.length > 0) {
-        try {
-          const contents = await opts.project.read(unread.map((f) => f.id));
-          contents.forEach((content, id) => libraryContents.set(id, content));
-          const paths = unread.filter((f) => contents.has(f.id)).map((f) => f.path);
-          if (paths.length > 0) emitPhaseBlock(`<library>${blockJSON({ paths })}</library>`);
-        } catch {
-        }
-        throwIfStopped(opts.signal);
+  const projectFilesBlock = async (round: AnswerRound, emit: (block: string) => void): Promise<string> => {
+    const picked = sendWholeLibrary ? library : library.filter((f) => round.selection.libraryIds.includes(f.id));
+    if (!opts.project || picked.length === 0) return "";
+    const unread = picked.filter((f) => !attemptedFiles.has(f.id));
+    unread.forEach((f) => attemptedFiles.add(f.id));
+    if (unread.length > 0) {
+      try {
+        const contents = await opts.project.read(unread.map((f) => f.id));
+        contents.forEach((content, id) => libraryContents.set(id, content));
+        const paths = unread.filter((f) => contents.has(f.id)).map((f) => f.path);
+        if (paths.length > 0) emit(`<library>${blockJSON({ paths })}</library>`);
+      } catch {
       }
-      projectFilesBlock = libraryBlock(picked, libraryContents, contextBudget(tier, modelInfo.contextWindow, "") * LIBRARY_PROMPT_SHARE);
+      throwIfStopped(opts.signal);
     }
+    return libraryBlock(picked, libraryContents, budget * LIBRARY_PROMPT_SHARE);
+  };
 
-    const pickedSkills = skills.filter((s) => memory.skillIds.includes(s.id));
-    const used = skillsPromptBlock(pickedSkills, contextBudget(tier, modelInfo.contextWindow, "") * SKILLS_PROMPT_SHARE);
+  const skillsBlock = (round: AnswerRound, emit: (block: string) => void): string => {
+    const used = skillsPromptBlock(skills.filter((s) => round.selection.skillIds.includes(s.id)), budget * SKILLS_PROMPT_SHARE);
     const newNames = used.names.filter((name) => !emittedSkills.has(name));
     if (newNames.length > 0) {
       newNames.forEach((name) => emittedSkills.add(name));
-      emitPhaseBlock(`<skills_used>${blockJSON({ names: newNames })}</skills_used>`);
+      emit(`<skills_used>${blockJSON({ names: newNames })}</skills_used>`);
     }
+    return used.block;
+  };
 
+  const buildMessages = async (round: AnswerRound, emit: (block: string) => void): Promise<ModelMessage[]> => {
+    throwIfStopped(opts.signal);
     const systemPrompt = await buildSystemPrompt({
       projectContext: opts.projectContext,
       conversationSummary: opts.conversationSummary,
-      memoryBlock: memory.block,
+      memoryBlock: memoryBlock(opts.memoryFiles, round.selection.memoryIds),
       memoryScope: opts.project ? "project" : "user",
-      projectFilesBlock,
-      skillsBlock: used.block,
+      projectFilesBlock: await projectFilesBlock(round, emit),
+      skillsBlock: skillsBlock(round, emit),
       customInstructions: opts.customInstructions,
-      generateTitle: opts.generateTitle && answer !== undefined && !answer.titleWritten,
-      generateBrief: Boolean(opts.generateBrief) && answer !== undefined && !answer.titleWritten,
+      generateTitle: opts.generateTitle && !round.titleWritten,
+      generateBrief: Boolean(opts.generateBrief) && !round.titleWritten,
       webSearch: opts.webSearch,
-      answer,
+      toolsBlock,
+      statusBlock: answerStatusBlock(round, { aliases, connectorTools }, opts.webSearch),
       provider: opts.provider,
-      providerModelID: enclaveModelID,
+      providerModelID: modelInfo.providerModelID,
     });
-
-    const budget = contextBudget(tier, modelInfo.contextWindow, systemPrompt);
     throwIfStopped(opts.signal);
-    const turns = trimTurns(opts.turns, budget).map((turn): ModelMessage => ({
-        role: turn.role,
-        content: turn.images?.length ? [
-          { type: "text", text: turn.content },
-          ...turn.images.map((url) => ({ type: "image_url", image_url: { url } })),
-        ] : turn.content,
-      }));
+    const turns = trimTurns(opts.turns, contextBudget(tier, modelInfo.contextWindow, systemPrompt)).map((turn): ModelMessage => ({
+      role: turn.role,
+      content: turn.images?.length ? [
+        { type: "text", text: turn.content },
+        ...turn.images.map((url) => ({ type: "image_url", image_url: { url } })),
+      ] : turn.content,
+    }));
     return [{ role: "system", content: systemPrompt }, ...turns];
   };
 
-  let memoryWriteHandled = false;
-  const preparation = await runPreparationPhase(helperTurn, {
-    messages: await messagesFor(emptySelection),
-    files: opts.memoryFiles,
-    library: sendWholeLibrary ? [] : library,
-    skills,
-    allowWrites: Boolean(opts.memoryWrites) && (opts.memoryFiles.length > 0 || (!sendWholeLibrary && library.length > 0) || skills.length > 0),
-    webSearch: opts.webSearch,
-    onToken: emitPhaseBlock,
-    onSearch: opts.onSearch ?? (() => {}),
-    loadSelection: async (selection) => {
-      if (opts.memoryWrites && selection.writeRequest && !memoryWriteHandled) {
-        memoryWriteHandled = true;
-        const block = await resolveMemoryWrite(opts, helperTurn, selection.writeRequest, lastUserMessage);
-        if (block) emitPhaseBlock(block);
-      }
-      return messagesFor(selection);
-    },
-  });
-  throwIfStopped(opts.signal);
-  const memory = preparation.selection;
-  const memoryOffered = opts.memoryFiles.length > 0 || (!sendWholeLibrary && library.length > 0);
-  if (memory.skipped && memoryOffered) {
-    emitPhaseBlock(`<notice>${blockJSON({ kind: "memory_skipped", reason: "model_unavailable", provider: opts.provider, provider_name: providerName, e2e: true })}</notice>`);
-  } else if (memory.failed && memoryOffered) {
-    emitPhaseBlock(`<notice>${blockJSON({ kind: "memory_skipped", reason: "decision" })}</notice>`);
-  }
-  if (skills.length > 0 && (memory.skipped || memory.failed)) {
-    emitPhaseBlock(`<notice>${blockJSON({ kind: "skills_skipped", reason: memory.skipped ? "model_unavailable" : "decision", provider_name: providerName })}</notice>`);
-  }
-  const context = [...preparation.messages];
-  if (opts.connectors !== false) {
-    const messages = [...await messagesFor(memory), ...context];
-    context.push(...(await runConnectorPhase(helperTurn, messages, emitPhaseBlock, preparation.searched, opts.project?.connectorIds)));
-  }
-
-  throwIfStopped(opts.signal);
-
-  const result = await streamAnswer(
+  // Translate the thinking level here: on this path the backend never builds the request, so its buildReasoning never runs.
+  const reasoningParams = buildReasoningParams(opts.model, opts.provider, opts.reasoningEffort ?? null);
+  return streamAnswer(
     opts,
     {
-      model: { providerModelID: enclaveModelID, reasoningParams },
-      buildMessages: async (round) => [...await messagesFor(memory, round), ...context],
-      preparation,
+      model: { providerModelID: modelInfo.providerModelID, reasoningParams },
+      call: { aliases, connectorTools, onSearch: opts.onSearch ?? (() => {}), signal: opts.signal },
+      buildMessages,
     },
     onToken
   );
-  return { ...result, phaseBlocks };
 }
 
-// A <search_query> the model writes ends the round: it is cut from the stream, the search runs, and the model continues with the results.
-async function streamAnswer(
-  opts: E2EStreamOptions,
-  request: { model: HelperModel; buildMessages: (round: AnswerRound) => Promise<ModelMessage[]>; preparation: PreparationResult },
-  onToken: (token: string) => void
-): Promise<Omit<E2EStreamResult, "phaseBlocks">> {
+// A call the model writes ends the round: it is cut from the stream, the app runs it, and the model continues with the result.
+// The memory note doesn't end the round; it is cut from the stream and saved once the answer is complete.
+async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (token: string) => void): Promise<E2EStreamResult> {
   const stream = opts.provider === "nearai" ? streamNearAIChat : streamPhalaChat;
-  const { preparation } = request;
-  const round: AnswerRound = {
-    searched: preparation.queries.map((q) => q.query),
-    searchesLeft: opts.webSearch && preparation.searchAvailable ? MAX_ANSWER_SEARCHES : 0,
-    titleWritten: false,
-  };
-  const seen = new Set(preparation.queries.map((q) => q.key));
+  const round = startAnswerRound(opts.webSearch);
   const followUps: ModelMessage[] = [];
   const total = { text: "", provider: opts.provider as string, inputTokens: 0, outputTokens: 0 };
+  const memory: { note?: MemoryWriteRequest } = {};
   let pendingText = "";
-  let answerSearched = false;
   // Blocks go on screen and into the saved answer, in stream order.
   const emit = (block: string) => {
     total.text += block;
     onToken(block);
   };
-
-  // Returns what the model reads next.
-  const search = async (asked: string): Promise<string> => {
-    const query = searchQuery(asked);
-    if (seen.has(query.key)) return `You already searched for ${JSON.stringify(asked)}; its results are above.`;
-    seen.add(query.key);
-    round.searched.push(asked);
-    answerSearched = true;
-    const result = await searchRound([query], { onToken: emit, onSearch: opts.onSearch ?? (() => {}), signal: opts.signal });
-    if (result.unavailable) {
-      round.searchesLeft = 0;
-      return "Web search isn't available right now.";
-    }
-    return result.text.trim() || `No web results for ${JSON.stringify(asked)}.`;
-  };
+  const ctx: AnswerCallContext = { ...turn.call, emit };
 
   try {
     for (;;) {
       throwIfStopped(opts.signal);
-      const call: { query?: string } = {};
+      const found: { call?: AnswerCall } = {};
       pendingText = "";
       const forward = (token: string) => {
         pendingText += token;
         onToken(token);
       };
-      const filter = round.searchesLeft > 0
-        ? createSearchCallFilter(forward, (query) => {
-            call.query = query;
-          })
-        : null;
-      const turns = [...await request.buildMessages(round), ...followUps];
+      // Filtered even when writes are off: a note the model writes anyway must not show up.
+      const noteFilter = createTagFilter(MEMORY_NOTE_OPEN, MEMORY_NOTE_CLOSE, forward, (value) => {
+        if (opts.memoryWrites) memory.note ??= parseMemoryNote(value, ctx.aliases) ?? undefined;
+      }, MEMORY_NOTE_MAX_CHARS);
+      // The call filter goes first: it drops what follows a call, as the client cuts the text there.
+      const tags = callTags(round, ctx);
+      const callFilter = tags.length > 0 ? createCallFilter(tags, noteFilter.push, (call) => (found.call = call)) : null;
+      const turns = [...await turn.buildMessages(round, emit), ...followUps];
       throwIfStopped(opts.signal);
       const result = await stream(
         {
-          providerModelID: request.model.providerModelID,
+          providerModelID: turn.model.providerModelID,
           turns,
-          reasoningParams: request.model.reasoningParams,
+          reasoningParams: turn.model.reasoningParams,
           signal: opts.signal,
-          stopAt: filter ? (text) => (call.query === undefined ? -1 : searchCallIndex(text)) : undefined,
+          stopAt: callFilter ? (text) => (found.call === undefined ? -1 : callIndex(text, tags)) : undefined,
         },
-        filter ? filter.push : forward
+        callFilter?.push ?? noteFilter.push
       );
-      filter?.flush();
-      total.text += result.text;
+      callFilter?.flush();
+      noteFilter.flush();
+      const text = stripMemoryNotes(result.text);
+      total.text += text;
       pendingText = "";
       total.provider = result.provider;
       total.inputTokens += result.inputTokens;
       total.outputTokens += result.outputTokens;
-      if (call.query === undefined) {
-        if (preparation.searchDecisionFailed && !answerSearched) {
-          emit(`<notice>${blockJSON({ kind: SEARCH_UNAVAILABLE_NOTICE_KIND, reason: "decision" })}</notice>`);
-        }
-        return total;
-      }
+      if (found.call === undefined) break;
 
-      round.searchesLeft--;
       round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
-      const partial = result.text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "").trim();
+      const partial = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "").trim();
       if (partial) followUps.push({ role: "assistant", content: partial });
-      followUps.push({ role: "user", content: `${await search(call.query)}\n\nContinue your reply.` });
+      followUps.push({ role: "user", content: `${await runAnswerCall(found.call, round, ctx)}\n\nContinue your reply.` });
     }
   } catch (error) {
     if (!(error instanceof StoppedError)) throw error;
@@ -580,4 +494,14 @@ async function streamAnswer(
     if (!total.text.includes(STOPPED_NOTICE)) emit(STOPPED_NOTICE);
     return total;
   }
+
+  // The answer is complete, so Stop now only skips the write.
+  if (memory.note) {
+    const block = await resolveMemoryWrite(opts, turn.model, memory.note).catch((error: unknown) => {
+      if (error instanceof StoppedError) return "";
+      throw error;
+    });
+    if (block) emit(block);
+  }
+  return total;
 }

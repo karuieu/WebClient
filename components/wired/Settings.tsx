@@ -382,11 +382,8 @@ function ProvidersSection() {
       providers={providers}
       provider={getProvider()}
       onProvider={(id) => update({ provider: id as ProviderId })}
-      helperEnabled={settings.helperEnabled}
-      onHelperEnabled={(v) => update({ helperEnabled: v })}
       autoSearch={settings.autoWebSearch}
       onAutoSearch={(v) => update({ autoWebSearch: v })}
-      heavyHelper={tier === "pro" ? { mode: settings.heavyHelper, onChange: (m) => update({ heavyHelper: m }) } : undefined}
     />
   );
 }

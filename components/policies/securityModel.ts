@@ -28,9 +28,9 @@ Providers that offer neither of these mechanisms are not on the list. Supporting
 
 ## Every path your plaintext takes
 
-A single message can leave your device more than once, so here is the full list. Web search adds extra passes over the same context: a helper model, Qwen 3.8 27B, reads your message to decide what to search for, and only then does your chosen model write the answer. Those passes run at the same provider, sealed the same way. The search query the model produces does not: it goes to Brave, an ordinary third-party API with no enclave, and it reaches us readable on the way.
+A single message can leave your device more than once, so here is the full list. Your chosen model can pause its answer to ask for more: a memory file, a file from your project, one of your skills, or a web search. Your browser adds what it asked for and sends the conversation back to the same model at the same provider, sealed the same way. The search query the model writes is the exception: it goes to Brave, an ordinary third-party API with no enclave, and it reaches us readable on the way.
 
-An image you attach goes to the model sealed like the text, and only to a model that reads images; our servers never see it. Memory stays sealed too, in both of its phases — deciding which memory files are relevant to a message, and reorganising those files from recent conversations. Summarising older turns of a long conversation works the same way. Every one of these features is optional, none of them is persisted, and in each case the work happens inside an enclave at the provider serving that conversation.
+An image you attach goes to the model sealed like the text, and only to a model that reads images; our servers never see it. Memory stays sealed too, at every step: your chosen model sees only a list of your memory files and opens the ones it needs; when it notes something worth keeping, a smaller model at the same provider merges it into the right file or leaves it as a suggestion; and that smaller model also reorganises your memory from recent conversations. Summarising older turns of a long conversation works the same way. Every one of these features is optional, none of them is persisted, and in each case the work happens inside an enclave at the provider serving that conversation.
 
 ## Two limits of doing this in a browser
 

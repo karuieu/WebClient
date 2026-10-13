@@ -2,7 +2,7 @@
 
 import { encryptField, fieldAad } from "./crypto";
 import { estimateTokens } from "./context";
-import { compressHistoryE2E, helperTurnFor, type CompressionTurn } from "./helperPhases";
+import { compressHistoryE2E, type CompressionTurn } from "./helperPhases";
 import { getModelProvider } from "./providers";
 import { chatModelAsHelper } from "./inference";
 import { API_URL, apiFetch } from "./api";
@@ -117,7 +117,7 @@ async function runCompression(
 ): Promise<string> {
   const provider = getModelProvider(modelId);
   if (!provider) throw new Error("Unknown model — no provider to ask for a summary");
-  return compressHistoryE2E(helperTurnFor(modelId, provider, chatModelAsHelper(modelId, provider)), turns, previousSummary);
+  return compressHistoryE2E({ provider, main: chatModelAsHelper(modelId, provider) }, turns, previousSummary);
 }
 
 export async function saveChatSummary(

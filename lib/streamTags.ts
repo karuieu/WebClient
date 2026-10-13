@@ -1,11 +1,13 @@
 
-// Pulls tags out of the stream as soon as they close: the title and brief of a first answer, and the answer's search call.
+// Pulls tags out of the stream as soon as they close: the title and brief of a first answer, the answer's memory note, and its calls.
 // Tokens that may be the start of a tag are held back until resolved.
 
 export const TITLE_OPEN = "<chat_title>";
 export const TITLE_CLOSE = "</chat_title>";
 export const BRIEF_OPEN = "<chat_brief>";
 export const BRIEF_CLOSE = "</chat_brief>";
+export const MEMORY_NOTE_OPEN = "<memory_note>";
+export const MEMORY_NOTE_CLOSE = "</memory_note>";
 const TITLE_BLOCK_MAX_CHARS = 300;
 
 export function trailingTagPrefixLen(s: string, tag: string): number {
@@ -16,7 +18,13 @@ export function trailingTagPrefixLen(s: string, tag: string): number {
   return 0;
 }
 
-export function createTagFilter(open: string, close: string, emit: (token: string) => void, onValue: (value: string) => void) {
+export function createTagFilter(
+  open: string,
+  close: string,
+  emit: (token: string) => void,
+  onValue: (value: string) => void,
+  maxChars = TITLE_BLOCK_MAX_CHARS
+) {
   let pending = "";
   let done = false;
 
@@ -38,7 +46,7 @@ export function createTagFilter(open: string, close: string, emit: (token: strin
 
     const closeIdx = pending.indexOf(close, openIdx + open.length);
     if (closeIdx === -1) {
-      if (pending.length - openIdx > TITLE_BLOCK_MAX_CHARS) {
+      if (pending.length - openIdx > maxChars) {
 
         done = true;
         emit(pending);
@@ -77,33 +85,61 @@ export function stripTitleBlock(response: string): string {
     .trimStart();
 }
 
-export const SEARCH_CALL_OPEN = "<search_query>";
-export const SEARCH_CALL_CLOSE = "</search_query>";
-const MAX_QUERY_CHARS = 200;
-// A call is a short single line between the tags. Anything else is the model talking about the tag, often in its reasoning.
-const SEARCH_CALL = new RegExp(`${SEARCH_CALL_OPEN}([^<\\n]{1,${MAX_QUERY_CHARS}})${SEARCH_CALL_CLOSE}`);
-
-export function searchCallIndex(text: string): number {
-  return text.search(SEARCH_CALL);
+export function stripMemoryNotes(text: string): string {
+  return text.replace(/<memory_note>[\s\S]*?<\/memory_note>/g, "");
 }
 
-// Where the tail of the text could still turn into a search call.
-function partialCallStart(text: string): number {
-  const open = text.lastIndexOf(SEARCH_CALL_OPEN);
-  if (open !== -1) {
-    const after = text.slice(open + SEARCH_CALL_OPEN.length);
-    const lt = after.indexOf("<");
-    const query = lt === -1 ? after : after.slice(0, lt);
-    const closing = lt === -1 ? "" : after.slice(lt);
-    const stillCall = !query.includes("\n") && query.length <= MAX_QUERY_CHARS && closing.length < SEARCH_CALL_CLOSE.length && SEARCH_CALL_CLOSE.startsWith(closing);
-    if (stillCall) return open;
+export type CallTag = "search_query" | "read" | "tool_call";
+
+export interface AnswerCall {
+  tag: CallTag;
+  value: string;
+}
+
+const QUERY_MAX_CHARS = 200;
+const TOOL_CALL_MAX_CHARS = 4000;
+
+// A call is a single line between the tags. Anything else is the model talking about the tag, often in its reasoning.
+const CALL_VALUE: Record<CallTag, string> = {
+  search_query: `[^<\\n]{1,${QUERY_MAX_CHARS}}`,
+  read: `[^<\\n]{1,${QUERY_MAX_CHARS}}`,
+  // Tool arguments are JSON, whose strings may contain "<".
+  tool_call: `\\{[^\\n]{0,${TOOL_CALL_MAX_CHARS}}?\\}`,
+};
+
+function findCall(text: string, tags: CallTag[]): { index: number; call: AnswerCall } | null {
+  let first: { index: number; call: AnswerCall } | null = null;
+  for (const tag of tags) {
+    const match = new RegExp(`<${tag}>(${CALL_VALUE[tag]})</${tag}>`).exec(text);
+    if (match && (!first || match.index < first.index)) first = { index: match.index, call: { tag, value: match[1].trim() } };
   }
-  return text.length - trailingTagPrefixLen(text, SEARCH_CALL_OPEN);
+  return first;
 }
 
-// Takes the first search call out of the stream. The rest of that chunk is dropped, as the client cuts its text there;
+export function callIndex(text: string, tags: CallTag[]): number {
+  return findCall(text, tags)?.index ?? -1;
+}
+
+function isCallPrefix(after: string, tag: CallTag): boolean {
+  const close = `</${tag}>`;
+  const max = tag === "tool_call" ? TOOL_CALL_MAX_CHARS + 2 : QUERY_MAX_CHARS;
+  if (after.includes("\n") || after.includes(close) || after.length > max + close.length) return false;
+  if (tag === "tool_call") return after === "" || after.startsWith("{");
+  const lt = after.indexOf("<");
+  return lt === -1 || close.startsWith(after.slice(lt));
+}
+
+// Where the tail of the text could still turn into a call.
+function heldFrom(text: string, tag: CallTag): number {
+  const open = `<${tag}>`;
+  const at = text.lastIndexOf(open);
+  if (at !== -1 && isCallPrefix(text.slice(at + open.length), tag)) return at;
+  return text.length - trailingTagPrefixLen(text, open);
+}
+
+// Takes the first call out of the stream. The rest of that chunk is dropped, as the client cuts its text there;
 // what the client sends after the cut (a closing </reasoning>) passes through.
-export function createSearchCallFilter(emit: (token: string) => void, onCall: (query: string) => void) {
+export function createCallFilter(tags: CallTag[], emit: (token: string) => void, onCall: (call: AnswerCall) => void) {
   let pending = "";
   let called = false;
 
@@ -113,15 +149,15 @@ export function createSearchCallFilter(emit: (token: string) => void, onCall: (q
       return;
     }
     pending += token;
-    const match = SEARCH_CALL.exec(pending);
-    if (match) {
+    const found = findCall(pending, tags);
+    if (found) {
       called = true;
-      if (match.index > 0) emit(pending.slice(0, match.index));
+      if (found.index > 0) emit(pending.slice(0, found.index));
       pending = "";
-      onCall(match[1].trim());
+      onCall(found.call);
       return;
     }
-    const hold = partialCallStart(pending);
+    const hold = Math.min(...tags.map((tag) => heldFrom(pending, tag)));
     if (hold > 0) emit(pending.slice(0, hold));
     pending = pending.slice(hold);
   };

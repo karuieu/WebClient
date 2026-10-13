@@ -16,6 +16,7 @@ import {
   type MemoryFileForChat,
 } from "./memory";
 import { stripMemoryWriteBlocks } from "./memoryWrite";
+import { parseMessageBlocks } from "./messageBlocks";
 import { getCustomInstructionsContext } from "./customInstructions";
 import { getSkillsForChat } from "./skills";
 import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock } from "./streamTags";
@@ -528,12 +529,10 @@ async function streamTurn(
   const emitToken = titleFilter ? titleFilter.push : afterTitle;
 
   const turns: ChatTurn[] = [...history, { role: "user", content: storedContent }];
-  // The web-search decision phase ("whether and what to search") goes through a
-  // separate, cheap model chosen in Settings → Web Search, not `model` above.
   const reasoningEffort = resolveReasoningEffort(model);
 
   // E2E path: the browser composes and encrypts the request; the backend only proxies it. The only plaintext the backend sees here is the finished search query.
-  const { text: response, phaseBlocks, provider, inputTokens, outputTokens } = await streamE2EChat(
+  const { text: response, provider, inputTokens, outputTokens } = await streamE2EChat(
     {
       provider: requireProvider(model),
       model,
@@ -552,12 +551,12 @@ async function streamTurn(
   briefFilter?.flush();
 
   const cleanResponse = onTitle || onBrief ? stripTitleBlock(response) : response;
-  if (!cleanResponse.trim()) throw new Error("The model returned an empty response");
+  if (!parseMessageBlocks(cleanResponse).answer.trim()) throw new Error("The model returned an empty response");
 
   return {
     userContent: storedContent,
-    // Return exactly what was on screen, in order, or the Processing section vanishes when the streamed message is replaced by the saved one.
-    assistantContent: phaseBlocks + cleanResponse,
+    // Exactly what was on screen, in order, or the Processing section vanishes when the streamed message is replaced by the saved one.
+    assistantContent: cleanResponse,
     provider,
     inputTokens,
     outputTokens,
@@ -753,7 +752,7 @@ export async function retryMessage(
   const reasoningEffort = resolveReasoningEffort(model);
   const variantGroup = origVariantGroup || crypto.randomUUID();
 
-  const { text: response, phaseBlocks, provider, outputTokens } = await streamE2EChat(
+  const { text: response, provider, outputTokens } = await streamE2EChat(
     {
       provider: requireProvider(model),
       model,
@@ -775,7 +774,7 @@ export async function retryMessage(
     onToken
   );
 
-  if (!response.trim()) throw new Error("The model returned an empty response");
+  if (!parseMessageBlocks(response).answer.trim()) throw new Error("The model returned an empty response");
 
   if (!origVariantGroup) {
     await apiCall<void>(`/api/chats/${chatId}/messages/${origAssistantId}/variant`, {
@@ -785,12 +784,11 @@ export async function retryMessage(
   }
 
   // Return exactly what was saved: ChatWindow finds the new variant by matching m.content to retryResponse.
-  const stored = phaseBlocks + response;
   await appendMessages(chatId, key, [
-    { role: "assistant", content: stored, model, provider, variant_group: variantGroup, tokens: outputTokens },
+    { role: "assistant", content: response, model, provider, variant_group: variantGroup, tokens: outputTokens },
   ]);
 
-  return stored;
+  return response;
 }
 
 export interface BillingStatus {

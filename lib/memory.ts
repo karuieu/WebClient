@@ -1,6 +1,6 @@
 // Advanced Memory System: memory is organised into categories and files, all encrypted in the browser. The server holds ciphertext and cursors for processed chats. This module must not import ./chat (chat.ts imports it), so it has its own HTTP helpers.
 
-import { accountSettingKey, ensureAesKey } from "./session";
+import { accountSettingKey, ensureAesKey, getUser } from "./session";
 import { decryptField, encryptField, fieldAad, messageAad, type FieldKind } from "./crypto";
 import { parseMessageContent } from "./vision";
 import {
@@ -26,7 +26,7 @@ export interface MemorySettings {
   enabled: boolean;
   interval: number;
   auto: boolean;
-  // Mid-conversation writes: the helper saves explicit user requests straight away and leaves everything else as proposals for the organising pass.
+  // Mid-conversation writes: explicit user requests are saved straight away, everything else is left as a proposal for the organising pass.
   liveWrites: boolean;
 }
 
@@ -457,6 +457,18 @@ export function buildBatches(blocks: ChatBlock[], interval: number): ChatBlock[]
 
 let refreshRunning = false;
 
+async function withMemoryRefreshLock<T>(refresh: () => Promise<T>): Promise<T> {
+  const userId = getUser()?.id;
+  if (!userId) throw new Error("No active session. Please sign in again.");
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    throw new Error("Memory refresh requires a browser with Web Locks support.");
+  }
+  return navigator.locks.request(`karui-memory-refresh:${userId}`, async () => {
+    if (getUser()?.id !== userId) throw new Error("Your session changed while waiting to refresh memory.");
+    return refresh();
+  });
+}
+
 export function isMemoryRefreshRunning(): boolean {
   return refreshRunning;
 }
@@ -578,47 +590,50 @@ export async function refreshMemory(
   onProgress?: (progress: MemoryRefreshProgress) => void
 ): Promise<MemoryCategory[] | null> {
   if (refreshRunning) throw new Error("Memory refresh is already running");
-  const settings = getMemorySettings();
-  if (!settings.enabled) throw new Error("Memory is disabled");
+  if (!getMemorySettings().enabled) throw new Error("Memory is disabled");
 
   refreshRunning = true;
   try {
-    const key = await requireAesKey();
-    const pending = (await getPendingMemoryChats()).filter((p) => !p.project_id);
-    if (pending.length === 0) return null;
+    return await withMemoryRefreshLock(async () => {
+      const settings = getMemorySettings();
+      if (!settings.enabled) throw new Error("Memory is disabled");
+      const key = await requireAesKey();
+      const pending = (await getPendingMemoryChats()).filter((p) => !p.project_id);
+      if (pending.length === 0) return null;
 
-    const blocks = await chatBlocks(key, pending);
-    if (blocks.length === 0) return null;
+      const blocks = await chatBlocks(key, pending);
+      if (blocks.length === 0) return null;
 
-    const batches = buildBatches(blocks, settings.interval);
+      const batches = buildBatches(blocks, settings.interval);
 
-    const tree = await getMemoryTree();
-    for (let i = 0; i < batches.length; i++) {
-      onProgress?.({ batch: i + 1, totalBatches: batches.length });
-      const batch = batches[i];
+      const tree = await getMemoryTree();
+      for (let i = 0; i < batches.length; i++) {
+        onProgress?.({ batch: i + 1, totalBatches: batches.length });
+        const batch = batches[i];
 
-      // Runs in the enclave: transcripts and the memory tree must never reach the backend in plaintext.
-      const operations = await organizeMemoryE2E(
-        getProvider(),
-        tree.map((c) => ({
-          name: c.name,
-          files: c.files.map((f) => ({
-            fileId: f.id,
-            name: f.name,
-            description: f.description,
-            content: f.content,
+        // Runs in the enclave: transcripts and the memory tree must never reach the backend in plaintext.
+        const operations = await organizeMemoryE2E(
+          getProvider(),
+          tree.map((c) => ({
+            name: c.name,
+            files: c.files.map((f) => ({
+              fileId: f.id,
+              name: f.name,
+              description: f.description,
+              content: f.content,
+            })),
           })),
-        })),
-        buildTranscript(batch)
-      );
+          buildTranscript(batch)
+        );
 
-      for (const op of operations) {
-        await applyOperation(tree, op);
+        for (const op of operations) {
+          await applyOperation(tree, op);
+        }
+        await markProcessed(batch);
       }
-      await markProcessed(batch);
-    }
-    window.dispatchEvent(new CustomEvent("karui-memory-updated"));
-    return tree;
+      window.dispatchEvent(new CustomEvent("karui-memory-updated"));
+      return tree;
+    });
   } finally {
     refreshRunning = false;
   }
@@ -631,35 +646,37 @@ export async function refreshProjectMemory(
   if (refreshRunning) return;
   refreshRunning = true;
   try {
-    const project = await getProject(projectId);
-    if (!project.settings.memory) return;
-    const key = await requireAesKey();
-    const pending = (await getPendingMemoryChats()).filter((p) => p.project_id === projectId);
-    const blocks = await chatBlocks(key, pending);
-    if (blocks.length === 0) return;
+    await withMemoryRefreshLock(async () => {
+      const project = await getProject(projectId);
+      if (!project.settings.memory) return;
+      const key = await requireAesKey();
+      const pending = (await getPendingMemoryChats()).filter((p) => p.project_id === projectId);
+      const blocks = await chatBlocks(key, pending);
+      if (blocks.length === 0) return;
 
-    const files = await listProjectMemory(projectId);
-    for (const batch of buildBatches(blocks, getMemorySettings().interval)) {
-      const { operations, briefs } = await organizeProjectMemoryE2E(
-        getProvider(),
-        { name: project.name, goal: project.goal },
-        files.map((f) => ({ fileId: f.id, name: f.name, description: f.description, content: f.content })),
-        buildTranscript(batch, true),
-        batch.map((b) => b.chatId)
-      );
-      for (const op of operations) {
-        if (op.action === "create_file" && op.file_name?.trim()) {
-          files.push(await createProjectMemoryFile(projectId, op.file_name.trim(), op.description, op.content));
-        } else if (op.action === "update_file") {
-          const file = files.find((f) => f.id === op.file_id);
-          if (!file) continue;
-          Object.assign(file, await updateProjectMemoryFile(projectId, file.id, op.file_name?.trim() || file.name, op.description, op.content, file.updated_at));
+      const files = await listProjectMemory(projectId);
+      for (const batch of buildBatches(blocks, getMemorySettings().interval)) {
+        const { operations, briefs } = await organizeProjectMemoryE2E(
+          getProvider(),
+          { name: project.name, goal: project.goal },
+          files.map((f) => ({ fileId: f.id, name: f.name, description: f.description, content: f.content })),
+          buildTranscript(batch, true),
+          batch.map((b) => b.chatId)
+        );
+        for (const op of operations) {
+          if (op.action === "create_file" && op.file_name?.trim()) {
+            files.push(await createProjectMemoryFile(projectId, op.file_name.trim(), op.description, op.content));
+          } else if (op.action === "update_file") {
+            const file = files.find((f) => f.id === op.file_id);
+            if (!file) continue;
+            Object.assign(file, await updateProjectMemoryFile(projectId, file.id, op.file_name?.trim() || file.name, op.description, op.content, file.updated_at));
+          }
         }
+        for (const [chatId, brief] of briefs) await setBrief(chatId, brief).catch(() => {});
+        await markProcessed(batch);
       }
-      for (const [chatId, brief] of briefs) await setBrief(chatId, brief).catch(() => {});
-      await markProcessed(batch);
-    }
-    window.dispatchEvent(new CustomEvent("karui-reload-chats"));
+      window.dispatchEvent(new CustomEvent("karui-reload-chats"));
+    });
   } finally {
     refreshRunning = false;
   }

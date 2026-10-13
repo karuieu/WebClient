@@ -221,18 +221,14 @@ export async function nearAICompletion(opts: {
   phase?: "compression";
   /** Tells our proxy not to discount the base prompt this call doesn't carry. */
   withoutBasePrompt?: boolean;
-  maxTokens?: number;
-  allowMessage?: boolean;
-  allowFollowUp?: boolean;
 }): Promise<ToolResponse> {
   const c = await verifiedClient(opts.providerModelID);
   const tools = opts.tools ?? [];
 
   const request = {
     model: opts.providerModelID,
-    messages: tools.length > 0 ? withToolInstructions(opts.turns, tools, opts.allowMessage, opts.allowFollowUp) : opts.turns,
+    messages: tools.length > 0 ? withToolInstructions(opts.turns, tools) : opts.turns,
     ...(opts.reasoningParams ?? {}),
-    ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
     ...(tools.length > 0 ? { response_format: { type: "json_object" } } : {}),
   };
   const headers = {
@@ -246,5 +242,5 @@ export async function nearAICompletion(opts: {
 
   const content = response.choices?.[0]?.message?.content ?? "";
   if (tools.length === 0) return { content, toolCalls: [] };
-  return parseToolResponse(content, tools, opts.allowMessage, opts.allowFollowUp);
+  return parseToolResponse(content, tools);
 }
