@@ -141,7 +141,6 @@ export async function streamNearAIChat(
   let outputTokens = 0;
   let inReasoning = false;
   let loopStopped = false;
-  let stopped = false;
   const loopCut = createLoopGuard();
 
   try {
@@ -191,8 +190,9 @@ export async function streamNearAIChat(
     }
   } catch (error) {
     if (!opts.signal?.aborted) throw error;
-    stopped = true;
   }
+  // The OpenAI SDK under NEAR's ends the stream quietly on abort instead of throwing, so Stop is read from the signal.
+  const stopped = opts.signal?.aborted === true;
 
   if (inReasoning) {
     text += "</reasoning>";

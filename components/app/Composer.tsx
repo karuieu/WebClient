@@ -366,8 +366,10 @@ export function Composer({
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {model && <ModelPicker {...model} />}
+          {/* Separate keys: a reused <button> turns type="submit" mid-click on Stop and sends the restored draft. */}
           {sending && onStop ? (
             <button
+              key="stop"
               type="button"
               onClick={onStop}
               aria-label="Stop"
@@ -377,6 +379,7 @@ export function Composer({
             </button>
           ) : (
             <button
+              key="send"
               type="submit"
               disabled={!canSend && !sending}
               aria-label={sending ? "Sending" : "Send message"}
