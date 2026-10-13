@@ -425,6 +425,14 @@ export function ChatView({
         <ChatHeader title={title} starred={starred} enclave={enclave} actions={chatActions} project={project} />
 
         <div ref={contentRef} className="mx-auto flex w-full max-w-[46rem] flex-1 flex-col gap-10 px-4 pb-10 pt-6 sm:px-6">
+          {!loading && messages.length === 0 && (
+            <Enter delay={150} blur={false}>
+              <div className="m-auto text-center">
+                <p className="text-[15px] font-medium tracking-[-0.01em]">Nothing here yet.</p>
+                <p className="mt-1.5 text-[14px] text-muted">Write to Karui whenever you&apos;re ready.</p>
+              </div>
+            </Enter>
+          )}
           {messages.map((m) => {
             const enter = !history?.has(m.id);
             const node =
