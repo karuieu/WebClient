@@ -68,7 +68,7 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
           <StepLabel live={live}>Searched the web</StepLabel>
           <div className="pl-3.5">
             <p className="font-mono text-[12.5px] text-fg">“{step.query}”</p>
-            {step.sources.length > 0 && (
+            {step.sources.length > 0 ? (
               <ul className="mt-2.5 flex flex-col gap-1">
                 {step.sources.map((s) => (
                   <li key={s.url}>
@@ -86,6 +86,8 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
                   </li>
                 ))}
               </ul>
+            ) : (
+              <p className="mt-2.5 text-[13.5px] text-muted">No results found.</p>
             )}
           </div>
         </div>

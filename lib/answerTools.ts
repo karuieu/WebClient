@@ -324,9 +324,9 @@ async function runSearchCall(query: string, round: AnswerRound, ctx: AnswerCallC
     round.searchesLeft = 0;
     return "Web search isn't available right now.";
   }
+  ctx.emit(`<search>${blockJSON({ query, results: results.map((r) => ({ title: r.title, url: r.url })) })}</search>`);
   if (results.length === 0) return `No web results for ${JSON.stringify(query)}.`;
   round.untrusted = true;
-  ctx.emit(`<search>${blockJSON({ query, results: results.map((r) => ({ title: r.title, url: r.url })) })}</search>`);
   const items = results
     .map((r, i) => `<result index="${i + 1}">\n  <title>${r.title}</title>\n  <url>${r.url}</url>\n  <description>${r.description}</description>\n</result>`)
     .join("\n");
