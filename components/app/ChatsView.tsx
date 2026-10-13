@@ -312,7 +312,7 @@ export function ChatsView({ chats, total, loading, query, onQueryChange, hasMore
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.closest?.("input, textarea, [contenteditable]");
-      if (e.key === "/" && !typing) {
+      if (e.key === "/" && !typing && searchRef.current) {
         e.preventDefault();
         searchRef.current?.focus();
       }
@@ -349,7 +349,7 @@ export function ChatsView({ chats, total, loading, query, onQueryChange, hasMore
   const allSelected = chats.length > 0 && picked.length === chats.length;
 
   return (
-    <div className="mx-auto w-full max-w-[48rem] px-4 pb-40 pt-16 sm:px-6 md:pt-20">
+    <div className="mx-auto w-full max-w-[60rem] px-4 pb-40 pt-16 sm:px-6 md:pt-20">
       <Enter>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
@@ -368,28 +368,27 @@ export function ChatsView({ chats, total, loading, query, onQueryChange, hasMore
         </div>
       </Enter>
 
-      <Enter delay={60}>
-        <div className="mt-10 flex items-center gap-2">
-          <SearchField ref={searchRef} value={query} onChange={onQueryChange} placeholder="Search your chats" label="Search chats" shortcut="/" />
-          <button
-            type="button"
-            onClick={() => (selecting ? exitSelect() : setSelecting(true))}
-            aria-pressed={selecting}
-            disabled={!chats.length}
-            className={cx(
-              "h-11 shrink-0 cursor-pointer rounded-full px-4 text-[14px] font-medium tracking-[-0.01em] transition-[background-color,color] duration-150 disabled:cursor-default disabled:opacity-40",
-              selecting ? "bg-surface-2 text-fg" : "text-muted hover:bg-surface hover:text-fg",
-            )}
-          >
-            {selecting ? "Done" : "Select"}
-          </button>
-        </div>
-      </Enter>
-      <Enter delay={90}>
-        <p className="mt-2.5 pl-4 font-mono text-[11px] text-muted">Titles are searched on this device. Nothing leaves your browser.</p>
-      </Enter>
+      {(total > 0 || query) && (
+        <Enter delay={60}>
+          <div className="mt-10 flex items-center gap-2">
+            <SearchField ref={searchRef} value={query} onChange={onQueryChange} placeholder="Search your chats" label="Search chats" shortcut="/" />
+            <button
+              type="button"
+              onClick={() => (selecting ? exitSelect() : setSelecting(true))}
+              aria-pressed={selecting}
+              disabled={!chats.length}
+              className={cx(
+                "h-11 shrink-0 cursor-pointer rounded-full px-4 text-[14px] font-medium tracking-[-0.01em] transition-[background-color,color] duration-150 disabled:cursor-default disabled:opacity-40",
+                selecting ? "bg-surface-2 text-fg" : "text-muted hover:bg-surface hover:text-fg",
+              )}
+            >
+              {selecting ? "Done" : "Select"}
+            </button>
+          </div>
+        </Enter>
+      )}
 
-      <div className="mt-10">
+      <div className={!loading && total === 0 && !query ? "mt-8" : "mt-10"}>
         {loading ? (
           <ul aria-label="Loading chats" className="flex flex-col gap-1">
             {[62, 78, 54, 70, 66].map((w, i) => (
@@ -409,7 +408,7 @@ export function ChatsView({ chats, total, loading, query, onQueryChange, hasMore
             ) : (
               <>
                 <p className="text-[15px] font-medium tracking-[-0.01em]">No chats yet.</p>
-                <p className="mt-1.5 text-[14px] text-muted">Your conversations will live here, encrypted.</p>
+                <p className="mt-1.5 text-[14px] text-muted">Your chats will live here, encrypted.</p>
               </>
             )}
           </div>

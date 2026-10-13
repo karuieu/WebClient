@@ -119,9 +119,6 @@ export function ProjectsView({ projects, loading, query, onQueryChange, onNew, a
           <div className="max-w-[34rem]">
             <Label>Library</Label>
             <h1 className="text-title mt-4">Projects</h1>
-            <p className="mt-4 text-pretty text-[1.0625rem] leading-relaxed text-muted">
-              Group chats around one goal, with the files and memory they all share.
-            </p>
           </div>
           <Button onClick={onNew} className="mb-1.5">
             <Plus className="size-4" />
@@ -132,8 +129,8 @@ export function ProjectsView({ projects, loading, query, onQueryChange, onNew, a
 
       {(projects.length > 0 || query) && (
         <Enter delay={60}>
-          <div className="mt-10 max-w-[30rem]">
-            <SearchField ref={searchRef} value={query} onChange={onQueryChange} placeholder="Search projects" label="Search projects" shortcut="/" />
+          <div className="mt-10">
+            <SearchField ref={searchRef} value={query} onChange={onQueryChange} placeholder="Search your projects" label="Search projects" shortcut="/" />
           </div>
         </Enter>
       )}
@@ -157,13 +154,9 @@ export function ProjectsView({ projects, loading, query, onQueryChange, onNew, a
               ) : (
                 <>
                   <p className="text-[15px] font-medium tracking-[-0.01em]">No projects yet.</p>
-                  <p className="mx-auto mt-1.5 max-w-[26rem] text-pretty text-[14px] leading-relaxed text-muted">
-                    Start one for your thesis, a move, a side project — anything you come back to.
+                  <p className="mt-1.5 text-[14px] text-muted">
+                    Your projects will live here, encrypted.
                   </p>
-                  <Button variant="secondary" onClick={onNew} className="mt-6">
-                    <Plus className="size-4" />
-                    New project
-                  </Button>
                 </>
               )}
             </div>
