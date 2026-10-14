@@ -327,6 +327,7 @@ const LIBRARY_WHOLE_SHARE = 0.25;
 const LIBRARY_PROMPT_SHARE = 0.4;
 const SKILLS_PROMPT_SHARE = 0.25;
 const MEMORY_NOTE_MAX_CHARS = 1000;
+const MAX_ANSWER_ROUNDS = 6;
 
 interface AnswerTurn {
   model: HelperModel;
@@ -445,8 +446,9 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
   const ctx: AnswerCallContext = { ...turn.call, emit };
 
   try {
-    for (;;) {
+    for (let request = 0; request < MAX_ANSWER_ROUNDS; request++) {
       throwIfStopped(opts.signal);
+      round.finalAnswer = request === MAX_ANSWER_ROUNDS - 1;
       const found: { call?: AnswerCall } = {};
       pendingText = "";
       const forward = (token: string) => {

@@ -191,6 +191,7 @@ export interface AnswerRound {
   // Web results or tool output are in the context: from then on every connector call asks first.
   untrusted: boolean;
   titleWritten: boolean;
+  finalAnswer: boolean;
 }
 
 export interface AnswerCallContext {
@@ -212,6 +213,7 @@ export function startAnswerRound(webSearch: boolean): AnswerRound {
     searchesLeft: webSearch ? MAX_ANSWER_SEARCHES : 0,
     untrusted: false,
     titleWritten: false,
+    finalAnswer: false,
   };
 }
 
@@ -219,6 +221,7 @@ const canRead = (round: AnswerRound, ctx: Pick<AnswerCallContext, "aliases">) =>
 const canCallTools = (round: AnswerRound, ctx: Pick<AnswerCallContext, "connectorTools">) => ctx.connectorTools.size > 0 && round.toolCalls < MAX_CONNECTOR_CALLS;
 
 export function callTags(round: AnswerRound, ctx: Pick<AnswerCallContext, "aliases" | "connectorTools">): CallTag[] {
+  if (round.finalAnswer) return [];
   const tags: CallTag[] = [];
   if (round.searchesLeft > 0) tags.push("search_query");
   if (canRead(round, ctx)) tags.push("read");
@@ -255,6 +258,12 @@ function contextStatus(round: AnswerRound, ctx: Pick<AnswerCallContext, "aliases
 
 // Changes with every round, so it sits at the end of the prompt.
 export function answerStatusBlock(round: AnswerRound, ctx: Pick<AnswerCallContext, "aliases" | "connectorTools">, webSearch: boolean): string {
+  if (round.finalAnswer) {
+    return contextStatus(round, ctx) +
+      "\n\n<final_answer>This is the final response round for this user message. No further searches, context reads or connector calls are available, regardless of the earlier tool instructions. " +
+      "Write the final answer now using the context and results already available. Do not write <search_query>, <read> or <tool_call> calls. " +
+      "If information is missing or the task is incomplete, state that plainly; do not invent results or claim actions you did not perform.</final_answer>";
+  }
   return (webSearch ? searchStatus(round) : "") + contextStatus(round, ctx);
 }
 
