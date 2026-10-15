@@ -82,7 +82,7 @@ function usePeek() {
   };
 }
 
-export function AppShell({ sidebar, children }: { sidebar: SidebarProps; children: React.ReactNode }) {
+export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps; banner?: React.ReactNode; children: React.ReactNode }) {
   const reduce = useReducedMotion();
   const router = useRouter();
   const [hidden, setHidden] = React.useState(false);
@@ -271,9 +271,12 @@ export function AppShell({ sidebar, children }: { sidebar: SidebarProps; childre
           </Tooltip>
         </header>
 
-        <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges]">
-          <ShellContext.Provider value={{ sidebarHidden: hidden }}>{children}</ShellContext.Provider>
-        </main>
+        <ShellContext.Provider value={{ sidebarHidden: hidden }}>
+          {banner}
+          <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges]">
+            {children}
+          </main>
+        </ShellContext.Provider>
       </div>
     </div>
   );

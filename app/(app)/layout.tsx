@@ -7,6 +7,8 @@ import { useToast } from "@/components/Toast";
 import { isOnboardingPending } from "@/lib/session";
 import { logout } from "@/lib/auth";
 import { settingsHref } from "@/lib/settingsOverlay";
+import { useAnnouncement } from "@/lib/announcement";
+import { AnnouncementBanner } from "@/components/app/AnnouncementBanner";
 import { AppShell } from "@/components/app/AppShell";
 import { LibraryContext, useLibrary } from "@/components/wired/useLibrary";
 import { SettingsOverlay } from "@/components/wired/Settings";
@@ -21,12 +23,14 @@ function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useSession();
   const library = useLibrary();
+  const { announcement, open: announcementOpen, dismiss: dismissAnnouncement } = useAnnouncement();
   const [searchOpen, setSearchOpen] = useState(false);
   const isFree = (user?.tier ?? "free") === "free";
 
   return (
     <>
       <AppShell
+        banner={announcement && <AnnouncementBanner announcement={announcement} open={announcementOpen} onDismiss={dismissAnnouncement} />}
         sidebar={{
           chats: library.chats,
           starredProjects: library.starredProjects,
