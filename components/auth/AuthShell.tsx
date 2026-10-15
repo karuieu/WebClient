@@ -1,9 +1,17 @@
 import Link from "next/link";
+import { CipherField } from "@/components/kit/CipherField";
 import { Cross } from "@/components/kit/Frame";
+import { SiteFooter } from "@/components/kit/SiteFooter";
 import { Logo } from "@/components/kit/Logo";
 import { ThemeToggle } from "@/components/kit/ThemeToggle";
+import { cx } from "@/lib/cx";
 
-export function AuthShell({ children }: { children: React.ReactNode }) {
+/**
+ * `form` is the narrow column for sign-in screens. `system` is the wide, centred
+ * page for 404s: ciphertext backdrop and the full site footer.
+ */
+export function AuthShell({ children, variant = "form" }: { children: React.ReactNode; variant?: "form" | "system" }) {
+  const system = variant === "system";
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
       <a
@@ -29,25 +37,34 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         >
           <Cross className="-left-[6px] -top-[6px]" />
           <Cross className="-right-[6px] -top-[6px]" />
-          <div className="w-full max-w-[26rem]">{children}</div>
+          {system && (
+            <CipherField className="absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black_80%)]" />
+          )}
+          <div className={cx("w-full", system ? "relative max-w-3xl" : "max-w-[26rem]")}>{children}</div>
         </main>
       </div>
 
-      <footer className="px-4 sm:px-6">
-        <div className="relative mx-auto flex h-14 w-full max-w-[1240px] items-center justify-between gap-4 border-x border-t border-line px-5 md:px-10">
-          <Cross className="-left-[6px] -top-[6px]" />
-          <Cross className="-right-[6px] -top-[6px]" />
-          <p className="text-label text-muted">© {new Date().getFullYear()} Karui</p>
-          <nav aria-label="Legal" className="flex items-center gap-5">
-            <Link href="/terms" className="text-label text-muted transition-colors duration-150 hover:text-fg">
-              Terms
-            </Link>
-            <Link href="/privacy" className="text-label text-muted transition-colors duration-150 hover:text-fg">
-              Privacy
-            </Link>
-          </nav>
+      {system ? (
+        <div>
+          <SiteFooter />
         </div>
-      </footer>
+      ) : (
+        <footer className="px-4 sm:px-6">
+          <div className="relative mx-auto flex h-14 w-full max-w-[1240px] items-center justify-between gap-4 border-x border-t border-line px-5 md:px-10">
+            <Cross className="-left-[6px] -top-[6px]" />
+            <Cross className="-right-[6px] -top-[6px]" />
+            <p className="text-label text-muted">© {new Date().getFullYear()} Karui</p>
+            <nav aria-label="Legal" className="flex items-center gap-5">
+              <Link href="/terms" className="text-label text-muted transition-colors duration-150 hover:text-fg">
+                Terms
+              </Link>
+              <Link href="/privacy" className="text-label text-muted transition-colors duration-150 hover:text-fg">
+                Privacy
+              </Link>
+            </nav>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

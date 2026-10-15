@@ -24,7 +24,7 @@ export function CheckEmailView({
   return (
     <div>
       <Rise>
-        <Label index="03">Verify email</Label>
+        <Label>Verify email</Label>
       </Rise>
       <Rise delay={0.06}>
         <h1 className="text-title mt-6 text-balance">Check your inbox.</h1>

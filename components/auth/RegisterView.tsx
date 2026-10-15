@@ -37,7 +37,7 @@ export function RegisterView({
   return (
     <div>
       <Rise>
-        <Label index="02">Create account</Label>
+        <Label>Create account</Label>
       </Rise>
       <Rise delay={0.06}>
         <h1 className="text-title mt-6 text-balance">Private from the first message.</h1>

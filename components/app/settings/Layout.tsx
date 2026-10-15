@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Lock } from "@/components/kit/icons";
 import { cx } from "@/lib/cx";
 
 export function Group({
@@ -64,15 +63,6 @@ export function Row({
   );
 }
 
-export function Encrypted({ children = "Encrypted in your browser" }: { children?: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted">
-      <Lock className="size-3" />
-      {children}
-    </span>
-  );
-}
-
 export function SectionIntro({ children }: { children: React.ReactNode }) {
-  return <p className="mb-8 max-w-[34rem] text-pretty text-[14px] leading-relaxed text-muted">{children}</p>;
+  return <p className="mt-8 max-w-[34rem] text-pretty text-[14px] leading-relaxed text-muted">{children}</p>;
 }

@@ -84,10 +84,6 @@ function UsageCard({ plan, window: w, loading }: { plan: "free" | "pro"; window:
 export function UsageSettings({ plan, window: w, week, loading, onUpgrade }: UsageSettingsProps) {
   return (
     <>
-      <SectionIntro>
-        Usage is counted in tokens over a rolling window. When the window resets, you start fresh. Nothing about what you wrote is counted, only how much. Tokens count at what they cost to run: a Light answer counts token for token, reading your conversation counts less, and Heavy counts about nine times more.
-      </SectionIntro>
-
       <div className="flex flex-col gap-3">
         <UsageCard plan={plan} window={w} loading={loading} />
         {week && <UsageCard plan={plan} window={week} loading={loading} />}
@@ -97,7 +93,7 @@ export function UsageSettings({ plan, window: w, week, loading, onUpgrade }: Usa
         <Group className="mt-6">
           <Row
             label="Need more room?"
-            description="Pro has a much larger allowance, resetting every 5 hours, plus Heavy and more models."
+            description="Pro has a much larger allowance, plus Heavy and more models."
             control={
               <button
                 type="button"
@@ -111,6 +107,10 @@ export function UsageSettings({ plan, window: w, week, loading, onUpgrade }: Usa
           />
         </Group>
       )}
+
+      <SectionIntro>
+        Usage is counted in tokens and resets with each window. Only how much is counted, never what you wrote. Light counts token for token, Heavy about nine times more.
+      </SectionIntro>
     </>
   );
 }

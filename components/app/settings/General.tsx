@@ -7,7 +7,7 @@ import { ArrowUpRight } from "@/components/kit/icons";
 import { Segmented } from "@/components/kit/Segmented";
 import { useTheme, type ThemePreference } from "@/lib/theme";
 import { cx } from "@/lib/cx";
-import { Encrypted, Group, Row } from "./Layout";
+import { Group, Row } from "./Layout";
 
 export type GeneralSettingsProps = {
   displayName: string;
@@ -49,7 +49,7 @@ export function GeneralSettings(p: GeneralSettingsProps) {
 
   return (
     <>
-      <Group title="Profile" footer="Karui uses your name to greet you. It's stored with your account.">
+      <Group title="Profile" footer="Karui uses your name to greet you.">
         <Row label="Name" htmlFor="settings-name">
           <input
             id="settings-name"
@@ -61,7 +61,7 @@ export function GeneralSettings(p: GeneralSettingsProps) {
             className={inputClass()}
           />
         </Row>
-        <Row label="Full name" description="Optional. Only used where a full name makes sense." htmlFor="settings-full-name">
+        <Row label="Full name" description="Optional." htmlFor="settings-full-name">
           <input
             id="settings-full-name"
             data-focus="within"
@@ -87,7 +87,6 @@ export function GeneralSettings(p: GeneralSettingsProps) {
       <Group title="Appearance">
         <Row
           label="Theme"
-          description="Follow your device, or pick one."
           control={
             <Segmented
               id="settings-theme"
@@ -105,10 +104,10 @@ export function GeneralSettings(p: GeneralSettingsProps) {
         />
       </Group>
 
-      <Group title="Custom instructions" footer={<Encrypted />}>
+      <Group title="Custom instructions">
         <Row
           label="How should Karui respond?"
-          description="Applies to every chat. Tone, format, things it should know about you."
+          description="Applies to every chat."
         >
           <label htmlFor="settings-instructions" className="sr-only">
             Custom instructions
@@ -140,7 +139,6 @@ export function GeneralSettings(p: GeneralSettingsProps) {
       <Group title="Chats">
         <Row
           label="Chat titles"
-          description="Let the model name each chat, or use your first message."
           control={
             <Segmented
               id="settings-titles"
@@ -157,12 +155,12 @@ export function GeneralSettings(p: GeneralSettingsProps) {
         />
         <Row
           label="Documents"
-          description="Let answers include standalone documents you can open, print and download."
+          description="Standalone documents you can open, print and download."
           control={<Switch checked={p.artifacts} onChange={p.onArtifacts} label="Documents in answers" />}
         />
         <Row
           label="Names in the tab"
-          description="Show the chat or project name in the browser tab. Your browser keeps tab titles in its history, unencrypted, and may sync them."
+          description="Show the name in the browser tab. Browsers keep tab titles in history, unencrypted, and may sync them."
           control={<Switch checked={p.tabNames} onChange={p.onTabNames} label="Names in the browser tab" />}
         />
       </Group>

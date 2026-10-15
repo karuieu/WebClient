@@ -19,6 +19,7 @@ const columns = [
     links: [
       { label: "Contact", href: "mailto:admin@karui.eu" },
       { label: "Security policy", href: "/security" },
+      { label: "Status", href: "https://status.karui.eu/", external: true },
     ],
   },
   {
@@ -45,7 +46,11 @@ export function SiteFooter() {
             <ul className="mt-5 space-y-3">
               {col.links.map((l) => (
                 <li key={l.label}>
-                  <a href={l.href} className="text-[0.9375rem] transition-colors hover:text-muted">
+                  <a
+                    href={l.href}
+                    {...("external" in l && { target: "_blank", rel: "noopener noreferrer" })}
+                    className="text-[0.9375rem] transition-colors hover:text-muted"
+                  >
                     {l.label}
                   </a>
                 </li>
@@ -55,14 +60,8 @@ export function SiteFooter() {
         ))}
       </div>
       <div className="flex flex-col gap-4 border-t border-line px-5 py-6 font-mono text-[11px] text-muted sm:flex-row sm:items-center sm:justify-between md:px-10">
-        <p>© 2026 Karui · Antoni Krzykowski · Poznań, Poland</p>
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-ok" aria-hidden="true" />
-            All enclaves attested
-          </span>
-          <ThemeToggle />
-        </div>
+        <p>© 2026 Karui · Antoni Krzykowski · All rights reserved</p>
+        <ThemeToggle />
       </div>
     </footer>
   );

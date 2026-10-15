@@ -84,7 +84,7 @@ export function OnboardingShell({
               exit={{ opacity: 0, x: -offset, transition: { duration: 0.18 } }}
               transition={{ type: "spring", bounce: 0, duration: 0.45 }}
             >
-              <Label index={String(step).padStart(2, "0")}>{label}</Label>
+              <Label>{label}</Label>
               <h1 className="text-title mt-6 text-balance">{title}</h1>
               {lead && <p className="mt-4 text-pretty text-[1.0625rem] leading-relaxed text-muted">{lead}</p>}
               <div className="mt-10">{children}</div>

@@ -37,7 +37,7 @@ export function LoginView({
   return (
     <div>
       <Rise>
-        <Label index="01">Sign in</Label>
+        <Label>Sign in</Label>
       </Rise>
       <Rise delay={0.06}>
         <h1 className="text-title mt-6 text-balance">Welcome back.</h1>

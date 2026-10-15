@@ -8,7 +8,7 @@ import { ChevronDown, Ellipsis, FileText, Folder, Lock, Pencil, Plus, Trash } fr
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Spinner } from "@/components/kit/Spinner";
 import { cx } from "@/lib/cx";
-import { Encrypted, Group, Row, SectionIntro } from "./Layout";
+import { Group, Row, SectionIntro } from "./Layout";
 
 export type MemoryPrefs = { enabled: boolean; interval: number; auto: boolean; liveWrites: boolean };
 /** `undecryptable`: saved in a form this device can't open (usually an older format); the text fields are empty. */
@@ -322,11 +322,7 @@ export function MemorySettings({ prefs, onPrefs, pending, refreshing, onRefresh,
   const off = !prefs.enabled;
   return (
     <>
-      <SectionIntro>
-        Memory lets Karui carry what matters from one chat to the next. A helper model running in the enclave sorts it into categories and files.
-      </SectionIntro>
-
-      <Group footer={<Encrypted>Memory is encrypted in your browser, like your chats</Encrypted>}>
+      <Group>
         <Row
           label="Use memory"
           description="Chats can read from memory and suggest what to add."
@@ -334,7 +330,7 @@ export function MemorySettings({ prefs, onPrefs, pending, refreshing, onRefresh,
         />
         <Row
           label="Your memory"
-          description="Read and edit everything Karui keeps, under Customize."
+          description="Read and edit it under Customize."
           control={
             <Button variant="secondary" onClick={onOpenFiles}>
               Open
@@ -379,6 +375,10 @@ export function MemorySettings({ prefs, onPrefs, pending, refreshing, onRefresh,
           />
         </Group>
       </div>
+
+      <SectionIntro>
+        Memory lets Karui carry what matters from one chat to the next, sorted into categories and files.
+      </SectionIntro>
     </>
   );
 }
@@ -387,10 +387,6 @@ export function MemorySettings({ prefs, onPrefs, pending, refreshing, onRefresh,
 export function MemoryFiles({ categories, actions, off, onTurnOn }: MemoryFilesProps) {
   return (
     <>
-      <SectionIntro>
-        What Karui remembers from your chats, sorted into categories and files. Change or delete anything; your next message already uses the new version. Chats in a project keep their own memory inside the project.
-      </SectionIntro>
-
       {off && (
         <div className="mb-9">
           <Group>
@@ -407,7 +403,7 @@ export function MemoryFiles({ categories, actions, off, onTurnOn }: MemoryFilesP
         </div>
       )}
 
-      <Group footer={<Encrypted>Memory is encrypted in your browser, like your chats</Encrypted>}>
+      <Group>
         {categories === null ? (
           <div className="flex flex-col gap-3 px-4 py-4" aria-label="Loading memory">
             {[40, 55, 35].map((w, i) => (
@@ -428,6 +424,10 @@ export function MemoryFiles({ categories, actions, off, onTurnOn }: MemoryFilesP
           </>
         )}
       </Group>
+
+      <SectionIntro>
+        What Karui remembers, sorted into categories and files. Change or delete anything; your next message uses the new version. Chats in a project keep their own memory.
+      </SectionIntro>
     </>
   );
 }

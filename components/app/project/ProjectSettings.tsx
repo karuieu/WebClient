@@ -8,7 +8,7 @@ import { Segmented } from "@/components/kit/Segmented";
 import { cx } from "@/lib/cx";
 import { Tile } from "../settings/ConnectorParts";
 import { ConnectorsLocked } from "../settings/Connectors";
-import { Encrypted, Group, Row, SectionIntro } from "../settings/Layout";
+import { Group, Row, SectionIntro } from "../settings/Layout";
 import { SettingsFrame, type FrameTab } from "../settings/SettingsFrame";
 import { UsageMeter, formatBytes, type LibraryUsage } from "./Library";
 
@@ -80,7 +80,7 @@ function General(p: ProjectSettingsProps) {
 
   return (
     <>
-      <Group footer={<Encrypted>Name, goal and everything in the Library are encrypted in your browser</Encrypted>}>
+      <Group>
         <Row label="Name" htmlFor="project-settings-name">
           <input
             id="project-settings-name"
@@ -153,10 +153,6 @@ function Memory({ memory: m }: ProjectSettingsProps) {
 
   return (
     <>
-      <SectionIntro>
-        This project keeps its own memory, apart from the rest of Karui. Chats here read it and add what&apos;s worth keeping. You&apos;ll find it in the Library, in the Memory folder.
-      </SectionIntro>
-
       <Group>
         <Row
           label="Project memory"
@@ -192,6 +188,10 @@ function Memory({ memory: m }: ProjectSettingsProps) {
           />
         )}
       </Group>
+
+      <SectionIntro>
+        This project keeps its own memory, apart from the rest of Karui. Chats here read it and add what&apos;s worth keeping. You&apos;ll find it in the Library, in the Memory folder.
+      </SectionIntro>
     </>
   );
 }
@@ -212,7 +212,6 @@ function Connectors({ connectors: c }: ProjectSettingsProps) {
     );
   return (
     <>
-      <SectionIntro>Pick the connectors chats in this project can use. They start switched off, so a project only reaches what you allow.</SectionIntro>
       <Group footer="Your connectors live on this device. On another one, this project only sees the connectors added there.">
         {c.items.map((it) => {
           const on = c.enabled.includes(it.id);
@@ -228,6 +227,9 @@ function Connectors({ connectors: c }: ProjectSettingsProps) {
           );
         })}
       </Group>
+
+
+      <SectionIntro>Pick the connectors chats in this project can use. They start switched off, so a project only reaches what you allow.</SectionIntro>
     </>
   );
 }
@@ -247,7 +249,6 @@ function Skills({ skills: s }: ProjectSettingsProps) {
     );
   return (
     <>
-      <SectionIntro>Pick the skills chats in this project can use. They start switched off, so a project only follows what you choose.</SectionIntro>
       <Group footer="A skill switched off in Settings stays off here too.">
         {s.items.map((it) => (
           <div key={it.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
@@ -259,6 +260,9 @@ function Skills({ skills: s }: ProjectSettingsProps) {
           </div>
         ))}
       </Group>
+
+
+      <SectionIntro>Pick the skills chats in this project can use. They start switched off, so a project only follows what you choose.</SectionIntro>
     </>
   );
 }

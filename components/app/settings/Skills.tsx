@@ -6,7 +6,7 @@ import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
 import { Plus, Trash } from "@/components/kit/icons";
 import { cx } from "@/lib/cx";
-import { Encrypted, Group, SectionIntro } from "./Layout";
+import { Group, SectionIntro } from "./Layout";
 
 export type SkillItem = { id: string; name: string; description: string; content: string; enabled: boolean };
 export type SkillFields = Pick<SkillItem, "name" | "description" | "content">;
@@ -203,10 +203,6 @@ export function SkillsSettings({ skills, limits, onCreate, onUpdate, onToggle, o
 
   return (
     <>
-      <SectionIntro>
-        Skills teach Karui how you like a kind of task done: a weekly update in your format, the points to check in a contract. Before each reply Karui looks at their names and when to use them, and reads the instructions only when your message calls for them. Chats in a project use only the skills picked in its settings.
-      </SectionIntro>
-
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-label px-1 text-fg/80">Your skills</h3>
         <div className="flex gap-2">
@@ -221,12 +217,7 @@ export function SkillsSettings({ skills, limits, onCreate, onUpdate, onToggle, o
       </div>
 
       <Group
-        footer={
-          <>
-            {atLimit && <p className="mb-1.5">You have {limits.skills} skills, the most you can keep. Delete one to add another.</p>}
-            <Encrypted>Skills are encrypted in your browser, like your chats</Encrypted>
-          </>
-        }
+        footer={atLimit && <p>You have {limits.skills} skills, the most you can keep. Delete one to add another.</p>}
       >
         {skills === null ? (
           <Skeleton />
@@ -280,6 +271,10 @@ export function SkillsSettings({ skills, limits, onCreate, onUpdate, onToggle, o
           </>
         )}
       </Group>
+
+      <SectionIntro>
+        Skills teach Karui how you like a kind of task done, like a weekly update in your format. Karui reads a skill&apos;s instructions only when your message calls for it. Chats in a project use only the skills picked in its settings.
+      </SectionIntro>
     </>
   );
 }

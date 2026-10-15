@@ -38,7 +38,7 @@ export function ResetPasswordView({
   return (
     <div>
       <Rise>
-        <Label index="04">Reset password</Label>
+        <Label>Reset password</Label>
       </Rise>
       <Rise delay={0.06}>
         <h1 className="text-title mt-6 text-balance">Choose a new password.</h1>

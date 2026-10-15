@@ -66,10 +66,7 @@ function DeleteChecksGroup({
     onChange(Object.fromEntries(DELETE_ACTIONS.map((a) => [a.id, check])) as DeleteChecks);
 
   return (
-    <Group
-      title="Ask before deleting"
-      footer={`Karui's server checks this, so it holds even for someone who gets into your session. Once you confirm, deleting doesn't ask again for 5 minutes, and changing these settings asks you to confirm too.${twoFactorOn ? "" : " Turn on two-factor to use a code."}`}
-    >
+    <Group title="Ask before deleting">
       <Row label="Deleting" description={CHECK_TEXT[mode]}>
         {checks && (
           <Segmented
@@ -140,10 +137,6 @@ export function SecuritySettings({
 
   return (
     <>
-      <SectionIntro>
-        Two-factor keeps a password that gets out from being enough on its own. A recovery phrase gets your chats back if you forget yours.
-      </SectionIntro>
-
       <Group title="Password">
         <Row
           label="Password"
@@ -215,7 +208,7 @@ export function SecuritySettings({
           }
           description={
             phrase && recovery?.createdAt
-              ? `Created ${date(recovery.createdAt)}. Resets your password without losing your chats.`
+              ? `Created ${date(recovery.createdAt)}.`
               : "12 words that reset your password without losing your chats."
           }
           control={
@@ -227,6 +220,10 @@ export function SecuritySettings({
           }
         />
       </Group>
+
+      <SectionIntro>
+        Two-factor protects your account if your password leaks. A recovery phrase gets your chats back if you forget it.
+      </SectionIntro>
     </>
   );
 }

@@ -76,7 +76,6 @@ export function BillingSettings(p: BillingSettingsProps) {
       <Group title="Payments" footer="Payments and invoices are handled by Polar. Karui never sees your card details.">
         <Row
           label="Invoices and payment method"
-          description="Opens your Polar customer portal in a new tab."
           control={
             <Button variant="secondary" loading={p.openingPortal} onClick={p.onOpenPortal}>
               Open portal
@@ -87,7 +86,6 @@ export function BillingSettings(p: BillingSettingsProps) {
         {pro && !p.cancelAtPeriodEnd && (
           <Row
             label="Cancel plan"
-            description="You keep Pro until the end of the billing period."
             control={
               <button
                 type="button"

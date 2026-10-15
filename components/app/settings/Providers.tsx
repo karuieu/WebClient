@@ -57,10 +57,6 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
 
   return (
     <MotionConfig reducedMotion="user">
-      <SectionIntro>
-        Every provider runs models inside hardware enclaves. Light runs on NEAR AI and Heavy on Phala; for models both offer, pick where your chats are processed. Karui only ever uses that one, even when it can&apos;t answer.
-      </SectionIntro>
-
       <section>
         <h3 className="text-label mb-3 px-1 text-fg/80">Provider</h3>
         {p.error ? (
@@ -152,7 +148,7 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
       <Group title="Search">
         <Row
           label="Search the web automatically"
-          description="Start new chats with Search on. Only the search query is sent out, never your conversation."
+          description="New chats start with Search on. Only the query is sent, never your conversation."
           control={
             <span className={cx(
               "[&>button]:before:absolute [&>button]:before:-inset-y-[9px] [&>button]:before:inset-x-0 [&>button]:before:content-['']",
@@ -163,6 +159,10 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
           }
         />
       </Group>
+
+      <SectionIntro>
+        Every provider runs inside hardware enclaves. For models both offer, pick where your chats are processed. Karui only ever uses that one, even when it&apos;s down.
+      </SectionIntro>
     </MotionConfig>
   );
 }

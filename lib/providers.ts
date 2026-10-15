@@ -28,7 +28,7 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: "phala",
     name: "Phala",
     description:
-      "Phala's enclave gateway passes each message only to a model host on Phala's own hardware that it has attested. Before sending, your browser checks that the gateway runs on genuine Intel TDX hardware, but it doesn't yet pin which release of the gateway's code that is.",
+      "Messages go only to model hosts on Phala's own attested hardware. Your browser checks that the gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
     tag: "USA",
     models: [
       { name: "GLM 5.3", region: "USA", tier: "heavy" },
@@ -40,7 +40,7 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: "nearai",
     name: "NEAR AI",
     description:
-      "Each message is encrypted in your browser to the model's own enclave key. Before sending, your browser checks that NEAR AI's gateway and the model run on genuine Intel TDX hardware, but it doesn't yet pin which release of their code that is.",
+      "Each message is encrypted in your browser to the model's own enclave key. Your browser checks that NEAR AI's gateway and the model run on genuine Intel TDX hardware, but doesn't yet pin which release of their code that is.",
     tag: "USA",
     models: [
       { name: "GLM 5.3 Flash", region: "USA", tier: "light" },

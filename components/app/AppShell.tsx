@@ -273,7 +273,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
 
         <ShellContext.Provider value={{ sidebarHidden: hidden }}>
           {banner}
-          <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable_both-edges]">
+          <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             {children}
           </main>
         </ShellContext.Provider>

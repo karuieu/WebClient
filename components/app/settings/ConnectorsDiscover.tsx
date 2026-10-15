@@ -283,7 +283,7 @@ export function ConnectorDetail({
         ) : (
           <Row
             label={c.browser ? "Browser or Karui server" : "Karui server"}
-            description={c.browser ? "You pick when you connect, and can switch any time." : routeNote(c)}
+            description={c.browser ? undefined : routeNote(c)}
           />
         )}
       </Group>
