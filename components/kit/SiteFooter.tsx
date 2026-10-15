@@ -17,7 +17,7 @@ const columns = [
   {
     title: "Company",
     links: [
-      { label: "Contact", href: "mailto:admin@karui.eu" },
+      { label: "Contact", href: "mailto:support@karui.eu" },
       { label: "Security policy", href: "/security" },
       { label: "Status", href: "https://status.karui.eu/", external: true },
     ],
