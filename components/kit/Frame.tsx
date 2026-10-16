@@ -15,7 +15,7 @@ export function Cross({ className }: { className?: string }) {
 export function Label({ index, children, className }: { index?: string; children: React.ReactNode; className?: string }) {
   return (
     <p className={cx("text-label flex items-center gap-2 text-muted", className)}>
-      {index && <span className="text-fg">[{index}]</span>}
+      {index && <span className="text-fg">{index}</span>}
       <span>{children}</span>
     </p>
   );
