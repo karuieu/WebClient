@@ -10,6 +10,8 @@ import { truncateName, GREETING_NAME_MAX_CHARS } from "@/lib/auth";
 import { DRAFT_OFFERED_EVENT, registerDraftRescue, takeDraft } from "@/lib/draftRescue";
 import { stashFirstMessage, type FirstMessage } from "@/lib/handoff";
 import { NewChatView } from "@/components/app/NewChatView";
+import { isHalloweenSeason, pickCostume } from "@/components/app/greeting";
+import { useNow } from "@/components/kit/useMounted";
 import { ProjectPickerDialog } from "@/components/app/Dialogs";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import { IncognitoChat } from "@/components/wired/IncognitoChat";
@@ -37,6 +39,10 @@ function NewChat() {
   const [picking, setPicking] = useState(false);
   const project = raw.projects.find((p) => p.id === projectId);
   const textRef = useRef("");
+  const now = useNow();
+  // Drawn once per visit: toggling incognito only changes the query, so the costume stays and the chat header gets the same one.
+  const [costume] = useState(pickCostume);
+  const halloween = now && isHalloweenSeason(now) ? costume : undefined;
 
   const composer = useComposer({ onSubmit: () => handleSend() });
   textRef.current = composer.text;
@@ -93,7 +99,7 @@ function NewChat() {
 
   const name = truncateName(user?.display_name || "", GREETING_NAME_MAX_CHARS) || null;
 
-  if (incognito && incognitoFirst) return <IncognitoChat first={incognitoFirst} />;
+  if (incognito && incognitoFirst) return <IncognitoChat first={incognitoFirst} halloween={halloween} />;
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col" {...composer.drop.dropHandlers}>
@@ -103,6 +109,7 @@ function NewChat() {
         name={name}
         returning={chats.length > 0}
         incognito={{ on: incognito, onToggle: () => router.replace(incognito ? "/new" : "/new?incognito") }}
+        halloween={halloween}
         composer={{
           ...composer.props,
           sending: isLoading,

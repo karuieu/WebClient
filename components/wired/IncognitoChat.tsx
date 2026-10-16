@@ -10,11 +10,12 @@ import { toBlockquote } from "@/lib/messageBlocks";
 import { useToast } from "@/components/Toast";
 import { ChatView } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
+import type { Costume } from "@/components/kit/icons";
 import { useComposer } from "./useComposer";
 import { enclaveFor, errorText, pendingQuestions, toViewData, type Streaming } from "./messageView";
 
 /** Keep incognito messages only in component memory; navigation, reload, and tab closure discard the conversation. */
-export function IncognitoChat({ first }: { first: FirstMessage }): React.JSX.Element {
+export function IncognitoChat({ first, halloween }: { first: FirstMessage; halloween?: Costume }): React.JSX.Element {
   const { showError } = useToast();
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [stream, setStream] = React.useState<Streaming>(null);
@@ -94,6 +95,7 @@ export function IncognitoChat({ first }: { first: FirstMessage }): React.JSX.Ele
       <DropOverlay active={composer.drop.isDragging} note={composer.props.attachNote} />
       <ChatView
         title="Incognito chat"
+        halloween={halloween}
         enclave={enclaveFor(model, streaming)}
         messages={data}
         composer={{

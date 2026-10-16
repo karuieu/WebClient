@@ -15,6 +15,7 @@
   --inverse: #0a0a0a;
   --on-inverse: #ffffff;
   --ok: #1f9d55;
+  --halloween: #c2410c;
   --danger: #d70015;
   --on-danger: #ffffff;
   --code-keyword: #ad3da4;
@@ -42,6 +43,7 @@
   --inverse: #f5f5f7;
   --on-inverse: #000000;
   --ok: #34c759;
+  --halloween: #ff9a3c;
   --danger: #ff6961;
   --on-danger: #000000;
   --code-keyword: #f18fb5;
@@ -69,6 +71,7 @@
   --color-inverse: var(--inverse);
   --color-on-inverse: var(--on-inverse);
   --color-ok: var(--ok);
+  --color-halloween: var(--halloween);
   --color-danger: var(--danger);
   --color-on-danger: var(--on-danger);
   --color-nav: var(--nav);
@@ -168,13 +171,6 @@ body {
   line-height: 1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-@utility bg-grid {
-  background-image:
-    linear-gradient(to right, var(--line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
-  background-size: 48px 48px;
 }
 
 @media (prefers-reduced-motion: reduce) {

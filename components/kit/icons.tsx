@@ -371,12 +371,55 @@ export const BookOpen = (p: IconProps) => (
   </Icon>
 );
 
-export const Incognito = (p: IconProps) => (
-  <Icon {...p}>
+const incognitoHat = (
+  <>
     <path d="M2 11h20" />
     <path d="m5 11 1.6-5.6A2 2 0 0 1 8.5 4h7a2 2 0 0 1 1.9 1.4L19 11" />
+  </>
+);
+
+const incognitoGlasses = (
+  <>
     <circle cx="7" cy="17" r="3" />
     <circle cx="17" cy="17" r="3" />
     <path d="M10 17a2 2 0 0 1 4 0" />
+  </>
+);
+
+export const Incognito = (p: IconProps) => (
+  <Icon {...p}>
+    {incognitoHat}
+    {incognitoGlasses}
   </Icon>
 );
+
+export const IncognitoWitch = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 11h20" />
+    <path d="M6 11 10.6 2.6c.5-.9 1.6-1.3 2.6-.9L17.5 3.6" />
+    <path d="M18 11 13.9 3.4" />
+    {incognitoGlasses}
+  </Icon>
+);
+
+export const IncognitoGhost = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 21V10a7 7 0 0 1 14 0v11l-2.33-1.5L14.33 21 12 19.5 9.67 21l-2.34-1.5Z" />
+    <circle cx="9" cy="11" r="2" />
+    <circle cx="15" cy="11" r="2" />
+    <path d="M11 11a1 1 0 0 1 2 0" />
+  </Icon>
+);
+
+export const IncognitoVampire = (p: IconProps) => (
+  <Icon {...p}>
+    {incognitoHat}
+    {incognitoGlasses}
+    <path d="M9.6 19.6 10.3 22.4 11 19.6Z" />
+    <path d="M13 19.6 13.7 22.4 14.4 19.6Z" />
+  </Icon>
+);
+
+// Incognito's Halloween costumes; the event draws one at random (`pickCostume` in greeting.ts).
+export const incognitoCostumes = { witch: IncognitoWitch, ghost: IncognitoGhost, vampire: IncognitoVampire };
+export type Costume = keyof typeof incognitoCostumes;

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { ArrowDown, ChevronDown, Folder, FolderInput, Incognito, PanelRight, Pencil, Quote, ShieldCheck, Sliders, Star, Trash } from "@/components/kit/icons";
+import { ArrowDown, ChevronDown, Folder, FolderInput, Incognito, PanelRight, Pencil, Quote, ShieldCheck, Sliders, Star, Trash, incognitoCostumes, type Costume } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Spinner } from "@/components/kit/Spinner";
 import { Enter, cascade } from "@/components/kit/Enter";
@@ -67,14 +67,18 @@ export function ChatHeader({
   enclave,
   actions,
   project,
+  halloween,
 }: {
   title: string;
   starred?: boolean;
   enclave?: EnclaveState;
   actions?: ChatActions;
   project?: HeaderProject;
+  /** The Halloween event's costume, shown only in an incognito chat. */
+  halloween?: Costume;
 }) {
   const { sidebarHidden } = React.useContext(ShellContext);
+  const CostumeIcon = halloween && incognitoCostumes[halloween];
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(title);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -138,7 +142,7 @@ export function ChatHeader({
           ))}
         {project && !title ? null : !actions ? (
           <p className="flex h-9 items-center gap-2 px-3 text-[14px] font-medium tracking-[-0.01em]">
-            <Incognito className="size-4 shrink-0 text-muted" />
+            {CostumeIcon ? <CostumeIcon className="size-4 shrink-0 text-halloween" /> : <Incognito className="size-4 shrink-0 text-muted" />}
             <span className="truncate">{title}</span>
             <span className="font-mono text-[11px] font-normal text-muted max-sm:hidden">Not saved</span>
           </p>
@@ -298,6 +302,7 @@ export function ChatView({
   gate,
   questions,
   chatActions,
+  halloween,
   onQuote,
   onRetry,
   onVariant,
@@ -319,6 +324,8 @@ export function ChatView({
   /** Karui's questions awaiting an answer; they take the composer's place. */
   questions?: QuestionsData | null;
   chatActions?: ChatActions;
+  /** The Halloween event's costume, shown only in an incognito chat. */
+  halloween?: Costume;
   onQuote?: (text: string) => void;
   onRetry?: (messageId: string) => void;
   onVariant?: (messageId: string, dir: -1 | 1) => void;
@@ -422,7 +429,7 @@ export function ChatView({
   return (
     <div className="flex min-h-0 flex-1">
       <div ref={scrollRef} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <ChatHeader title={title} starred={starred} enclave={enclave} actions={chatActions} project={project} />
+        <ChatHeader title={title} starred={starred} enclave={enclave} actions={chatActions} project={project} halloween={halloween} />
 
         <div ref={contentRef} className="mx-auto flex w-full max-w-[46rem] flex-1 flex-col gap-10 px-4 pb-10 pt-6 sm:px-6">
           {!loading && messages.length === 0 && (
