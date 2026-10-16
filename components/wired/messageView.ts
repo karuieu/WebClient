@@ -8,6 +8,7 @@ import { parseArtifacts, type Artifact } from "@/lib/artifacts";
 import { modelLabel, parseMessageBlocks, splitQuote } from "@/lib/messageBlocks";
 import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/skills";
 import { parseQuestions } from "@/lib/questions";
+import type { AnswerActivity } from "@/lib/answerTools";
 import type { ArtifactData, MessageData, SkillDraftData } from "@/components/app/chat/Messages";
 import type { QuestionData } from "@/components/app/chat/Questions";
 
@@ -92,7 +93,17 @@ export function toAssistant(
   };
 }
 
-export type Streaming = { content: string; search: string | null } | null;
+export type Streaming = { content: string; activity: AnswerActivity | null } | null;
+
+function activityStatus(activity: AnswerActivity | null): string | null {
+  if (!activity) return null;
+  if (activity.kind === "search") return "Searching the web";
+  try {
+    return `Reading ${new URL(activity.url).hostname.replace(/^www\./, "")}`;
+  } catch {
+    return "Reading a page";
+  }
+}
 
 type ShownMessage = Message & { variant?: { index: number; total: number } };
 
@@ -115,7 +126,7 @@ export function toViewData(
   if (stream) {
     const { message, artifacts } = toAssistant("streaming", stream.content, {
       streaming: true,
-      status: stream.search !== null ? "Searching the web" : null,
+      status: activityStatus(stream.activity),
     }, skills);
     artifacts.forEach((a, i) => byId.set(`streaming:${i}`, a));
     data.push(message);

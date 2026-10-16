@@ -46,14 +46,14 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, pending]);
-    setStream({ content: "", search: null });
+    setStream({ content: "", activity: null });
     sendIncognitoMessage(
       content,
       model,
       history,
-      (token) => setStream((s) => s && { ...s, search: null, content: s.content + token }),
+      (token) => setStream((s) => s && { ...s, activity: null, content: s.content + token }),
       webSearch,
-      (query) => setStream((s) => s && { ...s, search: query }),
+      (activity) => setStream((s) => s && { ...s, activity }),
       images,
       files,
     )

@@ -8,6 +8,7 @@ import { cx } from "@/lib/cx";
 export type ProcessingStep =
   | { kind: "thought"; text: string }
   | { kind: "search"; query: string; sources: { title: string; url: string }[] }
+  | { kind: "page"; url: string; title: string; status: "ok" | "error" }
   | { kind: "vision"; name: string; description: string }
   | { kind: "memory"; action: "edit" | "proposal"; file?: string | null; text: string }
   | { kind: "notice"; text: string }
@@ -30,6 +31,10 @@ function summarize(steps: ProcessingStep[]): string {
   if (steps.some((s) => s.kind === "thought")) parts.push("Thought");
   const sources = steps.reduce((n, s) => (s.kind === "search" ? n + s.sources.length : n), 0);
   if (steps.some((s) => s.kind === "search")) parts.push(sources ? `${sources} ${sources === 1 ? "source" : "sources"}` : "Searched");
+  const pages = steps.filter((s) => s.kind === "page" && s.status === "ok").length;
+  if (pages) parts.push(pages === 1 ? "1 page" : `${pages} pages`);
+  const unopened = steps.filter((s) => s.kind === "page" && s.status === "error").length;
+  if (unopened) parts.push(unopened === 1 ? "1 page not opened" : `${unopened} pages not opened`);
   const images = steps.filter((s) => s.kind === "vision").length;
   if (images) parts.push(images === 1 ? "1 image" : `${images} images`);
   const memory = steps.filter((s) => s.kind === "memory");
@@ -53,6 +58,17 @@ function StepLabel({ children, live }: { children: React.ReactNode; live?: boole
   );
 }
 
+function SourceLink({ url, title }: { url: string; title: string }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="group flex items-baseline gap-3 rounded-lg py-0.5 text-[13.5px]">
+      <span className="w-32 shrink-0 truncate font-mono text-[11.5px] text-muted">{domainOf(url)}</span>
+      <span className="min-w-0 truncate text-fg/85 underline decoration-transparent underline-offset-[3px] transition-colors duration-150 group-hover:decoration-line-strong">
+        {title}
+      </span>
+    </a>
+  );
+}
+
 function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
   switch (step.kind) {
     case "thought":
@@ -72,23 +88,22 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
               <ul className="mt-2.5 flex flex-col gap-1">
                 {step.sources.map((s) => (
                   <li key={s.url}>
-                    <a
-                      href={s.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group flex items-baseline gap-3 rounded-lg py-0.5 text-[13.5px]"
-                    >
-                      <span className="w-32 shrink-0 truncate font-mono text-[11.5px] text-muted">{domainOf(s.url)}</span>
-                      <span className="min-w-0 truncate text-fg/85 underline decoration-transparent underline-offset-[3px] transition-colors duration-150 group-hover:decoration-line-strong">
-                        {s.title}
-                      </span>
-                    </a>
+                    <SourceLink url={s.url} title={s.title} />
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="mt-2.5 text-[13.5px] text-muted">No results found.</p>
             )}
+          </div>
+        </div>
+      );
+    case "page":
+      return (
+        <div>
+          <StepLabel live={live}>{step.status === "ok" ? "Read a page" : "Couldn't open a page"}</StepLabel>
+          <div className="pl-3.5">
+            <SourceLink url={step.url} title={step.title || step.url.replace(/^https?:\/\//, "")} />
           </div>
         </div>
       );

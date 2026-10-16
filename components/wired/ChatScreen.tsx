@@ -135,7 +135,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
       clearQuoted();
       clearSearchTerms();
       setMessages((prev) => [...prev, userMessage]);
-      setStream({ content: "", search: null });
+      setStream({ content: "", activity: null });
       return true;
     },
     [chatId],
@@ -154,7 +154,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
       const st = getChatStream(chatId);
       if (!st) return;
       if (st.phase === "streaming") {
-        setStream({ content: st.content, search: st.searchStatus });
+        setStream({ content: st.content, activity: st.activity });
         const um = st.userMessage;
         if (um) setMessages((prev) => (prev.some((m) => m.id === um.id) ? prev : [...prev, um]));
         return;
@@ -260,7 +260,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     const idx = shown.findIndex((m) => m.id === messageId || (!!target.variant_group && m.variant_group === target.variant_group));
     const history = idx >= 0 ? shown.slice(0, idx) : shown;
     if (!startRetryStream({ chatId, assistantId: target.id, variantGroup: target.variant_group, model, history })) return;
-    setStream({ content: "", search: null });
+    setStream({ content: "", activity: null });
     setMessages((prev) =>
       target.variant_group ? prev.filter((m) => m.variant_group !== target.variant_group) : prev.filter((m) => m.id !== messageId),
     );

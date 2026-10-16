@@ -22,6 +22,7 @@ import { getSkillsForChat } from "./skills";
 import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock } from "./streamTags";
 import { resolveReasoningEffort } from "./reasoning";
 import { streamE2EChat, contextBudgetFor, ensureModelAvailable, type E2EStreamOptions } from "./inference";
+import { type AnswerActivity } from "./answerTools";
 import { getModelProvider, type ProviderId } from "./providers";
 import {
   maybeCompressChat,
@@ -517,7 +518,7 @@ async function streamTurn(
   onToken: (token: string) => void,
   ctx: TurnContext,
   webSearch: boolean,
-  onSearch: ((query: string) => void) | undefined,
+  onActivity: ((activity: AnswerActivity) => void) | undefined,
   images: ChatImage[],
   files: ChatTextFile[],
   onTitle: ((title: string) => void) | undefined,
@@ -536,7 +537,7 @@ async function streamTurn(
   const turns: ChatTurn[] = [...history, { role: "user", content: storedContent }];
   const reasoningEffort = resolveReasoningEffort(model);
 
-  // E2E path: the browser composes and encrypts the request; the backend only proxies it. The only plaintext the backend sees here is the finished search query.
+  // E2E path: the browser composes and encrypts the request; the backend only proxies it. The only plaintext the backend sees here is the finished search query and the address of a page the model reads.
   const { text: response, provider, inputTokens, outputTokens } = await streamE2EChat(
     {
       provider: requireProvider(model),
@@ -547,7 +548,7 @@ async function streamTurn(
       generateBrief: Boolean(onBrief),
       webSearch,
       reasoningEffort,
-      onSearch,
+      onActivity,
       applyMemoryEdit: ctx.applyMemoryEdit ?? applyLiveMemoryEdit,
     },
     emitToken
@@ -575,7 +576,7 @@ export async function sendMessage(
   history: HistoryMessage[],
   onToken: (token: string) => void,
   webSearch: boolean = false,
-  onSearch?: (query: string) => void,
+  onActivity?: (activity: AnswerActivity) => void,
   images: ChatImage[] = [],
   files: ChatTextFile[] = [],
   onTitle?: (title: string) => void,
@@ -608,7 +609,7 @@ export async function sendMessage(
         }
       : undefined;
 
-  const turn = await streamTurn(content, model, since.history, onToken, ctx, webSearch, onSearch, images, files, onTitle, onBrief);
+  const turn = await streamTurn(content, model, since.history, onToken, ctx, webSearch, onActivity, images, files, onTitle, onBrief);
   return appendMessages(
     chatId,
     key,
@@ -633,7 +634,7 @@ export async function sendIncognitoMessage(
   history: ChatTurn[],
   onToken: (token: string) => void,
   webSearch: boolean,
-  onSearch?: (query: string) => void,
+  onActivity?: (activity: AnswerActivity) => void,
   images: ChatImage[] = [],
   files: ChatTextFile[] = []
 ): Promise<Message[]> {
@@ -646,7 +647,7 @@ export async function sendIncognitoMessage(
     memoryWrites: false,
     connectors: false,
   };
-  const turn = await streamTurn(content, model, history, onToken, ctx, webSearch, onSearch, images, files, undefined);
+  const turn = await streamTurn(content, model, history, onToken, ctx, webSearch, onActivity, images, files, undefined);
   const base = { chat_id: INCOGNITO_CHAT_ID, model, pinned: false, created_at: new Date().toISOString() };
   return [
     { ...base, id: crypto.randomUUID(), role: "user", content: turn.userContent, tokens: turn.inputTokens },

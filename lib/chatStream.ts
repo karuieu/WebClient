@@ -12,6 +12,7 @@ import { maybeAutoMemory } from "./memory";
 import { type ChatImage, type ChatTextFile } from "./vision";
 import { applyChatTitle, fallbackTitleChat, getChatTitleMode } from "./chatTitle";
 import { throwIfStopped } from "./errors";
+import { type AnswerActivity } from "./answerTools";
 
 export type StreamPhase = "streaming" | "done" | "error";
 
@@ -21,7 +22,7 @@ export interface ChatStreamState {
   userMessage: Message | null;
   request: { content: string; model: ModelType; images: ChatImage[]; files: ChatTextFile[] };
   content: string;
-  searchStatus: string | null;
+  activity: AnswerActivity | null;
 
   saved: Message[] | null;
   retryResponse: string | null;
@@ -89,7 +90,7 @@ export function startSendStream(opts: {
     userMessage: opts.userMessage,
     request: { content: opts.content, model: opts.model, images: opts.images ?? [], files: opts.files ?? [] },
     content: "",
-    searchStatus: null,
+    activity: null,
     saved: null,
     retryResponse: null,
     discarded: [],
@@ -116,13 +117,13 @@ export function startSendStream(opts: {
         opts.model,
         opts.history,
         (token) => {
-          state.searchStatus = null;
+          state.activity = null;
           state.content += token;
           notify(chatId);
         },
         opts.webSearch,
-        (query) => {
-          state.searchStatus = query;
+        (activity) => {
+          state.activity = activity;
           notify(chatId);
         },
         opts.images ?? [],
@@ -170,7 +171,7 @@ export function startRetryStream(opts: {
     userMessage: null,
     request: { content: "", model: opts.model, images: [], files: [] },
     content: "",
-    searchStatus: null,
+    activity: null,
     saved: null,
     retryResponse: null,
     discarded: [],

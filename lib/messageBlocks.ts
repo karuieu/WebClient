@@ -14,6 +14,7 @@ export const SEARCH_UNAVAILABLE_NOTICE_KIND = "search_unavailable";
 export type MessageStep =
   | { kind: "thought"; text: string }
   | { kind: "search"; query: string; sources: { title: string; url: string }[] }
+  | { kind: "page"; url: string; title: string; status: "ok" | "error" }
   | { kind: "vision"; name: string; description: string }
   | { kind: "memory"; action: "edit" | "proposal"; file?: string | null; text: string }
   | { kind: "notice"; text: string }
@@ -63,12 +64,12 @@ function thoughtOf(inner: string): { text: string; rest: string | null } {
 }
 
 const BLOCKS =
-  /<reasoning>([\s\S]*?)<\/reasoning>|<search>([\s\S]*?)<\/search>|<vision>([\s\S]*?)<\/vision>|<notice>([\s\S]*?)<\/notice>|<memory_write>([\s\S]*?)<\/memory_write>|<tool>([\s\S]*?)<\/tool>|<library>([\s\S]*?)<\/library>|<skills_used>([\s\S]*?)<\/skills_used>/g;
+  /<reasoning>([\s\S]*?)<\/reasoning>|<search>([\s\S]*?)<\/search>|<vision>([\s\S]*?)<\/vision>|<notice>([\s\S]*?)<\/notice>|<memory_write>([\s\S]*?)<\/memory_write>|<tool>([\s\S]*?)<\/tool>|<library>([\s\S]*?)<\/library>|<skills_used>([\s\S]*?)<\/skills_used>|<fetched_page>([\s\S]*?)<\/fetched_page>/g;
 
 function parseBlocks(content: string): { steps: MessageStep[]; answer: string } {
   const steps: MessageStep[] = [];
 
-  let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, tool?: string, library?: string, skills?: string) => {
+  let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, tool?: string, library?: string, skills?: string, page?: string) => {
     if (reasoning !== undefined) {
       const { text, rest } = thoughtOf(reasoning);
       if (text) steps.push({ kind: "thought", text });
@@ -136,6 +137,12 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
         const d = JSON.parse(skills);
         const names = Array.isArray(d?.names) ? d.names.filter((n: unknown): n is string => typeof n === "string") : [];
         if (names.length > 0) steps.push({ kind: "skills", names });
+      } else if (page !== undefined) {
+        const d = JSON.parse(page);
+        // The address becomes a link, and the model could write this block itself.
+        if (d && typeof d.url === "string" && /^https?:\/\//i.test(d.url)) {
+          steps.push({ kind: "page", url: d.url, title: typeof d.title === "string" ? d.title : "", status: d.status === "error" ? "error" : "ok" });
+        }
       }
     } catch {
     }

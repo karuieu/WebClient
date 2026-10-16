@@ -25,6 +25,7 @@ import {
   parseMemoryNote,
   runAnswerCall,
   startAnswerRound,
+  type AnswerActivity,
   type AnswerCallContext,
   type AnswerRound,
   type ConnectorTool,
@@ -174,7 +175,7 @@ async function buildSystemPrompt(opts: {
 
   if (!opts.webSearch) {
     prompt +=
-      "\n\n<web_search_status>Web search is currently DISABLED by the user. Do NOT try to search. If the user asks something that clearly needs current information, tell them to turn on web search.</web_search_status>";
+      "\n\n<web_search_status>Web search is currently DISABLED by the user. Do NOT try to search or to read web pages. If the user asks something that clearly needs current information or a page they linked, tell them to turn on web search.</web_search_status>";
   }
   if (!getArtifactsEnabled()) {
     prompt +=
@@ -279,7 +280,7 @@ export interface E2EStreamOptions {
   generateTitle: boolean;
   webSearch: boolean;
   reasoningEffort?: ReasoningEffort | null;
-  onSearch?: (query: string) => void;
+  onActivity?: (activity: AnswerActivity) => void;
   // Memory writes happen on send only: a retry answers a message whose write already happened.
   memoryWrites?: boolean;
   applyMemoryEdit?: (edit: LiveMemoryEdit) => Promise<boolean>;
@@ -429,7 +430,7 @@ export async function streamE2EChat(
     opts,
     {
       model: { providerModelID: modelInfo.providerModelID, reasoningParams },
-      call: { aliases, connectorTools, onSearch: opts.onSearch ?? (() => {}), signal: opts.signal },
+      call: { aliases, connectorTools, onActivity: opts.onActivity ?? (() => {}), signal: opts.signal },
       buildMessages,
     },
     onToken

@@ -89,7 +89,7 @@ export function stripMemoryNotes(text: string): string {
   return text.replace(/<memory_note>[\s\S]*?<\/memory_note>/g, "");
 }
 
-export type CallTag = "search_query" | "read" | "tool_call";
+export type CallTag = "search_query" | "fetch_url" | "read" | "tool_call";
 
 export interface AnswerCall {
   tag: CallTag;
@@ -97,14 +97,23 @@ export interface AnswerCall {
 }
 
 const QUERY_MAX_CHARS = 200;
+const URL_MAX_CHARS = 2048;
 const TOOL_CALL_MAX_CHARS = 4000;
 
 // A call is a single line between the tags. Anything else is the model talking about the tag, often in its reasoning.
 const CALL_VALUE: Record<CallTag, string> = {
   search_query: `[^<\\n]{1,${QUERY_MAX_CHARS}}`,
+  fetch_url: ` *https?://[^\\s<]{1,${URL_MAX_CHARS}} *`,
   read: `[^<\\n]{1,${QUERY_MAX_CHARS}}`,
   // Tool arguments are JSON, whose strings may contain "<".
   tool_call: `\\{[^\\n]{0,${TOOL_CALL_MAX_CHARS}}?\\}`,
+};
+
+const CALL_MAX_CHARS: Record<CallTag, number> = {
+  search_query: QUERY_MAX_CHARS,
+  fetch_url: URL_MAX_CHARS + 10,
+  read: QUERY_MAX_CHARS,
+  tool_call: TOOL_CALL_MAX_CHARS + 2,
 };
 
 function findCall(text: string, tags: CallTag[]): { index: number; call: AnswerCall } | null {
@@ -122,8 +131,7 @@ export function callIndex(text: string, tags: CallTag[]): number {
 
 function isCallPrefix(after: string, tag: CallTag): boolean {
   const close = `</${tag}>`;
-  const max = tag === "tool_call" ? TOOL_CALL_MAX_CHARS + 2 : QUERY_MAX_CHARS;
-  if (after.includes("\n") || after.includes(close) || after.length > max + close.length) return false;
+  if (after.includes("\n") || after.includes(close) || after.length > CALL_MAX_CHARS[tag] + close.length) return false;
   if (tag === "tool_call") return after === "" || after.startsWith("{");
   const lt = after.indexOf("<");
   return lt === -1 || close.startsWith(after.slice(lt));

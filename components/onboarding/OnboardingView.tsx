@@ -198,7 +198,7 @@ export function OnboardingView(p: OnboardingViewProps) {
               {
                 value: "auto",
                 title: "Automatically",
-                description: "Karui decides when a search would help. Only the search query is sent out, never your conversation.",
+                description: "Karui decides when a search or a web page would help. Only the search query and the page address are sent out, never your conversation.",
               },
               { value: "manual", title: "Only when I ask", description: "Search stays off until you turn it on in a chat." },
             ]}
