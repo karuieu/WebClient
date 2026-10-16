@@ -21,7 +21,7 @@ import { getCustomInstructionsContext } from "./customInstructions";
 import { getSkillsForChat } from "./skills";
 import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock } from "./streamTags";
 import { resolveReasoningEffort } from "./reasoning";
-import { streamE2EChat, contextBudgetFor, type E2EStreamOptions } from "./inference";
+import { streamE2EChat, contextBudgetFor, ensureModelAvailable, type E2EStreamOptions } from "./inference";
 import { getModelProvider, type ProviderId } from "./providers";
 import {
   maybeCompressChat,
@@ -318,6 +318,11 @@ export async function createChat(title?: string, memoryEnabled = true): Promise<
     body: JSON.stringify({ id, encrypted_title, memory_enabled: memoryEnabled }),
   });
   return { id: raw.id, title: plain, created_at: raw.created_at };
+}
+
+// Checked before createChat, so a model an admin turned off doesn't leave an empty chat behind.
+export async function ensureChatModelAvailable(model: ModelType): Promise<void> {
+  await ensureModelAvailable(model, requireProvider(model));
 }
 
 export async function starChat(id: string): Promise<{ starred: boolean }> {

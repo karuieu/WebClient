@@ -2,7 +2,7 @@
 
 import { Suspense, useContext, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createChat, deleteChat, type ModelType } from "@/lib/chat";
+import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat";
 import { assignChatToProject } from "@/lib/projects";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -74,6 +74,7 @@ function NewChat() {
     }
     setIsLoading(true);
     try {
+      await ensureChatModelAvailable(composer.model as ModelType);
       const newChat = await createChat(undefined, memoryOn);
       if (project) {
         // Remove a chat if project assignment fails so it cannot inherit user memory instead of project context.

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { createChat, deleteChat, type ModelType } from "@/lib/chat";
+import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat";
 import { stashFirstMessage } from "@/lib/handoff";
 import { assignChatToProject } from "@/lib/projects";
 import { useToast } from "@/components/Toast";
@@ -25,6 +25,7 @@ export function ProjectNewChat({ projectId }: { projectId: string }) {
     if (composer.isEmpty || starting) return;
     setStarting(true);
     try {
+      await ensureChatModelAvailable(composer.model as ModelType);
       const chat = await createChat();
       // A chat left outside the project would get the user's memory instead of
       // the project's, so it goes rather than stays.

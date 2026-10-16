@@ -68,8 +68,8 @@ onSessionCleared(() => {
   modelCatalog = null;
 });
 
-async function loadModelCatalog(): Promise<Record<string, CachedModel>> {
-  if (!modelCatalog) {
+async function loadModelCatalog(fresh = false): Promise<Record<string, CachedModel>> {
+  if (!modelCatalog || fresh) {
     const response = await apiFetch(`${API_URL}/api/ai/models`);
     if (!response.ok) throw new Error("Could not fetch the model list");
     const payload = (await response.json()) as {
@@ -107,13 +107,20 @@ export async function contextBudgetFor(modelId: string): Promise<number> {
 // The window comes from /api/ai/models rather than a client copy of the catalogue, so backend changes reach here.
 async function fetchModelInfo(
   modelId: string,
-  provider: ProviderId
+  provider: ProviderId,
+  fresh = false
 ): Promise<{ providerModelID: string; contextWindow: number }> {
-  const catalog = await loadModelCatalog();
+  const catalog = await loadModelCatalog(fresh);
   const entry = catalog[modelId];
   const resolved = entry?.providerModelIDs[provider];
-  if (!resolved) throw new Error(`Model ${modelId} is not available from provider ${provider}`);
+  if (!resolved) throw new Error("This model isn't available right now. Choose another one.");
   return { providerModelID: resolved, contextWindow: entry.contextWindow };
+}
+
+// The backend leaves models and providers an admin turned off out of /api/ai/models, so a fresh copy
+// stops a turn before a chat is created or an enclave is verified.
+export async function ensureModelAvailable(modelId: string, provider: ProviderId): Promise<void> {
+  await fetchModelInfo(modelId, provider, true);
 }
 
 export function chatModelAsHelper(modelId: string, provider: ProviderId): () => Promise<HelperModel> {
@@ -343,7 +350,7 @@ export async function streamE2EChat(
   throwIfStopped(opts.signal);
   const tier = getUser()?.tier ?? "free";
   const [modelInfo, connectorTools] = await Promise.all([
-    fetchModelInfo(opts.model, opts.provider),
+    fetchModelInfo(opts.model, opts.provider, true),
     opts.connectors === false ? new Map<string, ConnectorTool>() : loadConnectorTools(opts.project?.connectorIds),
   ]);
   throwIfStopped(opts.signal);
