@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { LANDING_URL } from "@/app/siteUrl";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { SystemState } from "@/components/app/SystemState";
 import { Button, ButtonLink } from "@/components/kit/Button";
@@ -27,7 +28,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
             <Button size="lg" onClick={reset}>
               Try again
             </Button>
-            <ButtonLink href="/" size="lg" variant="secondary">
+            <ButtonLink href={LANDING_URL} size="lg" variant="secondary">
               Home
             </ButtonLink>
           </>

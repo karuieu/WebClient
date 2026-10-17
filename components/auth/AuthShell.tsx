@@ -24,7 +24,7 @@ export function AuthShell({ children, variant = "form" }: { children: React.Reac
 
       <header className="px-4 sm:px-6">
         <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between px-1 md:px-2">
-          <Link href="/" aria-label="Karui home" className="rounded-lg">
+          <Link href={LANDING_URL} aria-label="Karui home" className="rounded-lg">
             <Logo />
           </Link>
           <ThemeToggle />
