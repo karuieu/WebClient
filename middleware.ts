@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { LANDING_URL } from "@/app/siteUrl";
 import { API_URL } from "@/lib/api";
 
 /**
@@ -16,11 +17,10 @@ const publicRoutes = [
   "/forgot-password",
   "/reset-password",
   "/delete-account",
-  "/security",
-  "/privacy",
-  "/privacy/en",
-  "/terms",
 ];
+
+// The documents moved to the landing page; links from e-mails, bookmarks and Polar still lead there.
+const LANDING_PAGES = new Set(["/security", "/privacy", "/privacy/en", "/terms", "/terms/en"]);
 
 function isPublicRoute(pathname: string): boolean {
 
@@ -96,6 +96,8 @@ export function middleware(request: NextRequest) {
     const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
     return host === RELAY_HOST ? NextResponse.next() : new NextResponse(null, { status: 404 });
   }
+
+  if (LANDING_PAGES.has(pathname)) return NextResponse.redirect(`${LANDING_URL}${pathname}`, 308);
 
   // Only a hint for redirects: the session itself is an HttpOnly cookie on the API host, checked by the backend.
   const isLoggedIn = request.cookies.has("karui_signed_in");

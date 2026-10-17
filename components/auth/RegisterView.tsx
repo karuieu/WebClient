@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LANDING_URL } from "@/app/siteUrl";
 import { Button } from "@/components/kit/Button";
 import { Checkbox, Field } from "@/components/kit/Field";
 import { Label } from "@/components/kit/Frame";
@@ -104,11 +105,11 @@ export function RegisterView({
               onChange={(e) => onChange("terms", e.target.checked)}
             >
               I agree to the{" "}
-              <Link href="/terms" className="text-fg underline underline-offset-4">
+              <Link href={`${LANDING_URL}/terms`} target="_blank" rel="noopener noreferrer" className="text-fg underline underline-offset-4">
                 Terms
               </Link>{" "}
               and the{" "}
-              <Link href="/privacy" className="text-fg underline underline-offset-4">
+              <Link href={`${LANDING_URL}/privacy`} target="_blank" rel="noopener noreferrer" className="text-fg underline underline-offset-4">
                 Privacy Policy
               </Link>
               .

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LANDING_URL } from "@/app/siteUrl";
 import { CipherField } from "@/components/kit/CipherField";
 import { Cross } from "@/components/kit/Frame";
 import { SiteFooter } from "@/components/kit/SiteFooter";
@@ -55,10 +56,10 @@ export function AuthShell({ children, variant = "form" }: { children: React.Reac
             <Cross className="-right-[6px] -top-[6px]" />
             <p className="text-label text-muted">© {new Date().getFullYear()} Karui</p>
             <nav aria-label="Legal" className="flex items-center gap-5">
-              <Link href="/terms" className="text-label text-muted transition-colors duration-150 hover:text-fg">
+              <Link href={`${LANDING_URL}/terms`} className="text-label text-muted transition-colors duration-150 hover:text-fg">
                 Terms
               </Link>
-              <Link href="/privacy" className="text-label text-muted transition-colors duration-150 hover:text-fg">
+              <Link href={`${LANDING_URL}/privacy`} className="text-label text-muted transition-colors duration-150 hover:text-fg">
                 Privacy
               </Link>
             </nav>

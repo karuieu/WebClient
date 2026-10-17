@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
+import { LANDING_URL } from "@/app/siteUrl";
 import { Checkbox } from "@/components/kit/Field";
 import { RecoveryPhrase } from "@/components/kit/RecoveryPhrase";
 import { Lock } from "@/components/kit/icons";
@@ -85,7 +86,7 @@ export function OnboardingView(p: OnboardingViewProps) {
             className="mt-5"
           >
             I want Pro to start right away and understand that if I withdraw within 14 days, I pay for the days I had it (see the{" "}
-            <Link href="/terms" className="text-fg underline underline-offset-4">
+            <Link href={`${LANDING_URL}/terms`} target="_blank" rel="noopener noreferrer" className="text-fg underline underline-offset-4">
               Terms
             </Link>
             ).

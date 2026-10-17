@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
+import { LANDING_URL } from "@/app/siteUrl";
 import { Button } from "@/components/kit/Button";
 import { Checkbox } from "@/components/kit/Field";
 import { Label } from "@/components/kit/Frame";
@@ -170,7 +171,7 @@ export function PlansView({
             onChange={(e) => onStartNow(e.target.checked)}
           >
             I want Pro to start right away and understand that if I withdraw within 14 days, I pay for the days I had it (see the{" "}
-            <Link href="/terms" className="text-fg underline underline-offset-4">
+            <Link href={`${LANDING_URL}/terms`} target="_blank" rel="noopener noreferrer" className="text-fg underline underline-offset-4">
               Terms
             </Link>
             ).

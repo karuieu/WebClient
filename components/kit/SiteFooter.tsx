@@ -1,32 +1,31 @@
+import { LANDING_URL } from "@/app/siteUrl";
 import { Logo } from "./Logo";
 import { SocialLinks } from "./SocialIcons";
 import { ThemeToggle } from "./ThemeToggle";
-
-const SITE = "https://karui.eu";
 
 const columns = [
   {
     title: "Product",
     links: [
-      { label: "Security", href: `${SITE}/#security` },
-      { label: "Features", href: `${SITE}/#features` },
-      { label: "Models", href: `${SITE}/#models` },
-      { label: "Pricing", href: `${SITE}/#pricing` },
+      { label: "Security", href: `${LANDING_URL}/#security` },
+      { label: "Features", href: `${LANDING_URL}/#features` },
+      { label: "Models", href: `${LANDING_URL}/#models` },
+      { label: "Pricing", href: `${LANDING_URL}/#pricing` },
     ],
   },
   {
     title: "Company",
     links: [
       { label: "Contact", href: "mailto:support@karui.eu" },
-      { label: "Security policy", href: "/security" },
+      { label: "Security policy", href: `${LANDING_URL}/security` },
       { label: "Status", href: "https://status.karui.eu/", external: true },
     ],
   },
   {
     title: "Legal",
     links: [
-      { label: "Privacy", href: "/privacy" },
-      { label: "Terms", href: "/terms" },
+      { label: "Privacy", href: `${LANDING_URL}/privacy` },
+      { label: "Terms", href: `${LANDING_URL}/terms` },
     ],
   },
 ];
