@@ -14,7 +14,7 @@ import { cx } from "@/lib/cx";
 export function AuthShell({ children, variant = "form" }: { children: React.ReactNode; variant?: "form" | "system" }) {
   const system = variant === "system";
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-fg">
+    <div data-auth-shell className="flex min-h-dvh flex-col bg-bg text-fg">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-full focus:bg-inverse focus:px-4 focus:py-2 focus:text-sm focus:text-on-inverse"
@@ -23,7 +23,8 @@ export function AuthShell({ children, variant = "form" }: { children: React.Reac
       </a>
 
       <header className="px-4 sm:px-6">
-        <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between px-1 md:px-2">
+        {/* Same inset as the frame below and the landing nav, so the logo lines up with both. */}
+        <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between border-x border-transparent px-5 md:px-10">
           <Link href={LANDING_URL} aria-label="Karui home" className="rounded-lg">
             <Logo />
           </Link>

@@ -87,6 +87,12 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Sign-in screens are often shorter than the window. Keeping the scrollbar's space puts the
+   logo where the landing (which always scrolls) has it, and short and long forms don't shift. */
+html:has([data-auth-shell]) {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
