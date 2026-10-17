@@ -104,7 +104,8 @@ export function middleware(request: NextRequest) {
 
   let response: NextResponse;
   if (pathname === "/") {
-    response = NextResponse.redirect(new URL("/new", REDIRECT_BASE || request.url));
+    // Someone without a session, search engines included, lands on the landing page rather than a sign-in form.
+    response = NextResponse.redirect(isLoggedIn ? new URL("/new", REDIRECT_BASE || request.url) : LANDING_URL);
   } else if (!isLoggedIn && isProtectedRoute(pathname)) {
     response = NextResponse.redirect(new URL("/login", REDIRECT_BASE || request.url));
   } else {
