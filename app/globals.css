@@ -21,21 +21,23 @@ body {
   font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-::-webkit-scrollbar {
+/* Thin bars for panels only. The page's own bar stays native, as on the landing, so its reserved
+   space (kit.css) is as wide there and the sign-in logo lines up with the landing's. */
+:not(html, body)::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+:not(html, body)::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+:not(html, body)::-webkit-scrollbar-thumb {
   background: #303030;
   border-radius: 3px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+:not(html, body)::-webkit-scrollbar-thumb:hover {
   background: #404040;
 }
 
