@@ -11,6 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "minimal-ui",
     background_color: "#0a0a0a",
     theme_color: "#0a0a0a",
+    // PNGs next to the SVG: home screens don't take SVG. iOS reads app/apple-icon.png instead.
     icons: [
       {
         src: "/icon.svg",
@@ -18,6 +19,8 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "any",
         purpose: "any",
       },
+      { src: "/brand/icon-192.png", type: "image/png", sizes: "192x192", purpose: "any" },
+      { src: "/brand/icon-512.png", type: "image/png", sizes: "512x512", purpose: "any" },
     ],
   };
 }
