@@ -493,7 +493,8 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
       if (found.call === undefined) break;
 
       round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
-      const partial = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "").trim();
+      // Without its title and brief: seeing them at the start of its own reply, the model wrote them again.
+      const partial = stripTitleBlock(text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "")).trim();
       if (partial) followUps.push({ role: "assistant", content: partial });
       followUps.push({ role: "user", content: `${await runAnswerCall(found.call, round, ctx)}\n\nContinue your reply.` });
     }
