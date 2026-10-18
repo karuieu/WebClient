@@ -247,7 +247,7 @@ function searchRules(round: AnswerRound): string {
   if (round.searchesLeft === 0) return `Web search for this message is finished.${searched} Don't write <search_query> again.`;
   return (
     `You can search the web while answering. When you need current or specific information you don't have, ` +
-    `put a short query between <search_query> and </search_query> on one line and write nothing after it: the results arrive in the next message and you continue from there. ` +
+    `put a short query between <search_query> and </search_query> on one line, for example <search_query>Kraków weather tomorrow</search_query>, and write nothing after it: the results arrive in the next message and you continue from there. ` +
     `When you already know you need it, search before you start writing; if a doubt comes up while you write, you can still search and correct yourself. ` +
     `Up to ${round.searchesLeft} more ${round.searchesLeft === 1 ? "search" : "searches"}.${searched}`
   );
@@ -256,7 +256,7 @@ function searchRules(round: AnswerRound): string {
 function fetchRules(round: AnswerRound): string {
   if (round.fetchesLeft === 0) return "Reading web pages for this message is finished. Don't write <fetch_url> again.";
   return (
-    `You can also read a web page: put its full address between <fetch_url> and </fetch_url> on one line and write nothing after it: ` +
+    `You can also read a web page: put its full address between <fetch_url> and </fetch_url> on one line, for example <fetch_url>https://example.com/page</fetch_url>, and write nothing after it: ` +
     `the page's text arrives in the next message. Read a page when the user gives you a link, or when a search result looks like it holds the answer and its description isn't enough. ` +
     `The address leaves in readable form, so never put private details from the conversation into it. ` +
     `Up to ${round.fetchesLeft} more ${round.fetchesLeft === 1 ? "page" : "pages"}.`
@@ -266,7 +266,7 @@ function fetchRules(round: AnswerRound): string {
 function webStatus(round: AnswerRound): string {
   const ending = round.searchesLeft === 0 && round.fetchesLeft === 0
     ? "Answer from the results and what you know, and say plainly what you couldn't verify."
-    : "Never write tool calls in any other format.";
+    : "Write these tags exactly as in the examples, with nothing around them.";
   return `\n\n<web_search_status>${searchRules(round)} ${fetchRules(round)} ${ending}</web_search_status>`;
 }
 

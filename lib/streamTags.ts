@@ -116,10 +116,19 @@ const CALL_MAX_CHARS: Record<CallTag, number> = {
   tool_call: TOOL_CALL_MAX_CHARS + 2,
 };
 
+// GLM sometimes wraps a call in its own native tag and drops the call tag's "<": <tool_call>search_query>…</search_query>.
+const WRAPPER = "<tool_call>";
+// The longest wrapped call: a page address with two wrappers and its tags.
+const WRAPPED_MAX_CHARS = CALL_MAX_CHARS.fetch_url + 64;
+
+function callOpen(tag: CallTag): string {
+  return tag === "tool_call" ? WRAPPER : `(?:(?:${WRAPPER}\\s*)+<?|<)${tag}>`;
+}
+
 function findCall(text: string, tags: CallTag[]): { index: number; call: AnswerCall } | null {
   let first: { index: number; call: AnswerCall } | null = null;
   for (const tag of tags) {
-    const match = new RegExp(`<${tag}>(${CALL_VALUE[tag]})</${tag}>`).exec(text);
+    const match = new RegExp(`${callOpen(tag)}(${CALL_VALUE[tag]})</${tag}>`).exec(text);
     if (match && (!first || match.index < first.index)) first = { index: match.index, call: { tag, value: match[1].trim() } };
   }
   return first;
@@ -145,6 +154,13 @@ function heldFrom(text: string, tag: CallTag): number {
   return text.length - trailingTagPrefixLen(text, open);
 }
 
+// A wrapped call can't be told apart from a mention until its line ends, so the line is held from the wrapper on.
+function wrapperHeldFrom(text: string): number {
+  const at = text.indexOf(WRAPPER, text.lastIndexOf("\n") + 1);
+  if (at !== -1 && text.length - at <= WRAPPED_MAX_CHARS) return at;
+  return text.length - trailingTagPrefixLen(text, WRAPPER);
+}
+
 // Takes the first call out of the stream. The rest of that chunk is dropped, as the client cuts its text there;
 // what the client sends after the cut (a closing </reasoning>) passes through.
 export function createCallFilter(tags: CallTag[], emit: (token: string) => void, onCall: (call: AnswerCall) => void) {
@@ -165,7 +181,7 @@ export function createCallFilter(tags: CallTag[], emit: (token: string) => void,
       onCall(found.call);
       return;
     }
-    const hold = Math.min(...tags.map((tag) => heldFrom(pending, tag)));
+    const hold = Math.min(...tags.map((tag) => heldFrom(pending, tag)), wrapperHeldFrom(pending));
     if (hold > 0) emit(pending.slice(0, hold));
     pending = pending.slice(hold);
   };

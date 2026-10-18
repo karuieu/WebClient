@@ -104,9 +104,12 @@ export type ChatTurn = { role: "user" | "assistant"; content: string };
 export const UNDECRYPTABLE_PLACEHOLDER = "(unable to decrypt)";
 
 // <notice> blocks are UI metadata. Strip them from history, or the model reacts to them (e.g. apologising for 'memory skipped').
+// Search and page steps go too: the model copied them and wrote made-up results instead of searching.
 export function stripNoticeBlocks(content: string): string {
   return content
     .replace(/<notice>[\s\S]*?<\/notice>/g, "")
+    .replace(/<search>[\s\S]*?<\/search>/g, "")
+    .replace(/<fetched_page>[\s\S]*?<\/fetched_page>/g, "")
     .replace(/<tool>[\s\S]*?<\/tool>/g, "")
     .replace(/<library>[\s\S]*?<\/library>/g, "")
     .replace(/<skills_used>[\s\S]*?<\/skills_used>/g, "")
