@@ -10,7 +10,7 @@ import { Enter, cascade } from "@/components/kit/Enter";
 import { cx } from "@/lib/cx";
 import { Composer } from "../Composer";
 import { ShellContext } from "../AppShell";
-import { ArtifactPanel, type ArtifactPanelData } from "./ArtifactPanel";
+import { ArtifactPanel } from "./ArtifactPanel";
 import { AssistantMessage, UserMessage, type ArtifactData, type MessageData, type SkillDraftData } from "./Messages";
 import { QuestionCard, type QuestionsData } from "./Questions";
 
@@ -308,6 +308,7 @@ export function ChatView({
   onVariant,
   onOpenArtifact,
   onDownloadArtifact,
+  onSaveArtifact,
   onSaveSkill,
   artifactPanel,
   project,
@@ -331,13 +332,9 @@ export function ChatView({
   onVariant?: (messageId: string, dir: -1 | 1) => void;
   onOpenArtifact?: (a: ArtifactData) => void;
   onDownloadArtifact?: (a: ArtifactData) => void;
+  onSaveArtifact?: (a: ArtifactData) => void;
   onSaveSkill?: (s: SkillDraftData) => void;
-  artifactPanel?: {
-    artifact: ArtifactPanelData | null;
-    onClose: () => void;
-    onDownloadHtml: () => void;
-    onDownloadDoc: () => void;
-  };
+  artifactPanel?: React.ComponentProps<typeof ArtifactPanel>;
   project?: HeaderProject;
   focusMessageId?: string | null;
   onFocusShown?: (row: HTMLElement | null) => void;
@@ -454,6 +451,7 @@ export function ChatView({
                   onVariant={onVariant ? (d) => onVariant(m.id, d) : undefined}
                   onOpenArtifact={onOpenArtifact}
                   onDownloadArtifact={onDownloadArtifact}
+                  onSaveArtifact={onSaveArtifact}
                   onSaveSkill={onSaveSkill}
                 />
               );

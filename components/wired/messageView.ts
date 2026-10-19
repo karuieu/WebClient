@@ -1,15 +1,17 @@
+import type { ComponentProps } from "react";
 import { type Message } from "@/lib/chat";
 import { limitOf, statusOf } from "@/lib/errors";
 import { isProviderVerified } from "@/lib/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
-import { parseArtifacts, type Artifact } from "@/lib/artifacts";
+import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactMarkdown, parseArtifacts, type Artifact } from "@/lib/artifacts";
+import type { ArtifactPanel } from "@/components/app/chat/ArtifactPanel";
 import { modelLabel, parseMessageBlocks, splitQuote } from "@/lib/messageBlocks";
 import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/skills";
 import { parseQuestions } from "@/lib/questions";
 import type { AnswerActivity } from "@/lib/answerTools";
-import type { ArtifactData, MessageData, SkillDraftData } from "@/components/app/chat/Messages";
+import type { ArtifactChange, ArtifactData, MessageData, SkillDraftData } from "@/components/app/chat/Messages";
 import type { QuestionData } from "@/components/app/chat/Questions";
 
 
@@ -36,8 +38,42 @@ export function errorText(error: unknown, fallback: string): string {
   return msg;
 }
 
-function artifactsOf(id: string, artifacts: Artifact[]): ArtifactData[] {
-  return artifacts.map((a, i) => ({ id: `${id}:${i}`, title: a.title, streaming: a.streaming }));
+/** `savedHere`: saves made by hand on this page, which a message's tag can't record (messages aren't rewritten). */
+export type ChatLibrary = { paths: ReadonlySet<string>; savedHere: ReadonlyMap<string, string>; saving: string | null };
+
+function changeOf(artifact: Artifact): ArtifactChange | undefined {
+  if (artifact.saved === "updated") return { kind: "updated" };
+  if (artifact.saved === "edited") return { kind: "edited", count: artifact.changes ?? 1 };
+  // A failed save of a new file has no reason: its card offers Save to Library instead.
+  if (artifact.saved === "failed" && artifact.reason) return { kind: "failed", reason: artifact.reason };
+  return undefined;
+}
+
+function libraryOf(key: string, artifact: Artifact, library: ChatLibrary): ArtifactData["library"] {
+  const tagged = artifact.saved && artifact.saved !== "failed" ? artifact.path : undefined;
+  const path = library.savedHere.get(key) ?? tagged ?? (artifact.edit ? artifact.path : undefined);
+  const change = changeOf(artifact);
+  return { path: path ?? "", saved: path !== undefined && library.paths.has(path), saving: library.saving === key, change };
+}
+
+function artifactsOf(id: string, artifacts: Artifact[], library?: ChatLibrary): ArtifactData[] {
+  return artifacts.map((a, i) => {
+    const key = `${id}:${i}`;
+    return { id: key, title: a.title, type: a.type, edit: a.edit, streaming: a.streaming, library: library && libraryOf(key, a, library) };
+  });
+}
+
+export function artifactPanelOf(id: string | null, current: Artifact | undefined, onClose: () => void): ComponentProps<typeof ArtifactPanel> {
+  const download = (save: (artifact: Artifact) => void) => (source: string) => {
+    if (current) save({ ...current, content: source });
+  };
+  return {
+    artifact: id && current ? { id, title: current.title, type: current.type, source: current.content, streaming: current.streaming } : null,
+    onClose,
+    onDownloadHtml: download(downloadArtifactHtml),
+    onDownloadDoc: download(downloadArtifactDoc),
+    onDownloadMarkdown: download(downloadArtifactMarkdown),
+  };
 }
 
 export function toUser(m: Message): MessageData {
@@ -72,6 +108,7 @@ export function toAssistant(
   content: string,
   extra: Partial<AssistantData>,
   skills: SkillContext = NO_SKILLS,
+  library?: ChatLibrary,
 ): { message: AssistantData; artifacts: Artifact[] } {
   const { artifacts, text } = parseArtifacts(content);
   const { steps, answer, preparation } = parseMessageBlocks(text);
@@ -84,7 +121,7 @@ export function toAssistant(
       text: shown,
       steps,
       preparation,
-      artifacts: artifactsOf(id, artifacts),
+      artifacts: artifactsOf(id, artifacts, library),
       skills: skillsOf(id, drafts, skills),
       questions,
       ...extra,
@@ -111,6 +148,7 @@ export function toViewData(
   messages: ShownMessage[],
   stream: Streaming,
   skills: SkillContext = NO_SKILLS,
+  library?: ChatLibrary,
 ): { data: MessageData[]; artifacts: Map<string, Artifact> } {
   const byId = new Map<string, Artifact>();
   const data: MessageData[] = messages.map((m) => {
@@ -119,11 +157,12 @@ export function toViewData(
       model: modelLabel(m.model, m.provider),
       variant: m.variant,
       decryptionFailed: m.decryptionFailed,
-    }, skills);
+    }, skills, library);
     artifacts.forEach((a, i) => byId.set(`${m.id}:${i}`, a));
     return message;
   });
   if (stream) {
+    // No Library state while streaming: the note is saved only after the answer ends.
     const { message, artifacts } = toAssistant("streaming", stream.content, {
       streaming: true,
       status: activityStatus(stream.activity),

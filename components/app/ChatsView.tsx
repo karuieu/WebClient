@@ -37,6 +37,16 @@ export function stamp(iso: string, now: Date) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+export function exactStamp(iso: string, now: Date) {
+  const d = new Date(iso);
+  const days = dayDiff(d, now);
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  if (days === 0) return `Today ${time}`;
+  if (days === 1) return `Yesterday ${time}`;
+  if (days < 7) return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${time}`;
+  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${time}`;
+}
+
 export function standaloneStamp(iso: string, now: Date) {
   const d = new Date(iso);
   const days = dayDiff(d, now);

@@ -29,3 +29,17 @@ export function useMediaQuery(query: string) {
     () => false,
   );
 }
+
+// Measured before paint, so a narrow layout doesn't flash the wide one first.
+export function useNarrow(ref: React.RefObject<HTMLElement | null>, below: number) {
+  const [narrow, setNarrow] = React.useState(false);
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setNarrow(el.getBoundingClientRect().width < below);
+    const observer = new ResizeObserver(([entry]) => setNarrow(entry.contentRect.width < below));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, below]);
+  return narrow;
+}

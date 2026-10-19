@@ -240,8 +240,8 @@ export function ModelPicker({
   const label = (
     <>
       <span className="text-fg">{current?.name}</span>
-      {current?.tier && <span className="max-sm:hidden">· {current.tier === "light" ? "Light" : "Heavy"}</span>}
-      {effortLabel && <span className="max-sm:hidden">· {effortLabel}</span>}
+      {current?.tier && <span className="@max-[26rem]:hidden">· {current.tier === "light" ? "Light" : "Heavy"}</span>}
+      {effortLabel && <span className="@max-[26rem]:hidden">· {effortLabel}</span>}
     </>
   );
 

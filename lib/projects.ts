@@ -278,6 +278,10 @@ export interface LibraryFileMeta {
   path: string;
   preview: string;
   size: number;
+  /** v1, v2, … : every save is the next number. */
+  version: number;
+  /** The current version stays in the history once it's replaced. */
+  kept: boolean;
   updated_at: string;
 }
 
@@ -293,6 +297,8 @@ interface RawLibraryFile {
   encrypted_path: string;
   encrypted_preview: string;
   size: number;
+  version?: number;
+  kept?: boolean;
   updated_at: string;
 }
 
@@ -308,7 +314,7 @@ async function decryptLibraryFile(key: CryptoKey, projectId: string, raw: RawLib
     safeDecrypt(key, raw.encrypted_path, fieldAad("project-file-path", projectId, raw.id)),
     safeDecrypt(key, raw.encrypted_preview, fieldAad("project-file-preview", projectId, raw.id)),
   ]);
-  return { id: raw.id, path, preview, size: raw.size, updated_at: raw.updated_at };
+  return { id: raw.id, path, preview, size: raw.size, version: raw.version ?? 1, kept: raw.kept ?? false, updated_at: raw.updated_at };
 }
 
 function notifyFiles(projectId: string) {
@@ -416,11 +422,13 @@ export async function readProjectFiles(projectId: string, files: Pick<LibraryFil
   return out;
 }
 
+/** `keepVersion` moves the content being replaced into the file's versions (notes and documents). */
 export async function updateProjectFile(
   projectId: string,
   file: Pick<LibraryFileMeta, "id" | "updated_at">,
   content: string,
-  preview: string
+  preview: string,
+  keepVersion = false
 ): Promise<LibraryFileMeta> {
   const key = await requireAesKey();
   const [encrypted_preview, encrypted_content] = await Promise.all([
@@ -429,7 +437,7 @@ export async function updateProjectFile(
   ]);
   const raw = await apiCall<RawLibraryFile>(`/api/projects/${projectId}/files/${file.id}`, {
     method: "PATCH",
-    body: JSON.stringify({ encrypted_preview, encrypted_content, expected_updated_at: file.updated_at }),
+    body: JSON.stringify({ encrypted_preview, encrypted_content, expected_updated_at: file.updated_at, keep_version: keepVersion }),
   });
   contentCache.set(raw.id, { updatedAt: raw.updated_at, content });
   notifyFiles(projectId);
@@ -445,4 +453,34 @@ export async function deleteProjectFiles(projectId: string, ids: string[]): Prom
   }
   for (const id of ids) contentCache.delete(id);
   notifyFiles(projectId);
+}
+
+export interface FileVersionMeta {
+  id: string;
+  number: number;
+  size: number;
+  kept: boolean;
+  saved_at: string;
+}
+
+export async function listFileVersions(projectId: string, fileId: string): Promise<FileVersionMeta[]> {
+  return apiCall<FileVersionMeta[]>(`/api/projects/${projectId}/files/${fileId}/versions`, { method: "GET" });
+}
+
+/** A version is the file's own ciphertext, moved: it decrypts under the file's AAD. */
+export async function readFileVersion(projectId: string, fileId: string, versionId: string): Promise<string> {
+  const key = await requireAesKey();
+  const raw = await apiCall<{ encrypted_content: string }>(`/api/projects/${projectId}/files/${fileId}/versions/${versionId}`, { method: "GET" });
+  return decryptField(key, raw.encrypted_content, fieldAad("project-file-content", projectId, fileId));
+}
+
+export async function keepFileVersion(projectId: string, fileId: string): Promise<LibraryFileMeta> {
+  const key = await requireAesKey();
+  const raw = await apiCall<RawLibraryFile>(`/api/projects/${projectId}/files/${fileId}/keep`, { method: "POST" });
+  notifyFiles(projectId);
+  return decryptLibraryFile(key, projectId, raw);
+}
+
+export async function deleteFileVersion(projectId: string, fileId: string, versionId: string): Promise<void> {
+  await apiCall<void>(`/api/projects/${projectId}/files/${fileId}/versions/${versionId}`, { method: "DELETE" });
 }

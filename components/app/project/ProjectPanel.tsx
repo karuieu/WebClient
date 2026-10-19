@@ -8,14 +8,18 @@ import {
   ChevronRight,
   Ellipsis,
   Expand,
+  FileCode,
   FileText,
   Folder,
   FolderInput,
   FolderMinus,
   Layers,
+  NotebookText,
   PanelRight,
   Pencil,
   Plus,
+  Printer,
+  RotateCcw,
   Shrink,
   Star,
   Trash,
@@ -24,11 +28,16 @@ import {
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Segmented } from "@/components/kit/Segmented";
 import { Spinner } from "@/components/kit/Spinner";
-import { useNow } from "@/components/kit/useMounted";
+import { useNarrow, useNow } from "@/components/kit/useMounted";
 import { Tooltip } from "@/components/kit/Tooltip";
+import { artifactTypeOf, toDocument } from "@/lib/artifacts";
 import { cx } from "@/lib/cx";
-import { groupOf, stamp } from "../ChatsView";
+import { exactStamp, groupOf, stamp } from "../ChatsView";
+import { DocumentPaper } from "../chat/ArtifactPanel";
+import { ShellContext } from "../AppShell";
 import { DropOverlay } from "../DropOverlay";
+import { NumberedTextArea } from "../NumberedTextArea";
+import { VersionPaper, VersionPicker, versionMenuItems, type FileVersionsProps } from "./FileVersions";
 import { AddButtons, UsageMeter, formatBytes, type LibraryFile, type LibraryMemoryFile, type LibraryUsage } from "./Library";
 import type { YouMode } from "./ProjectSettings";
 
@@ -36,7 +45,14 @@ export type PanelChat = { id: string; title: string; brief?: string; starred: bo
 export type PanelView = "chats" | "library";
 
 export type OpenLibraryItem =
-  | { kind: "file"; file: LibraryFile; content: string | null; error?: string | null }
+  | {
+      kind: "file";
+      file: LibraryFile;
+      content: string | null;
+      error?: string | null;
+      /** Bumped when the content is replaced from outside the editor (a restored version), which starts the editor afresh. */
+      revision?: number;
+    }
   | { kind: "memory"; file: LibraryMemoryFile };
 
 export type ProjectPanelProps = {
@@ -70,6 +86,7 @@ export type ProjectPanelProps = {
     onMemorySettings: () => void;
     onOpenFile: (f: LibraryFile) => void;
     onSaveFile: (id: string, content: string) => void;
+    versions?: FileVersionsProps;
     onRetryOpen: () => void;
     onCloseItem: () => void;
 
@@ -293,8 +310,12 @@ function allFiles(n: TreeNode): LibraryFile[] {
 
 const indent = (depth: number) => ({ paddingLeft: `${12 + depth * 14}px` });
 
+const FILE_ICON = { markdown: NotebookText, html: FileCode } as const;
+
 function FileRow({ file, depth, p }: { file: LibraryFile; depth: number; p: Internal }) {
   const name = file.path.split("/").pop() ?? file.path;
+  const type = artifactTypeOf(file.path);
+  const Icon = type ? FILE_ICON[type] : FileText;
   return (
     <li className="group/row relative">
       <button
@@ -303,7 +324,7 @@ function FileRow({ file, depth, p }: { file: LibraryFile; depth: number; p: Inte
         style={indent(depth)}
         className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg pr-9 text-left text-[13px] tracking-[-0.01em] text-fg/90 transition-colors duration-150 hover:bg-surface-2/70"
       >
-        <FileText className="size-3.5 shrink-0 text-muted" />
+        <Icon className="size-3.5 shrink-0 text-muted" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
         <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted [@media(hover:hover)]:group-hover/row:opacity-0">{formatBytes(file.size)}</span>
       </button>
@@ -565,54 +586,11 @@ function LibraryView(p: Internal) {
   );
 }
 
+// Narrower than this, the version picker and Preview / Edit move into ⋯.
+const COMPACT_HEADER = 520;
+
 const smallButton =
   "flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-[opacity,background-color,transform] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40";
-
-/** Mirror soft-wrapped lines behind the textarea in the same grid cell so line numbers and scrolling stay aligned. */
-function NumberedTextArea({
-  value,
-  onChange,
-  label,
-  placeholder,
-  spellCheck,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  label: string;
-  placeholder?: string;
-  spellCheck?: boolean;
-}) {
-  const lines = value.split("\n");
-  const gutter = `calc(${String(lines.length).length}ch + 1.75rem)`;
-  const text = "whitespace-pre-wrap break-words py-3 pr-4 font-mono text-[12.5px] leading-relaxed [tab-size:4]";
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto transition-colors duration-150 focus-within:bg-elevated">
-      <div className="grid min-h-full grid-cols-1 [&>*]:[grid-area:1/1]">
-        <div aria-hidden="true" className="border-r border-line bg-surface-2/40" style={{ width: `calc(${gutter} - 0.625rem)` }} />
-        <div aria-hidden="true" className={cx(text, "pointer-events-none text-transparent [counter-reset:line]")} style={{ paddingLeft: gutter }}>
-          {lines.map((line, i) => (
-            <div
-              key={i}
-              className="relative [counter-increment:line] before:absolute before:right-full before:top-0 before:mr-3.5 before:font-mono before:text-[11px] before:leading-[calc(12.5px*1.625)] before:text-muted before:content-[counter(line)]"
-            >
-              {line || "\u200b"}
-            </div>
-          ))}
-        </div>
-        <textarea
-          data-focus="within"
-          aria-label={label}
-          value={value}
-          placeholder={placeholder}
-          spellCheck={spellCheck}
-          onChange={(e) => onChange(e.target.value)}
-          className={cx(text, "block w-full resize-none overflow-hidden border-0 bg-transparent text-fg outline-none placeholder:font-sans placeholder:text-subtle")}
-          style={{ paddingLeft: gutter }}
-        />
-      </div>
-    </div>
-  );
-}
 
 /** Key the editor by file and loaded content so opening a file initializes the correct draft. */
 function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
@@ -645,18 +623,79 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
 
   const field = "w-full bg-transparent outline-none transition-colors duration-150 placeholder:text-subtle focus:bg-elevated";
 
+  const type = memory ? null : artifactTypeOf((item.file as LibraryFile).path);
+  const [view, setView] = React.useState<"preview" | "edit">(type ? "preview" : "edit");
+  const frameRef = React.useRef<HTMLIFrameElement>(null);
+  const loaded = item.kind === "file" && item.content !== null && !item.error;
+  const previewing = type !== null && view === "preview" && loaded;
+  const document = React.useMemo(
+    () => (previewing ? toDocument({ title: name ?? "", type, content: draft.content }) : ""),
+    [previewing, type, name, draft.content],
+  );
+  const versions = type && loaded ? l.versions : undefined;
+  const viewing = versions?.viewing ?? null;
+  const file = item.kind === "file" ? item.file : null;
+  const current = { number: file?.version ?? 1, kept: !!file?.kept };
+
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const compact = useNarrow(rootRef, COMPACT_HEADER);
+  const { sidebarHidden } = React.useContext(ShellContext);
+  const now = useNow();
+  const toolbar = type !== null && loaded;
+  const menuItems: MenuItem[] = [
+    ...(toolbar && compact && !viewing
+      ? [
+          { type: "header" as const, content: <p className="text-label text-muted">View</p> },
+          { label: "Preview", checked: view === "preview", onSelect: () => setView("preview") },
+          { label: "Edit", checked: view === "edit", onSelect: () => setView("edit") },
+          { type: "separator" as const },
+        ]
+      : []),
+    ...(compact && versions ? [...versionMenuItems(current, !dirty, versions, now), { type: "separator" as const }] : []),
+    ...(previewing || viewing
+      ? [
+          { label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: () => frameRef.current?.contentWindow?.print() },
+          { type: "separator" as const },
+        ]
+      : []),
+    ...(viewing && versions
+      ? [{ label: `Delete v${viewing.version.number}`, icon: <Trash className="size-3.5" />, danger: true, onSelect: () => versions.onDelete(viewing.version) }]
+      : []),
+    {
+      label: "Delete file",
+      icon: <Trash className="size-3.5" />,
+      danger: true,
+      onSelect: () => (memory ? l.onDeleteMemoryFile(memory) : l.onDeleteFiles([item.file.id], name ?? "")),
+    },
+  ];
+  const shownSubtitle = viewing
+    ? [`v${viewing.version.number}`, now && exactStamp(viewing.version.savedAt, now), "read only"].filter(Boolean).join(" · ")
+    : toolbar && compact
+      ? `v${current.number} · ${subtitle}`
+      : subtitle;
+
   return (
     <div
+      ref={rootRef}
       className="flex min-h-0 flex-1 flex-col"
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
           e.preventDefault();
           save();
         }
-        if (e.key === "Escape" && !dirty) l.onCloseItem();
+        if (e.key !== "Escape") return;
+        if (viewing) versions?.onView(null);
+        else if (!dirty) l.onCloseItem();
       }}
     >
-      <div className="flex h-12 shrink-0 items-center gap-1 border-y border-line pl-2 pr-3 md:pr-4">
+      <div
+        className={cx(
+          "flex shrink-0 items-center gap-1 border-line pl-2 pr-3 md:pr-4",
+          // Over the chat: the chat header's height, and room for the floating button of a hidden sidebar.
+          p.expanded ? "h-14 border-b" : "h-12 border-y",
+          p.expanded && sidebarHidden && "md:pl-14",
+        )}
+      >
         <button
           type="button"
           onClick={back}
@@ -671,16 +710,35 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
             <span className="truncate">{name}</span>
             {dirty && <span className="size-1.5 shrink-0 rounded-full bg-fg" aria-label="Unsaved changes" />}
           </p>
-          <p className="truncate font-mono text-[10.5px] text-muted" title={subtitle}>
-            {subtitle}
+          <p className="truncate font-mono text-[10.5px] text-muted" title={shownSubtitle}>
+            {shownSubtitle}
           </p>
         </div>
+        {toolbar && !compact && (
+          <>
+            {versions && <VersionPicker current={current} canKeep={!dirty} p={versions} />}
+            {!viewing && (
+              <Segmented
+                id={`library-view-${p.variant}`}
+                label="View"
+                size="sm"
+                className="mx-1 shrink-0"
+                options={[
+                  { value: "preview", label: "Preview" },
+                  { value: "edit", label: "Edit" },
+                ]}
+                value={view}
+                onChange={setView}
+              />
+            )}
+          </>
+        )}
         {p.onToggleExpand && (
           <button
             type="button"
             onClick={p.onToggleExpand}
-            aria-label={p.expanded ? "Narrow the panel" : "Widen the panel"}
-            title={p.expanded ? "Narrow the panel" : "Widen the panel"}
+            aria-label={p.expanded ? "Show the chat again" : "Expand over the chat"}
+            title={p.expanded ? "Show the chat again" : "Expand over the chat"}
             className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg max-md:hidden"
           >
             {p.expanded ? <Shrink className="size-3.5" /> : <Expand className="size-3.5" />}
@@ -688,14 +746,9 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
         )}
         <Menu
           label={`Actions for ${name}`}
-          items={[
-            {
-              label: "Delete file",
-              icon: <Trash className="size-3.5" />,
-              danger: true,
-              onSelect: () => (memory ? l.onDeleteMemoryFile(memory) : l.onDeleteFiles([item.file.id], name ?? "")),
-            },
-          ]}
+          sheetTitle={name ?? "File"}
+          items={menuItems}
+          onOpenChange={(open) => open && compact && versions?.onLoad()}
         >
           {({ open, triggerProps }) => (
             <button
@@ -710,12 +763,25 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
             </button>
           )}
         </Menu>
-        <Tooltip keys={["Mod", "S"]} align="end" className="ml-1">
-          <button type="button" onClick={save} disabled={!dirty} className={cx(smallButton, "bg-inverse text-on-inverse hover:opacity-85")}>
-            {l.saving && <Spinner inverse className="size-3" />}
-            Save
+        {viewing && versions ? (
+          <button
+            type="button"
+            onClick={() => versions.onRestore(viewing.version)}
+            disabled={viewing.content === null || versions.restoring}
+            title={`Makes v${viewing.version.number} the newest version, v${current.number + 1}`}
+            className={cx(smallButton, "ml-1 bg-inverse text-on-inverse hover:opacity-85")}
+          >
+            {versions.restoring ? <Spinner inverse className="size-3" /> : <RotateCcw className="size-3" />}
+            Restore
           </button>
-        </Tooltip>
+        ) : (
+          <Tooltip keys={["Mod", "S"]} align="end" className="ml-1">
+            <button type="button" onClick={save} disabled={!dirty} className={cx(smallButton, "bg-inverse text-on-inverse hover:opacity-85")}>
+              {l.saving && <Spinner inverse className="size-3" />}
+              Save
+            </button>
+          </Tooltip>
+        )}
       </div>
 
       <AnimatePresence initial={false}>
@@ -786,18 +852,21 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
             <span key={i} className="h-2.5 animate-pulse rounded-full bg-surface-2" style={{ width: `${w}%` }} />
           ))}
         </div>
+      ) : type && viewing ? (
+        <VersionPaper name={name ?? ""} type={type} viewing={viewing} onRetry={() => versions?.onView(viewing.version)} frameRef={frameRef} />
+      ) : previewing ? (
+        <div className="min-h-0 flex-1 p-3">
+          <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} />
+        </div>
       ) : (
         <NumberedTextArea
           label={`Content of ${name}`}
           value={draft.content}
-          spellCheck={false}
+          spellCheck={type === "markdown"}
           onChange={(content) => setDraft((d) => ({ ...d, content }))}
         />
       )}
 
-      <p className="shrink-0 border-t border-line px-4 py-2 font-mono text-[10.5px] text-muted">
-        {draft.content.split("\n").length} lines · {formatBytes(new Blob([draft.content]).size)} · encrypted when you save
-      </p>
     </div>
   );
 }
@@ -814,7 +883,7 @@ export function ProjectPanel(p: Internal) {
         p.variant === "docked" ? "border-l border-line" : editing ? "w-screen" : "w-[min(400px,90vw)]",
       )}
     >
-      <div className="flex h-14 shrink-0 items-center justify-between gap-2 pl-4 pr-3 md:pr-4">
+      <div className={cx("flex h-14 shrink-0 items-center justify-between gap-2 pl-4 pr-3 md:pr-4", p.expanded && editing && "hidden")}>
         <Segmented
           id={`project-panel-view-${p.variant}`}
           label="Show"
@@ -840,13 +909,14 @@ export function ProjectPanel(p: Internal) {
 
       {editing ? (
         <LibraryEditor
-          key={`${editing.kind}-${editing.file.id}-${editing.kind === "file" && editing.content !== null}`}
+          key={`${editing.kind}-${editing.file.id}-${editing.kind === "file" && editing.content !== null}-${editing.kind === "file" ? (editing.revision ?? 0) : 0}`}
           item={editing}
           p={p}
         />
       ) : (
       <div className="relative min-h-0 flex-1">
-        <div className="absolute inset-0 overflow-y-auto overscroll-contain pt-2 [mask-image:linear-gradient(to_bottom,transparent,black_10px,black_calc(100%-20px),transparent)]">
+        {/* overflow-x-hidden: the view entering from 10px right would flash a horizontal scrollbar. */}
+        <div className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain pt-2 [mask-image:linear-gradient(to_bottom,transparent,black_10px,black_calc(100%-20px),transparent)]">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={p.view}

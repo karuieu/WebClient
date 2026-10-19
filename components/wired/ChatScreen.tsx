@@ -23,7 +23,8 @@ import { clearQuoted, markQuoted } from "@/lib/quotedHighlight";
 import { clearPendingFocus, peekPendingFocus, subscribePendingFocus } from "@/lib/searchFocus";
 import { clearSearchTerms, markSearchTerms } from "@/lib/searchHighlight";
 import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
-import { toDocument, downloadArtifactDoc, downloadArtifactHtml } from "@/lib/artifacts";
+import { downloadArtifact } from "@/lib/artifacts";
+import { saveArtifactToLibrary } from "@/lib/projectFiles";
 import { toBlockquote } from "@/lib/messageBlocks";
 import { getUser } from "@/lib/session";
 import {
@@ -36,14 +37,15 @@ import {
   updateSkill,
   type Skill,
 } from "@/lib/skills";
-import type { SkillDraftData } from "@/components/app/chat/Messages";
+import type { ArtifactData, SkillDraftData } from "@/components/app/chat/Messages";
 import { useTabTitle } from "@/lib/tabTitle";
 import { useToast } from "@/components/Toast";
 import { ChatView, type HeaderProject } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import { useComposer } from "./useComposer";
 import { LibraryContext } from "./useLibrary";
-import { enclaveFor, errorText, pendingQuestions, resetTime, toViewData, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, type Streaming } from "./messageView";
+import type { ProjectLibrary } from "./ProjectScreen";
 
 const COMPRESSION_FAILED: Record<Exclude<CompressionOutcome, "done">, string> = {
   nothing: "There's nothing left to condense in this conversation.",
@@ -54,6 +56,7 @@ const COMPRESSION_FAILED: Record<Exclude<CompressionOutcome, "done">, string> = 
 export type ChatInProject = {
   routeProjectId: string;
   header: HeaderProject;
+  library: ProjectLibrary;
   onDocumentOpen: (open: boolean) => void;
 };
 
@@ -268,9 +271,18 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
 
   const [savedSkills, setSavedSkills] = React.useState<Skill[]>([]);
   const [savingSkill, setSavingSkill] = React.useState<string | null>(null);
+  const [savedHere, setSavedHere] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const [savingArtifact, setSavingArtifact] = React.useState<string | null>(null);
+  const libraryPaths = project?.library.paths;
   const { data, artifacts } = React.useMemo(
-    () => toViewData(visibleMessages(messages, selection), stream, { saved: savedSkills, saving: savingSkill }),
-    [messages, selection, stream, savedSkills, savingSkill],
+    () =>
+      toViewData(
+        visibleMessages(messages, selection),
+        stream,
+        { saved: savedSkills, saving: savingSkill },
+        libraryPaths ? { paths: libraryPaths, savedHere, saving: savingArtifact } : undefined,
+      ),
+    [messages, selection, stream, savedSkills, savingSkill, libraryPaths, savedHere, savingArtifact],
   );
 
   // Saved skills are only needed to label drafted ones, so a chat without drafts never loads them.
@@ -302,7 +314,29 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   };
 
   const current = openArtifact ? artifacts.get(openArtifact) : undefined;
-  const panelDocument = React.useMemo(() => (current && !current.streaming ? toDocument(current) : ""), [current]);
+
+  // A note or document in the Library opens there, at its latest version; one that isn't opens from the message.
+  const openArtifactData = (a: ArtifactData) => {
+    if (!a.library?.saved) return setOpenArtifact(a.id);
+    setOpenArtifact(null);
+    project?.library.open(a.library.path);
+  };
+
+  const saveToLibrary = async (a: ArtifactData) => {
+    const art = artifacts.get(a.id);
+    const routeProjectId = project?.routeProjectId;
+    if (!art || !routeProjectId) return;
+    setSavingArtifact(a.id);
+    try {
+      const path = await saveArtifactToLibrary(routeProjectId, art);
+      setSavedHere((saved) => new Map(saved).set(a.id, path));
+      showSuccess("Saved to the Library");
+    } catch (error) {
+      showError(error instanceof Error && error.message ? error.message : "Couldn't save to the Library");
+    } finally {
+      setSavingArtifact(null);
+    }
+  };
 
   const enclave = enclaveFor(model, streaming);
 
@@ -414,11 +448,12 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
         project={project && { ...project.header, onTogglePanel: current ? () => setOpenArtifact(null) : project.header.onTogglePanel }}
         focusMessageId={focus?.messageId}
         onFocusShown={onFocusShown}
-        onOpenArtifact={(a) => setOpenArtifact(a.id)}
+        onOpenArtifact={openArtifactData}
         onDownloadArtifact={(a) => {
           const art = artifacts.get(a.id);
-          if (art) downloadArtifactHtml(art);
+          if (art) downloadArtifact(art);
         }}
+        onSaveArtifact={project ? (a) => void saveToLibrary(a) : undefined}
         onSaveSkill={(d) => void saveSkill(d)}
         questions={
           asking && {
@@ -427,12 +462,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
             onSkip: () => setDismissedQuestions(asking.id),
           }
         }
-        artifactPanel={{
-          artifact: current ? { title: current.title, document: panelDocument, streaming: current.streaming } : null,
-          onClose: () => setOpenArtifact(null),
-          onDownloadHtml: () => current && downloadArtifactHtml(current),
-          onDownloadDoc: () => current && downloadArtifactDoc(current),
-        }}
+        artifactPanel={artifactPanelOf(openArtifact, current, () => setOpenArtifact(null))}
       />
     </div>
   );

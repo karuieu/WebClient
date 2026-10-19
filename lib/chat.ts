@@ -6,6 +6,7 @@
 import { ensureAesKey, getUser } from "./session";
 import { decryptField, encryptField, fieldAad, messageAad } from "./crypto";
 import { getProject, listProjectFiles, listProjectMemory, readProjectFiles } from "./projects";
+import { saveArtifactsToLibrary } from "./projectFiles";
 import {
   applyLiveMemoryEdit,
   applyProjectMemoryEdit,
@@ -447,6 +448,8 @@ interface ProjectTurn {
   applyMemoryEdit: (edit: LiveMemoryEdit) => Promise<boolean>;
   project: NonNullable<E2EStreamOptions["project"]>;
   skillIds: string[];
+  /** Returns the answer with the saved paths written into its artifact tags. */
+  saveArtifacts: (content: string) => Promise<string>;
 }
 
 /**
@@ -465,6 +468,7 @@ async function projectTurn(chat: Chat | null): Promise<ProjectTurn | null> {
     applyMemoryEdit: async () => false,
     project: { files: [], read: async () => new Map(), connectorIds: [] },
     skillIds: [],
+    saveArtifacts: (content) => saveArtifactsToLibrary(projectId, content),
   };
   try {
     const [project, listing] = await Promise.all([getProject(projectId), listProjectFiles(projectId)]);
@@ -487,6 +491,7 @@ async function projectTurn(chat: Chat | null): Promise<ProjectTurn | null> {
         connectorIds: settings.connectorIds,
       },
       skillIds: settings.skillIds,
+      saveArtifacts: none.saveArtifacts,
     };
   } catch {
     return none;
@@ -613,12 +618,14 @@ export async function sendMessage(
       : undefined;
 
   const turn = await streamTurn(content, model, since.history, onToken, ctx, webSearch, onActivity, images, files, onTitle, onBrief);
+  // Retries don't save: a retry repeats the answer, not its actions.
+  const assistantContent = inProject ? await inProject.saveArtifacts(turn.assistantContent) : turn.assistantContent;
   return appendMessages(
     chatId,
     key,
     [
       { role: "user", content: turn.userContent, model, tokens: turn.inputTokens },
-      { role: "assistant", content: turn.assistantContent, model, provider: turn.provider, tokens: turn.outputTokens },
+      { role: "assistant", content: assistantContent, model, provider: turn.provider, tokens: turn.outputTokens },
     ],
     discard
   );

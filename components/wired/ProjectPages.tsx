@@ -74,7 +74,7 @@ export function ProjectChat({ projectId, chatId }: { projectId: string; chatId: 
     <ChatScreen
       key={chatId}
       chatId={chatId}
-      project={frame ? { routeProjectId: projectId, header: frame.header, onDocumentOpen: frame.setDocumentOpen } : undefined}
+      project={frame ? { routeProjectId: projectId, header: frame.header, library: frame.library, onDocumentOpen: frame.setDocumentOpen } : undefined}
     />
   );
 }

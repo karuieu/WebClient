@@ -14,7 +14,8 @@ export type ProcessingStep =
   | { kind: "notice"; text: string }
   | { kind: "tool"; connector: string; tool: string; status: "ok" | "error" | "declined" }
   | { kind: "skills"; names: string[] }
-  | { kind: "files"; paths: string[] };
+  | { kind: "files"; paths: string[] }
+  | { kind: "version"; path: string; status: "ok" | "error" };
 
 const spring = { type: "spring", bounce: 0, duration: 0.4 } as const;
 
@@ -46,6 +47,9 @@ function summarize(steps: ProcessingStep[]): string {
   if (skills) parts.push(skills === 1 ? "1 skill" : `${skills} skills`);
   const files = steps.reduce((n, s) => (s.kind === "files" ? n + s.paths.length : n), 0);
   if (files) parts.push(files === 1 ? "1 file" : `${files} files`);
+  const kept = steps.filter((s) => s.kind === "version");
+  if (kept.some((v) => v.kind === "version" && v.status === "error")) parts.push("Version not kept");
+  else if (kept.length) parts.push("Version kept");
   return parts.join(" · ");
 }
 
@@ -160,6 +164,15 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
               </li>
             ))}
           </ul>
+        </div>
+      );
+    case "version":
+      return (
+        <div>
+          <StepLabel live={live}>{step.status === "ok" ? "Kept a version of a Library file" : "Couldn't keep a version of a Library file"}</StepLabel>
+          <p className="truncate pl-3.5 font-mono text-[12.5px] text-fg" title={step.path}>
+            {step.path}
+          </p>
         </div>
       );
     default:

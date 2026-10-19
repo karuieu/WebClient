@@ -153,7 +153,8 @@ export function Composer({
       onClick={(e) => {
         if (e.target === e.currentTarget) textRef.current?.focus();
       }}
-      className="rounded-[22px] border border-line-strong bg-elevated shadow-soft transition-[border-color] duration-200 focus-within:border-fg/30"
+      // A container: the model picker shortens with the field, which a project panel can narrow on a wide screen.
+      className="@container rounded-[22px] border border-line-strong bg-elevated shadow-soft transition-[border-color] duration-200 focus-within:border-fg/30"
     >
       <AnimatePresence initial={false}>
         {quote && (

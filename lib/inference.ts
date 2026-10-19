@@ -131,6 +131,15 @@ export function chatModelAsHelper(modelId: string, provider: ProviderId): () => 
   });
 }
 
+const PROJECT_ARTIFACTS = `<project_artifacts>
+In this project, artifacts are files in its Library: a note (type="markdown") is a .md file, a document (type="html") an .html file. The .md and .html files in <library_index> are notes and documents too, including ones the user added.
+- A new file: write the artifact. Add path="folder/name.md" to choose where; without it, the title names the file.
+- A change to a file that exists: load it with <read> first. Then write it whole again with path="<its path>", or send only the changes, one pair per change: <artifact type="markdown" title="…" path="<its path>" mode="edit"><old>exact text from the file</old><new>its replacement</new></artifact>. Each <old> must appear in the file exactly once, or nothing changes. For a small fix to a long file, send the changes.
+- Every save keeps the version it replaces, and the last three stay, so a change can be undone in the Library.
+- When the user asks to keep or back up a file's current version, write <keep_version path="<its path>"/>. A kept version stays until the user deletes it.
+After a save, your earlier artifact tags show what happened: saved="created", "updated", "edited", or "failed" with a reason.
+</project_artifacts>`;
+
 // Block order matters: providers cache the longest common token prefix, so stable blocks go first and per-message memory goes last. Must match the backend's order.
 async function buildSystemPrompt(opts: {
   projectContext: string;
@@ -180,6 +189,8 @@ async function buildSystemPrompt(opts: {
   if (!getArtifactsEnabled()) {
     prompt +=
       "\n\n<artifacts_status>Artifacts are currently DISABLED by the user. Do NOT emit any <artifact> block — write the full answer inline in the chat instead.</artifacts_status>";
+  } else if (opts.memoryScope === "project") {
+    prompt += `\n\n${PROJECT_ARTIFACTS}`;
   }
   if (opts.generateTitle) {
     prompt += opts.generateBrief

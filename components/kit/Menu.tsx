@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cx } from "@/lib/cx";
 import { Check } from "./icons";
-import { useMounted } from "./useMounted";
+import { Sheet } from "./Sheet";
+import { useMediaQuery, useMounted } from "./useMounted";
 
 export type MenuItem =
   | {
@@ -42,6 +43,7 @@ export function Menu({
   placement = "bottom-end",
   className,
   panelClassName,
+  sheetTitle,
   onOpenChange,
   children,
 }: {
@@ -50,6 +52,8 @@ export function Menu({
   placement?: Placement;
   className?: string;
   panelClassName?: string;
+  /** On a phone, opens as a bottom sheet with this title, like the model picker. */
+  sheetTitle?: string;
   onOpenChange?: (open: boolean) => void;
   children: (props: { open: boolean; triggerProps: React.ComponentProps<"button"> }) => React.ReactNode;
 }) {
@@ -62,6 +66,7 @@ export function Menu({
   const id = React.useId();
   const fromTop = placement.startsWith("top");
   const viaKeyboard = React.useRef(false);
+  const asSheet = useMediaQuery("(max-width: 639px)") && !!sheetTitle;
 
   const setOpen = React.useCallback(
     (v: boolean) => {
@@ -80,8 +85,9 @@ export function Menu({
     els[next].focus();
   }, []);
 
+  // Popover only: the sheet closes itself.
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || asSheet) return;
     requestAnimationFrame(() => (viaKeyboard.current ? focusItem("first") : panelRef.current?.focus()));
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
@@ -96,7 +102,7 @@ export function Menu({
       window.removeEventListener("resize", close);
       window.removeEventListener("scroll", close, true);
     };
-  }, [open, setOpen, focusItem]);
+  }, [open, asSheet, setOpen, focusItem]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const keys: Record<string, () => void> = {
@@ -138,7 +144,44 @@ export function Menu({
         },
       })}
 
+      {asSheet && sheetTitle && (
+        <Sheet open={open} onClose={() => setOpen(false)} title={sheetTitle}>
+          <div className="flex flex-col px-2 pt-1">
+            {items.map((item, i) => {
+              if (item.type === "separator") return <div key={i} role="separator" className="mx-3 my-1.5 h-px bg-line" />;
+              if (item.type === "header")
+                return (
+                  <div key={i} className="px-3 pb-1.5 pt-3">
+                    {item.content}
+                  </div>
+                );
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  aria-checked={item.checked}
+                  role={item.checked === undefined ? undefined : "menuitemcheckbox"}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onSelect();
+                  }}
+                  className={cx(
+                    "flex h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-[15px] tracking-[-0.01em] transition-colors duration-100",
+                    item.danger ? "text-danger active:bg-danger/10" : "text-fg active:bg-surface",
+                  )}
+                >
+                  {item.icon && <span className={cx("grid place-items-center", !item.danger && "text-muted")}>{item.icon}</span>}
+                  <span className="flex-1">{item.label}</span>
+                  {item.hint && <span className="font-mono text-[12px] text-muted">{item.hint}</span>}
+                  {item.checked !== undefined && <Check className={cx(item.checked ? "opacity-100" : "opacity-0")} />}
+                </button>
+              );
+            })}
+          </div>
+        </Sheet>
+      )}
       {mounted &&
+        !asSheet &&
         createPortal(
           <AnimatePresence>
             {open && (

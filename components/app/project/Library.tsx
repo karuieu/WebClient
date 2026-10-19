@@ -9,7 +9,8 @@ import { Spinner } from "@/components/kit/Spinner";
 import { cx } from "@/lib/cx";
 import type { MemoryFileItem } from "../settings/Memory";
 
-export type LibraryFile = { id: string; path: string; size: number };
+/** `version` counts saves (v1, v2, …); `kept` keeps the current one in the history once it's replaced. */
+export type LibraryFile = { id: string; path: string; size: number; version?: number; kept?: boolean };
 export type LibraryMemoryFile = MemoryFileItem & { fromYou?: boolean };
 export type LibraryUsage = { used: number; limit: number; files: number; maxFiles: number };
 

@@ -5,14 +5,14 @@ import { INCOGNITO_CHAT_ID, sendIncognitoMessage, type Message, type ModelType }
 import type { FirstMessage } from "@/lib/handoff";
 import { clearQuoted, markQuoted } from "@/lib/quotedHighlight";
 import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
-import { toDocument, downloadArtifactDoc, downloadArtifactHtml } from "@/lib/artifacts";
+import { downloadArtifact } from "@/lib/artifacts";
 import { toBlockquote } from "@/lib/messageBlocks";
 import { useToast } from "@/components/Toast";
 import { ChatView } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import type { Costume } from "@/components/kit/icons";
 import { useComposer } from "./useComposer";
-import { enclaveFor, errorText, pendingQuestions, toViewData, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, toViewData, type Streaming } from "./messageView";
 
 /** Keep incognito messages only in component memory; navigation, reload, and tab closure discard the conversation. */
 export function IncognitoChat({ first, halloween }: { first: FirstMessage; halloween?: Costume }): React.JSX.Element {
@@ -86,7 +86,6 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
 
   const { data, artifacts } = React.useMemo(() => toViewData(messages, stream), [messages, stream]);
   const current = openArtifact ? artifacts.get(openArtifact) : undefined;
-  const panelDocument = React.useMemo(() => (current && !current.streaming ? toDocument(current) : ""), [current]);
   const [dismissedQuestions, setDismissedQuestions] = React.useState<string | null>(null);
   const asking = pendingQuestions(data, dismissedQuestions);
 
@@ -126,14 +125,9 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
         onOpenArtifact={(a) => setOpenArtifact(a.id)}
         onDownloadArtifact={(a) => {
           const art = artifacts.get(a.id);
-          if (art) downloadArtifactHtml(art);
+          if (art) downloadArtifact(art);
         }}
-        artifactPanel={{
-          artifact: current ? { title: current.title, document: panelDocument, streaming: current.streaming } : null,
-          onClose: () => setOpenArtifact(null),
-          onDownloadHtml: () => current && downloadArtifactHtml(current),
-          onDownloadDoc: () => current && downloadArtifactDoc(current),
-        }}
+        artifactPanel={artifactPanelOf(openArtifact, current, () => setOpenArtifact(null))}
       />
     </div>
   );

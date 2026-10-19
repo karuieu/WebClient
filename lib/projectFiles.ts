@@ -1,7 +1,18 @@
 import type { PickedItem, SkipReason, SkippedItem } from "@/components/app/project/Library";
 import { estimateTokens } from "./context";
 import type { LibraryIndexEntry } from "./answerTools";
+import { applyEdits, editPairs, parseArtifacts, setArtifactAttrs, tagAttr, titleSlug, type Artifact } from "./artifacts";
+import { blockJSON } from "./messageBlocks";
 import { extractPdfText } from "./pdfText";
+import {
+  keepFileVersion,
+  listProjectFiles,
+  ProjectApiError,
+  readProjectFiles,
+  updateProjectFile,
+  uploadProjectFiles,
+  type LibraryFileMeta,
+} from "./projects";
 
 const MB = 1024 * 1024;
 
@@ -88,6 +99,115 @@ export function previewOf(content: string): string {
   const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
   const heading = lines.find((l) => /^#{1,3}\s/.test(l));
   return (heading ?? lines[0] ?? "").slice(0, 200);
+}
+
+const ARTIFACT_EXTENSION = { markdown: "md", html: "html" } as const;
+// Characters file systems refuse, so a downloaded Library keeps its names.
+const UNSAFE_PATH_CHARS = /[\\:*?"<>|]/g;
+
+// The model's path cleaned up, with the extension of the artifact's type; the title when it gave none.
+function requestedPath(artifact: Pick<Artifact, "title" | "type" | "path">): { base: string; ext: string } {
+  const raw = artifact.path ?? "";
+  const parts = raw
+    .split("/")
+    .map((p) => p.replace(UNSAFE_PATH_CHARS, "-").trim())
+    .filter((p) => p && p !== "." && p !== "..");
+  const last = raw.trimEnd().endsWith("/") ? undefined : parts.pop();
+  const name = last?.replace(/\.[^.]+$/, "") || titleSlug(artifact.title) || "untitled";
+  return { base: [...parts, name].join("/"), ext: ARTIFACT_EXTENSION[artifact.type] };
+}
+
+/** Never an existing file's path: a taken one gets " (2)", " (3)", … */
+export function libraryPath(artifact: Pick<Artifact, "title" | "type" | "path">, taken: ReadonlySet<string>): string {
+  const { base, ext } = requestedPath(artifact);
+  let path = `${base}.${ext}`;
+  for (let n = 2; taken.has(path); n++) path = `${base} (${n}).${ext}`;
+  return path;
+}
+
+function failureReason(error: unknown): string {
+  if (error instanceof ProjectApiError && error.status === 409) return "the file changed in the meantime";
+  if (error instanceof ProjectApiError && error.status === 507) return "the Library is full";
+  return "it couldn't be saved";
+}
+
+type SaveResult = Record<string, string>;
+
+async function createFile(projectId: string, artifact: Artifact, taken: Set<string>): Promise<SaveResult> {
+  const path = libraryPath(artifact, taken);
+  taken.add(path);
+  return uploadProjectFiles(projectId, [{ path, content: artifact.content, preview: previewOf(artifact.content) }]).then(
+    () => ({ path, saved: "created" }),
+    // No reason: the card offers Save to Library instead.
+    () => ({ path, saved: "failed" }),
+  );
+}
+
+async function replaceFile(projectId: string, file: LibraryFileMeta, content: string, saved: string): Promise<SaveResult> {
+  return updateProjectFile(projectId, file, content, previewOf(content), true).then(
+    () => ({ path: file.path, saved }),
+    (error: unknown) => ({ path: file.path, saved: "failed", reason: failureReason(error) }),
+  );
+}
+
+async function editFile(projectId: string, file: LibraryFileMeta, artifact: Artifact): Promise<SaveResult> {
+  const pairs = editPairs(artifact.content);
+  const text = (await readProjectFiles(projectId, [file])).get(file.id);
+  const edited = text === undefined ? null : applyEdits(text, pairs);
+  if (edited === null) return { path: file.path, saved: "failed", reason: "the text to replace wasn't found" };
+  const result = await replaceFile(projectId, file, edited, "edited");
+  return result.saved === "edited" ? { ...result, changes: String(pairs.length) } : result;
+}
+
+async function saveArtifact(projectId: string, artifact: Artifact, files: Map<string, LibraryFileMeta>, taken: Set<string>): Promise<SaveResult> {
+  const { base, ext } = requestedPath(artifact);
+  const existing = artifact.path ? files.get(`${base}.${ext}`) : undefined;
+  if (artifact.edit) {
+    return existing ? editFile(projectId, existing, artifact) : { saved: "failed", reason: "the file isn't in the Library" };
+  }
+  return existing ? replaceFile(projectId, existing, artifact.content, "updated") : createFile(projectId, artifact, taken);
+}
+
+const KEEP_TAG = /<keep_version\b([^>]*?)\/?>(?:\s*<\/keep_version>)?/g;
+
+// <keep_version path="…"/> from the model becomes a <kept_version> block, which shows as a step under the answer.
+async function keepVersions(projectId: string, content: string, files: Map<string, LibraryFileMeta>): Promise<string> {
+  const blocks: string[] = [];
+  for (const [, attrs] of content.matchAll(KEEP_TAG)) {
+    const path = tagAttr(attrs, "path").replace(/^\.?\//, "");
+    const file = files.get(path);
+    const kept = file ? await keepFileVersion(projectId, file.id).then(() => true, () => false) : false;
+    blocks.push(`<kept_version>${blockJSON({ path, status: kept ? "ok" : "error" })}</kept_version>`);
+  }
+  let index = 0;
+  return content.replace(KEEP_TAG, () => blocks[index++]);
+}
+
+/**
+ * Saves a project chat's answer to the Library: kept versions first, so an edit in the same answer keeps the version
+ * it replaces. Returns the answer with the outcome written into its tags.
+ */
+export async function saveArtifactsToLibrary(projectId: string, content: string): Promise<string> {
+  const closed = parseArtifacts(content).artifacts.filter((a) => !a.streaming);
+  if (closed.length === 0 && !content.match(KEEP_TAG)) return content;
+  let files: Map<string, LibraryFileMeta>;
+  try {
+    files = new Map((await listProjectFiles(projectId)).files.map((f) => [f.path, f]));
+  } catch {
+    return content;
+  }
+  const kept = await keepVersions(projectId, content, files);
+  const taken = new Set(files.keys());
+  const results: SaveResult[] = [];
+  for (const artifact of closed) results.push(await saveArtifact(projectId, artifact, files, taken));
+  return setArtifactAttrs(kept, results);
+}
+
+export async function saveArtifactToLibrary(projectId: string, artifact: Artifact): Promise<string> {
+  const listing = await listProjectFiles(projectId);
+  const path = libraryPath(artifact, new Set(listing.files.map((f) => f.path)));
+  await uploadProjectFiles(projectId, [{ path, content: artifact.content, preview: previewOf(artifact.content) }]);
+  return path;
 }
 
 export function byteSize(text: string): number {

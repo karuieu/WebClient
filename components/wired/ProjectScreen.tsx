@@ -5,17 +5,22 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   assignChatToProject,
   createProjectMemoryFile,
+  deleteFileVersion,
   deleteProjectFiles,
   deleteProjectMemoryFile,
   getProject,
+  keepFileVersion,
+  listFileVersions,
   listProjectFiles,
   listProjectMemory,
   ProjectApiError,
+  readFileVersion,
   readProjectFiles,
   unassignChatFromProject,
   updateProjectFile,
   updateProjectMemoryFile,
   uploadProjectFiles,
+  type LibraryFileMeta,
   type LibraryListing,
   type Project,
   type ProjectMemoryFile,
@@ -28,15 +33,24 @@ import type { HeaderProject } from "@/components/app/chat/ChatView";
 import { ConfirmDeleteDialog } from "@/components/app/Dialogs";
 import { deletionErrorText } from "@/lib/api";
 import { AddChatsDialog } from "@/components/app/ProjectDialogs";
-import { AddToLibraryDialog, type ContextSelection } from "@/components/app/project/Library";
+import { AddToLibraryDialog, type ContextSelection, type LibraryFile } from "@/components/app/project/Library";
+import type { FileVersionItem, FileVersionsProps } from "@/components/app/project/FileVersions";
+import { artifactTypeOf } from "@/lib/artifacts";
 import type { OpenLibraryItem, PanelChat, PanelView, ProjectPanelProps } from "@/components/app/project/ProjectPanel";
 import { ProjectWorkspace, useProjectPanel } from "@/components/app/project/ProjectWorkspace";
 import { LibraryContext } from "./useLibrary";
+
+export type ProjectLibrary = {
+  /** null while the Library loads, so chat cards don't flash "not in the Library". */
+  paths: ReadonlySet<string> | null;
+  open: (path: string) => void;
+};
 
 export type ProjectFrame = {
   project: Project | null;
   header: HeaderProject;
   libraryNote?: string;
+  library: ProjectLibrary;
   setDocumentOpen: (open: boolean) => void;
   openSettings: () => void;
 };
@@ -49,6 +63,10 @@ export function openProjectOn(projectId: string, view: PanelView) {
 }
 
 const emptySelection: ContextSelection = { items: [], skipped: [] };
+
+function asLibraryFile(meta: LibraryFileMeta): LibraryFile {
+  return { id: meta.id, path: meta.path, size: meta.size, version: meta.version, kept: meta.kept };
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -73,7 +91,11 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
   const [selection, setSelection] = React.useState<ContextSelection | null>(null);
   const prepared = React.useRef(new Map<string, PreparedFile[]>());
   const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null);
-  const [deleting, setDeleting] = React.useState<{ ids: string[]; label: string; memory: boolean } | null>(null);
+  const [deleting, setDeleting] = React.useState<{ ids: string[]; label: string; kind: "file" | "memory" | "version" } | null>(null);
+  const [versionList, setVersionList] = React.useState<FileVersionItem[] | null>(null);
+  const [versionsFailed, setVersionsFailed] = React.useState(false);
+  const [viewing, setViewing] = React.useState<FileVersionsProps["viewing"]>(null);
+  const [restoring, setRestoring] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [addingChats, setAddingChats] = React.useState(false);
 
@@ -137,6 +159,8 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
   );
   const asSidebar = (c: PanelChat) => ({ id: c.id, title: c.title, starred: c.starred, projectId });
 
+  const libraryPaths = React.useMemo(() => listing && new Set(listing.files.map((f) => f.path)), [listing]);
+
   const tier = (user?.tier ?? "free") === "pro" ? "pro" : "free";
   const usage = listing
     ? { used: listing.project.used, limit: listing.project.limit, files: listing.files.length, maxFiles: listing.maxFiles }
@@ -180,7 +204,9 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
     const meta = listing?.files.find((f) => f.id === id);
     if (!meta) return;
     setView("library");
-    setOpen({ kind: "file", file: { id: meta.id, path: meta.path, size: meta.size }, content: null });
+    setVersionList(null);
+    setViewing(null);
+    setOpen({ kind: "file", file: asLibraryFile(meta), content: null });
     readProjectFiles(projectId, [meta])
       .then((contents) => {
         const content = contents.get(meta.id);
@@ -199,6 +225,59 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
     setOpen({ kind: "memory", file: { id: f.id, name: f.name, description: f.description, content: f.content, fromYou: project?.settings.youCopyIds.includes(f.id) } });
 
   const conflict = (error: unknown) => error instanceof ProjectApiError && error.status === 409;
+
+  // `restart` starts the editor afresh, for content replaced outside it (a restored version).
+  const showSaved = (meta: LibraryFileMeta, content?: string, restart = false) => {
+    setListing((l) => l && { ...l, files: l.files.map((f) => (f.id === meta.id ? meta : f)) });
+    setOpen((o) =>
+      o?.kind === "file" && o.file.id === meta.id
+        ? { ...o, file: asLibraryFile(meta), content: content ?? o.content, revision: restart ? (o.revision ?? 0) + 1 : o.revision }
+        : o,
+    );
+  };
+
+  const openMeta = open?.kind === "file" ? listing?.files.find((f) => f.id === open.file.id) : undefined;
+  const versions: FileVersionsProps | undefined = openMeta && {
+    list: versionList,
+    error: versionsFailed,
+    viewing,
+    restoring,
+    onLoad: () => {
+      setVersionsFailed(false);
+      listFileVersions(projectId, openMeta.id).then(
+        (list) => setVersionList(list.map((v) => ({ id: v.id, number: v.number, savedAt: v.saved_at, size: v.size, kept: v.kept }))),
+        () => setVersionsFailed(true),
+      );
+    },
+    onView: (v) => {
+      if (!v) return setViewing(null);
+      setViewing({ version: v, content: null, error: false });
+      readFileVersion(projectId, openMeta.id, v.id).then(
+        (content) => setViewing((o) => (o?.version.id === v.id ? { ...o, content } : o)),
+        () => setViewing((o) => (o?.version.id === v.id ? { ...o, error: true } : o)),
+      );
+    },
+    onRestore: async (v) => {
+      const content = viewing?.version.id === v.id ? viewing.content : null;
+      if (content === null) return;
+      setRestoring(true);
+      try {
+        showSaved(await updateProjectFile(projectId, openMeta, content, previewOf(content), true), content, true);
+        setViewing(null);
+        setVersionList(null);
+      } catch (error) {
+        showError(conflict(error) ? "This file changed elsewhere. Close it and open it again." : errorMessage(error, "Couldn't restore that version"));
+      } finally {
+        setRestoring(false);
+      }
+    },
+    onDelete: (v) => setDeleting({ ids: [v.id], label: `v${v.number} of ${openMeta.path.split("/").pop()}`, kind: "version" }),
+    onKeep: () =>
+      void keepFileVersion(projectId, openMeta.id).then(
+        (meta) => showSaved(meta),
+        (error: unknown) => showError(errorMessage(error, "Couldn't keep this version")),
+      ),
+  };
 
   const panelProps: ProjectPanelProps = {
     error: loadFailed ? { message: "This project's chats and Library couldn't be loaded.", onRetry: () => (loadProject(), loadFiles(), loadMemory()) } : null,
@@ -227,7 +306,7 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
       memory: memory && memory.map((f) => ({ id: f.id, name: f.name, description: f.description, content: f.content, fromYou: project?.settings.youCopyIds.includes(f.id) })),
       memoryOn: project?.settings.memory ?? true,
       you: project?.settings.you ?? "off",
-      files: listing && listing.files.map((f) => ({ id: f.id, path: f.path, size: f.size })),
+      files: listing && listing.files.map(asLibraryFile),
       usage: listing ? usage : null,
       uploading: selection ? null : progress,
       open,
@@ -259,7 +338,7 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
           setSaving(false);
         }
       },
-      onDeleteMemoryFile: (f) => setDeleting({ ids: [f.id], label: f.name, memory: true }),
+      onDeleteMemoryFile: (f) => setDeleting({ ids: [f.id], label: f.name, kind: "memory" }),
       onMemorySettings: () => library.actions?.onOpenProjectSettings(projectId, "memory"),
       onOpenFile: (f) => openFile(f.id),
       onSaveFile: async (id, content) => {
@@ -267,9 +346,8 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
         if (!meta) return;
         setSaving(true);
         try {
-          const saved = await updateProjectFile(projectId, meta, content, previewOf(content));
-          setListing((l) => l && { ...l, files: l.files.map((f) => (f.id === id ? saved : f)) });
-          setOpen((o) => (o?.kind === "file" && o.file.id === id ? { ...o, file: { ...o.file, size: saved.size }, content } : o));
+          showSaved(await updateProjectFile(projectId, meta, content, previewOf(content), artifactTypeOf(meta.path) !== null), content);
+          setVersionList(null);
         } catch (error) {
           showError(conflict(error) ? "This file changed elsewhere. Close it and open it again." : errorMessage(error, "Couldn't save the file"));
         } finally {
@@ -278,7 +356,8 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
       },
       onRetryOpen: () => open?.kind === "file" && openFile(open.file.id),
       onCloseItem: () => setOpen(null),
-      onDeleteFiles: (ids, label) => setDeleting({ ids, label, memory: false }),
+      versions,
+      onDeleteFiles: (ids, label) => setDeleting({ ids, label, kind: "file" }),
       onAddFiles: (files) => void choose(fromInput(files, false)),
       onAddFolder: (files) => void choose(fromInput(files, true)),
       onDropData: (data) => void fromDataTransfer(data).then(choose),
@@ -297,6 +376,15 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
     project,
     header,
     libraryNote: listing?.files.length ? `${listing.files.length} ${listing.files.length === 1 ? "file" : "files"} in the Library` : undefined,
+    library: {
+      paths: libraryPaths,
+      open: (path) => {
+        const meta = listing?.files.find((f) => f.path === path);
+        if (!meta) return;
+        panel.show();
+        openFile(meta.id);
+      },
+    },
     setDocumentOpen,
     openSettings: () => library.actions?.onOpenProjectSettings(projectId, "general"),
   };
@@ -333,14 +421,18 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
         open={!!deleting}
         onClose={() => setDeleting(null)}
         deleting={busy}
-        kind="file"
+        kind={deleting?.kind === "version" ? "version" : "file"}
         name={deleting?.label ?? ""}
         count={deleting?.ids.length}
         onConfirm={async () => {
           if (!deleting) return;
           setBusy(true);
           try {
-            if (deleting.memory) {
+            if (deleting.kind === "version" && openMeta) {
+              await deleteFileVersion(projectId, openMeta.id, deleting.ids[0]);
+              setVersionList((all) => all && all.filter((v) => v.id !== deleting.ids[0]));
+              setViewing(null);
+            } else if (deleting.kind === "memory") {
               await deleteProjectMemoryFile(projectId, deleting.ids[0]);
               setMemory((m) => (m ?? []).filter((x) => !deleting.ids.includes(x.id)));
             } else {

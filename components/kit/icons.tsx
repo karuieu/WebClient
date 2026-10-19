@@ -124,6 +124,28 @@ export const FileText = (p: IconProps) => (
   </Icon>
 );
 
+export const NotebookText = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2 6h4M2 10h4M2 14h4M2 18h4" />
+    <rect width="16" height="20" x="4" y="2" rx="2" />
+    <path d="M9.5 8h5M9.5 12H16M9.5 16H14" />
+  </Icon>
+);
+
+export const FileCode = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    <path d="m10 12.5-2 2.5 2 2.5M14 12.5l2 2.5-2 2.5" />
+  </Icon>
+);
+
+export const Bookmark = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+  </Icon>
+);
+
 export const Plus = (p: IconProps) => (
   <Icon {...p}>
     <path d="M5 12h14M12 5v14" />

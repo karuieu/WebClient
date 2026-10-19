@@ -21,6 +21,7 @@ export type ProjectPanelState = {
   drawer: boolean;
 
   toggle: () => void;
+  show: () => void;
   hide: () => void;
   closeDrawer: () => void;
 };
@@ -42,10 +43,13 @@ export function useProjectPanel(): ProjectPanelState {
     } catch {}
   }, []);
 
+  const desktop = () => window.matchMedia("(min-width: 768px)").matches;
+
   return {
     hidden,
     drawer,
-    toggle: () => (window.matchMedia("(min-width: 768px)").matches ? persist(!hidden) : setDrawer((d) => !d)),
+    toggle: () => (desktop() ? persist(!hidden) : setDrawer((d) => !d)),
+    show: () => (desktop() ? persist(false) : setDrawer(true)),
     hide: () => persist(true),
     closeDrawer: () => setDrawer(false),
   };
@@ -66,11 +70,16 @@ export function ProjectWorkspace({
   const { drawer, closeDrawer } = state;
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [width, setWidth] = React.useState(DEFAULT_WIDTH);
-  const [maxWidth, setMaxWidth] = React.useState(Infinity);
+  const [rootWidth, setRootWidth] = React.useState(Infinity);
   const [expanded, setExpanded] = React.useState(false);
   const [dragging, setDragging] = React.useState(false);
-  const clampWidth = (w: number) => Math.round(Math.min(Math.max(w, MIN_WIDTH), Math.max(maxWidth, MIN_WIDTH)));
-  const shown = expanded ? Math.max(maxWidth, MIN_WIDTH) : Math.min(width, Math.max(maxWidth, MIN_WIDTH));
+  const maxWidth = Math.max(rootWidth - MIN_CHAT_WIDTH, MIN_WIDTH);
+  const clampWidth = (w: number) => Math.round(Math.min(Math.max(w, MIN_WIDTH), maxWidth));
+  const shown = expanded ? rootWidth : Math.min(width, maxWidth);
+  // Width changes from the window or the sliding sidebar don't animate: a lagging spring uncovers the chat.
+  const [settledWidth, setSettledWidth] = React.useState(rootWidth);
+  const following = settledWidth !== rootWidth;
+  React.useEffect(() => setSettledWidth(rootWidth), [rootWidth]);
 
   React.useEffect(() => {
     try {
@@ -87,7 +96,7 @@ export function ProjectWorkspace({
   React.useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const measure = () => setMaxWidth(root.clientWidth - MIN_CHAT_WIDTH);
+    const measure = () => setRootWidth(root.clientWidth);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(root);
@@ -138,16 +147,17 @@ export function ProjectWorkspace({
 
   return (
     <div ref={rootRef} className="flex min-h-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      <div className={cx("flex min-w-0 flex-1 flex-col", expanded && "overflow-hidden")}>{children}</div>
 
       <AnimatePresence initial={false}>
         {!state.hidden && !suspended && (
           <motion.div
             key="docked"
             initial={{ width: 0 }}
-            animate={{ width: shown }}
+            // 100% rather than a measured width, so it follows the sliding sidebar in the same frame.
+            animate={{ width: expanded ? "100%" : shown }}
             exit={{ width: 0 }}
-            transition={reduce || dragging ? { duration: 0 } : spring}
+            transition={reduce || dragging || following ? { duration: 0 } : spring}
             className="relative hidden shrink-0 overflow-hidden md:flex"
           >
             <div
@@ -156,7 +166,7 @@ export function ProjectWorkspace({
               aria-label="Resize project panel"
               aria-valuenow={shown}
               aria-valuemin={MIN_WIDTH}
-              aria-valuemax={Math.max(maxWidth, MIN_WIDTH)}
+              aria-valuemax={maxWidth}
               tabIndex={0}
               title="Drag to resize · double-click to reset"
               onPointerDown={startDrag}

@@ -17,6 +17,7 @@ import {
 } from "@/components/kit/icons";
 import { LogoMark } from "@/components/kit/Logo";
 import { Spinner } from "@/components/kit/Spinner";
+import type { ArtifactType } from "@/lib/artifacts";
 import { cx } from "@/lib/cx";
 import { Markdown } from "./Markdown";
 import { Processing, type ProcessingStep } from "./Processing";
@@ -33,7 +34,18 @@ export type UserMessageData = {
   decryptionFailed?: boolean;
 };
 
-export type ArtifactData = { id: string; title: string; streaming?: boolean };
+export type ArtifactData = {
+  id: string;
+  title: string;
+  type: ArtifactType;
+  streaming?: boolean;
+  /** An edit carries only the changes, not a document: there's nothing to download or open from the message. */
+  edit?: boolean;
+  /** Project chats only. */
+  library?: { path: string; saved: boolean; saving?: boolean; change?: ArtifactChange };
+};
+
+export type ArtifactChange = { kind: "updated" } | { kind: "edited"; count: number } | { kind: "failed"; reason: string };
 
 export type SkillDraftData = {
   id: string;
@@ -169,17 +181,43 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
   );
 }
 
+function changeStatus(change: ArtifactChange, path: string): string {
+  if (change.kind === "failed") return `Not changed · ${change.reason}`;
+  if (change.kind === "updated") return `Updated · ${path}`;
+  return `Edited · ${change.count === 1 ? "1 change" : `${change.count} changes`} · ${path}`;
+}
+
+function artifactStatus({ type, streaming, library }: ArtifactData): string {
+  const kind = type === "markdown" ? "Note" : "Document";
+  if (streaming) return library?.change ? "Changing the Library file…" : `Writing ${kind.toLowerCase()}…`;
+  if (!library) return type === "markdown" ? "Note · Markdown" : "Document · HTML";
+  if (library.change) return changeStatus(library.change, library.path);
+  if (library.saving) return "Saving to the Library…";
+  return library.saved ? `In the Library · ${library.path}` : `${kind} · not in the Library`;
+}
+
+const pill =
+  "flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-[background-color,opacity,transform] duration-150 active:scale-[0.97] disabled:pointer-events-none";
+
 function ArtifactCard({
   artifact,
   onOpen,
   onDownload,
+  onSave,
 }: {
   artifact: ArtifactData;
   onOpen?: (a: ArtifactData) => void;
   onDownload?: (a: ArtifactData) => void;
+  onSave?: (a: ArtifactData) => void;
 }) {
+  const { library } = artifact;
+  const status = artifactStatus(artifact);
+  const failed = library?.change?.kind === "failed";
+  // A change lives in the Library file: without it there's nothing to open, and nothing to save.
+  const canSave = library && !library.saved && !library.change && onSave;
+  const canOpen = onOpen && (!(artifact.edit || library?.change) || library?.saved);
   return (
-    <div className="my-5 flex items-center gap-4 rounded-2xl border border-line bg-elevated p-3 pr-4 shadow-soft">
+    <div className="my-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-line bg-elevated p-3 pr-4 shadow-soft">
       <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-bg p-2">
         <span className="h-1.5 w-3/4 rounded-full bg-line-strong" />
         <span className="h-1 w-full rounded-full bg-line" />
@@ -187,24 +225,42 @@ function ArtifactCard({
         <span className="h-1 w-full rounded-full bg-line" />
         <span className="h-1 w-2/3 rounded-full bg-line" />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[9rem] flex-1">
         <p className="truncate text-[14.5px] font-medium tracking-[-0.01em]">{artifact.title}</p>
-        <p className={cx("mt-0.5 font-mono text-[11.5px] text-muted", artifact.streaming && "text-shimmer")}>
-          {artifact.streaming ? "Writing document…" : "Document · HTML"}
+        <p
+          title={status}
+          className={cx(
+            "mt-0.5 truncate font-mono text-[11.5px]",
+            failed ? "text-danger" : "text-muted",
+            (artifact.streaming || library?.saving) && "text-shimmer",
+          )}
+        >
+          {status}
         </p>
       </div>
       {!artifact.streaming && (
-        <div className="flex items-center gap-1">
-          {onDownload && (
+        <div className="ml-auto flex items-center gap-1">
+          {onDownload && !artifact.edit && (
             <ActionButton label="Download" onClick={() => onDownload(artifact)}>
               <Download className="size-3.5" />
             </ActionButton>
           )}
-          {onOpen && (
+          {canSave && (
+            <button
+              type="button"
+              onClick={() => onSave(artifact)}
+              disabled={library.saving}
+              className={cx(pill, "mr-1 bg-inverse text-on-inverse hover:opacity-85")}
+            >
+              {library.saving && <Spinner inverse className="size-3" />}
+              Save to Library
+            </button>
+          )}
+          {canOpen && (
             <button
               type="button"
               onClick={() => onOpen(artifact)}
-              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-elevated px-3.5 text-[13px] font-medium ring-1 ring-inset ring-line-strong transition-[background-color,transform] duration-150 hover:bg-surface active:scale-[0.97]"
+              className={cx(pill, "bg-elevated ring-1 ring-inset ring-line-strong hover:bg-surface")}
             >
               Open
               <ArrowUpRight className="size-3.5" />
@@ -305,6 +361,7 @@ export function AssistantMessage({
   onVariant,
   onOpenArtifact,
   onDownloadArtifact,
+  onSaveArtifact,
   onSaveSkill,
 }: {
   message: AssistantMessageData;
@@ -314,6 +371,7 @@ export function AssistantMessage({
   onVariant?: (dir: -1 | 1) => void;
   onOpenArtifact?: (a: ArtifactData) => void;
   onDownloadArtifact?: (a: ArtifactData) => void;
+  onSaveArtifact?: (a: ArtifactData) => void;
   /** Absent in incognito, where nothing is saved to the account. */
   onSaveSkill?: (s: SkillDraftData) => void;
 }) {
@@ -349,7 +407,7 @@ export function AssistantMessage({
         )}
 
         {message.artifacts?.map((a) => (
-          <ArtifactCard key={a.id} artifact={a} onOpen={onOpenArtifact} onDownload={onDownloadArtifact} />
+          <ArtifactCard key={a.id} artifact={a} onOpen={onOpenArtifact} onDownload={onDownloadArtifact} onSave={onSaveArtifact} />
         ))}
 
         {message.skills?.map((s) => (

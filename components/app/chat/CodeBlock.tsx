@@ -69,6 +69,8 @@ export const codeTheme: Record<string, React.CSSProperties> = {
   constant: number,
   inserted: { color: "var(--ok)" },
   deleted: { color: "var(--danger)" },
+  // As a theme key the class stays off the span, which would otherwise get Tailwind's `.table` (display: table).
+  table: { display: "inline" },
 };
 
 export function CodeBlock({ language, code }: { language?: string; code: string }) {

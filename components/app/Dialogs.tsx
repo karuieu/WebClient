@@ -21,7 +21,7 @@ export function ConfirmDeleteDialog({
   onClose: () => void;
   onConfirm: () => void;
   deleting?: boolean;
-  kind: "chat" | "project" | "file";
+  kind: "chat" | "project" | "file" | "version";
   name: string;
   count?: number;
   preview?: string | null;
@@ -33,7 +33,9 @@ export function ConfirmDeleteDialog({
       ? "Delete this chat?"
       : kind === "project"
         ? "Delete this project?"
-        : count > 1
+        : kind === "version"
+          ? "Delete this version?"
+          : count > 1
           ? "Delete this folder?"
           : "Delete this file?";
   return (
@@ -51,6 +53,10 @@ export function ConfirmDeleteDialog({
         ) : kind === "project" ? (
           <>
             <span className="font-medium text-fg">{name}</span>, its Library and memory will be deleted for good. Its chats stay in your library.
+          </>
+        ) : kind === "version" ? (
+          <>
+            <span className="font-medium text-fg">{name}</span> will be deleted for good. The file itself stays as it is.
           </>
         ) : (
           <>
