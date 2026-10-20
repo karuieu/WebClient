@@ -1,4 +1,4 @@
-// The user's MCP connectors live on this device only, encrypted with the account's AES key in localStorage, until the backend supports them.
+// Connectors and their OAuth grants stay on this device, encrypted with the account's AES key. They are never synced to the backend.
 
 import { encryptMessage, decryptMessage } from "./crypto";
 import { ensureAesKey, getUser, onSessionCleared } from "./session";
