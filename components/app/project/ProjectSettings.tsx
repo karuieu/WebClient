@@ -47,7 +47,7 @@ export type ProjectSettingsProps = {
   };
   connectors: {
     locked: boolean;
-    items: { id: string; name: string; host: string }[];
+    items: { id: string; name: string; host: string; logo?: string }[];
     enabled: string[];
     onToggle: (id: string, on: boolean) => void;
     onOpenConnectors: () => void;
@@ -217,7 +217,7 @@ function Connectors({ connectors: c }: ProjectSettingsProps) {
           const on = c.enabled.includes(it.id);
           return (
             <div key={it.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
-              <Tile name={it.name} />
+              <Tile logo={it.logo} name={it.name} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[14.5px] font-medium tracking-[-0.01em]">{it.name}</span>
                 <span className="block truncate font-mono text-[11px] text-muted">{it.host}</span>

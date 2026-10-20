@@ -3,16 +3,27 @@
 import * as React from "react";
 import { Segmented, type SegmentedOption } from "@/components/kit/Segmented";
 import { cx } from "@/lib/cx";
+import { BrandLogo, isBrandLogoId } from "./BrandLogo";
 import type { ConnectorInfo, ConnectorRoute } from "@/lib/connectors";
 
-export type ConnectorStatus = "available" | "connecting" | "connected";
+export type ConnectorStatus = "available" | "connected" | "expired";
 
 export type ConnectorItem = ConnectorInfo & {
   status: ConnectorStatus;
   route: ConnectorRoute;
   account?: string;
   custom?: boolean;
+  ready?: boolean;
 };
+
+export class ConnectError extends Error {
+  constructor(
+    message: string,
+    readonly href?: string,
+  ) {
+    super(message);
+  }
+}
 
 export const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
 
@@ -44,26 +55,27 @@ export function routeLabel(route: ConnectorRoute) {
 
 export function routeNote(c: ConnectorItem) {
   if (!c.browser) return `${c.name} only accepts connections from a server for now, so this one goes through Karui's servers.`;
-  if (c.route === "browser") return `Straight from your browser. What ${c.name} sends never passes through Karui's servers.`;
-  return `What ${c.name} sends passes through Karui's servers on its way to you.`;
+  if (c.route === "server") return `What ${c.name} sends passes through Karui's servers on its way to you.`;
+  if (c.app) return `Signing in goes through Karui's servers. After that, what ${c.name} sends never passes through them.`;
+  return `Straight from your browser. What ${c.name} sends never passes through Karui's servers.`;
 }
 
 const tileSizes = {
-  md: "size-9 rounded-[11px] text-[14px]",
-  lg: "size-14 rounded-[16px] text-[21px]",
+  md: { tile: "size-9 rounded-[11px] text-[14px]", logo: "size-[18px]" },
+  lg: { tile: "size-14 rounded-[16px] text-[21px]", logo: "size-7" },
 };
 
-export function Tile({ name, size = "md", className }: { name: string; size?: keyof typeof tileSizes; className?: string }) {
+export function Tile({ logo, name, size = "md", className }: { logo?: string; name: string; size?: keyof typeof tileSizes; className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={cx(
         "grid shrink-0 place-items-center bg-surface font-medium tracking-[-0.01em] ring-1 ring-inset ring-line",
-        tileSizes[size],
+        tileSizes[size].tile,
         className,
       )}
     >
-      {name.charAt(0).toUpperCase()}
+      {logo && isBrandLogoId(logo) ? <BrandLogo id={logo} className={tileSizes[size].logo} /> : name.charAt(0).toUpperCase()}
     </span>
   );
 }

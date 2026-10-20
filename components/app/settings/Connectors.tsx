@@ -12,9 +12,10 @@ import type { ConnectorRoute } from "@/lib/connectors";
 import { BrandLogo, type BrandLogoId } from "./BrandLogo";
 import { Group, Row } from "./Layout";
 import { ConnectionControls, host, routeLabel, routeOptions, spring, Tile, type ConnectorItem } from "./ConnectorParts";
-import { ConnectorDetail, ConnectorsDiscover } from "./ConnectorsDiscover";
+import { ConnectorDetail, ConnectorsDiscover, type ConnectHandler } from "./ConnectorsDiscover";
 
-export type { ConnectorItem, ConnectorStatus } from "./ConnectorParts";
+export { ConnectError, type ConnectorItem, type ConnectorStatus } from "./ConnectorParts";
+export type { ConnectHandler } from "./ConnectorsDiscover";
 
 export type NewConnector = { name: string; url: string; route: ConnectorRoute; token?: string };
 
@@ -24,7 +25,7 @@ export type ConnectorsSettingsProps = {
   connectors: ConnectorItem[];
   discover?: boolean;
   serverRoute?: boolean;
-  onConnect?: (id: string, route: ConnectorRoute) => void;
+  onConnect?: ConnectHandler;
   onDisconnect: (id: string) => void;
   onRoute: (id: string, route: ConnectorRoute) => void;
   onAdd?: (connector: NewConnector) => void | Promise<void>;
@@ -72,11 +73,11 @@ function YoursRow({
         onClick={() => setOpen((o) => !o)}
         className="flex min-h-16 w-full cursor-pointer items-center gap-3 px-4 py-3 text-left"
       >
-        <Tile name={c.name} />
+        <Tile logo={c.id} name={c.name} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14.5px] font-medium tracking-[-0.01em]">{c.name}</span>
           <span className="block truncate font-mono text-[11px] text-muted">
-            {c.account ?? host(c.url)} · {routeLabel(c.route)}
+            {c.status === "expired" ? "Signed out" : (c.account ?? host(c.url))} · {routeLabel(c.route)}
           </span>
         </span>
         <ChevronDown className={cx("size-3.5 text-muted transition-transform duration-300 ease-out-soft", !open && "-rotate-90")} />
@@ -93,6 +94,14 @@ function YoursRow({
             className="overflow-hidden"
           >
             <div className="border-t border-line px-4 pb-3 pt-4 sm:pl-16">
+              {c.status === "expired" && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+                  <p className="text-pretty text-[13px] leading-relaxed text-muted">Chats can&apos;t use {c.name} until you sign in again.</p>
+                  <Button onClick={() => onOpen(c.id)}>
+                    Sign in again
+                  </Button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => onOpen(c.id)}
@@ -329,7 +338,7 @@ function Marketplace(p: ConnectorsSettingsProps) {
   const reduce = useReducedMotion();
   const discover = p.discover !== false;
   const serverRoute = p.serverRoute !== false;
-  const connected = p.connectors.filter((c) => c.status === "connected");
+  const connected = p.connectors.filter((c) => c.status !== "available");
   const [view, setView] = React.useState<View>(() => (!discover || connected.length > 0 ? "yours" : "discover"));
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);

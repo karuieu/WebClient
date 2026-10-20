@@ -17,6 +17,8 @@ const publicRoutes = [
   "/forgot-password",
   "/reset-password",
   "/delete-account",
+  // MCP sign-in servers fetch this client description without cookies.
+  "/oauth/client.json",
 ];
 
 // The documents moved to the landing page; links from e-mails, bookmarks and Polar still lead there.

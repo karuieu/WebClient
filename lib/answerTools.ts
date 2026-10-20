@@ -3,8 +3,9 @@
 // continues with the result.
 
 import { getUser } from "./session";
-import { loadConnectors, type UserConnector, type UserConnectorTool } from "./userConnectors";
-import { callTool } from "./mcpClient";
+import { loadConnectors, serverFor, type UserConnector, type UserConnectorTool } from "./userConnectors";
+import { callTool, SignInRequired } from "./mcpClient";
+import { callGoogleTool } from "./googleWorkspace";
 import { getToolApprovalMode, requestToolApproval } from "./toolApproval";
 import { type MemoryFileForChat } from "./memory";
 import { type MemoryWriteRequest } from "./helperPhases";
@@ -99,12 +100,12 @@ export interface ConnectorTool {
   definition: { name: string; description: string; parameters: Record<string, unknown> };
 }
 
-// Pro only, and only connectors the browser reaches itself. A project limits them to its own picks.
+// Pro only; a connector that was signed out waits until the user signs in again. A project limits them to its own picks.
 export async function loadConnectorTools(allowedIds?: string[]): Promise<Map<string, ConnectorTool>> {
   const tools = new Map<string, ConnectorTool>();
   if ((getUser()?.tier ?? "free") !== "pro") return tools;
   const connectors = (await loadConnectors().catch(() => [] as UserConnector[])).filter(
-    (c) => c.route === "browser" && (!allowedIds || allowedIds.includes(c.id))
+    (c) => !c.signedOut && (!allowedIds || allowedIds.includes(c.id))
   );
   connectors.forEach((connector, i) => {
     for (const tool of connector.tools) {
@@ -448,7 +449,11 @@ async function approveAndCall(entry: ConnectorTool, args: Record<string, unknown
   }
   throwIfStopped(signal);
   try {
-    const result = await callTool({ url: connector.url, token: connector.token }, tool.name, args);
+    const server = await serverFor(connector);
+    if (!server) throw new SignInRequired();
+    const result = connector.api
+      ? await callGoogleTool(server, connector.api, { name: tool.name, args })
+      : await callTool(server, tool.name, args);
     return { status: result.isError ? "error" : "ok", text: result.text.slice(0, MAX_TOOL_RESULT_CHARS) || "(no output)" };
   } catch (error) {
     return { status: "error", text: error instanceof Error ? error.message : "The call failed." };

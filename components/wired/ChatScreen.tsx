@@ -46,6 +46,7 @@ import { useComposer } from "./useComposer";
 import { LibraryContext } from "./useLibrary";
 import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, type Streaming } from "./messageView";
 import type { ProjectLibrary } from "./ProjectScreen";
+import { useGoogleDocsExport } from "./useGoogleDocsExport";
 
 const COMPRESSION_FAILED: Record<Exclude<CompressionOutcome, "done">, string> = {
   nothing: "There's nothing left to condense in this conversation.",
@@ -314,6 +315,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   };
 
   const current = openArtifact ? artifacts.get(openArtifact) : undefined;
+  const googleDocsExport = useGoogleDocsExport(openArtifact, current);
 
   // A note or document in the Library opens there, at its latest version; one that isn't opens from the message.
   const openArtifactData = (a: ArtifactData) => {
@@ -462,7 +464,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
             onSkip: () => setDismissedQuestions(asking.id),
           }
         }
-        artifactPanel={artifactPanelOf(openArtifact, current, () => setOpenArtifact(null))}
+        artifactPanel={{ ...artifactPanelOf(openArtifact, current, () => setOpenArtifact(null)), ...googleDocsExport }}
       />
     </div>
   );

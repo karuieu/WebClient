@@ -1,0 +1,10 @@
+{
+  "client_id": "https://karui.eu/oauth/client.json",
+  "client_name": "Karui",
+  "client_uri": "https://karui.eu",
+  "logo_uri": "https://karui.eu/icon.svg",
+  "redirect_uris": ["https://karui.eu/connectors/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none"
+}

@@ -1,10 +1,17 @@
-// Minimal MCP client (Streamable HTTP). Requests go through the connector relay (mcpSandbox.ts). Only initialize, tools/list and tools/call are implemented.
+// Minimal MCP client (Streamable HTTP). Requests go through the connector's route (connectorRelay.ts). Only initialize, tools/list and tools/call are implemented.
 
-import { relayFetch } from "./mcpSandbox";
+import type { ConnectorRoute } from "./connectors";
+import { connectorFetch } from "./connectorRelay";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
-export type McpServer = { url: string; token?: string };
+export type McpServer = {
+  url: string;
+  route?: ConnectorRoute;
+  token?: string;
+  // OAuth connectors: a fresh token after a 401, or null when the user has to sign in again.
+  refreshToken?: () => Promise<string | null>;
+};
 
 export type McpTool = {
   name: string;
@@ -16,7 +23,15 @@ export type McpTool = {
 
 export class McpError extends Error {}
 
+export class SignInRequired extends McpError {
+  constructor() {
+    super("Sign in to this connector again in Settings, under Connectors.");
+  }
+}
+
 class SessionExpired extends Error {}
+
+class Unauthorized extends Error {}
 
 type Session = { id: string; protocol: string };
 
@@ -78,16 +93,14 @@ function findReply(contentType: string, body: string, id: number): JsonRpcMessag
 
 async function rpc(server: McpServer, session: Session | undefined, method: string, params: unknown) {
   const id = nextId++;
-  const res = await relayFetch({
+  const res = await connectorFetch(server.route ?? "browser", {
     url: server.url,
     headers: headersFor(server, session),
     body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
   });
 
   if (res.status === 404 && session?.id) throw new SessionExpired();
-  if (res.status === 401 || res.status === 403) {
-    throw new McpError(server.token ? "The server didn't accept this token." : "This server needs a token.");
-  }
+  if (res.status === 401 || res.status === 403) throw new Unauthorized();
   if (res.status < 200 || res.status >= 300) throw new McpError(`The server answered with an error (${res.status}).`);
 
   const reply = findReply(res.contentType, res.body, id);
@@ -105,7 +118,7 @@ async function openSession(server: McpServer): Promise<Session> {
   const protocol = (result as { protocolVersion?: unknown } | null)?.protocolVersion;
   const session: Session = { id: sessionId, protocol: typeof protocol === "string" ? protocol : PROTOCOL_VERSION };
 
-  await relayFetch({
+  await connectorFetch(server.route ?? "browser", {
     url: server.url,
     headers: headersFor(server, session),
     body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
@@ -124,13 +137,29 @@ function getSession(server: McpServer): Promise<Session> {
   return session;
 }
 
-async function withSession<T>(server: McpServer, run: (session: Session) => Promise<T>): Promise<T> {
+type Run<T> = (server: McpServer, session: Session) => Promise<T>;
+
+async function inSession<T>(server: McpServer, run: Run<T>): Promise<T> {
   try {
-    return await run(await getSession(server));
+    return await run(server, await getSession(server));
   } catch (error) {
     if (!(error instanceof SessionExpired)) throw error;
     sessions.delete(sessionKey(server));
-    return run(await getSession(server));
+    return run(server, await getSession(server));
+  }
+}
+
+// An OAuth token that expired early gets one refresh; a second 401 means the grant itself is gone.
+async function withSession<T>(server: McpServer, run: Run<T>): Promise<T> {
+  try {
+    return await inSession(server, run);
+  } catch (error) {
+    if (!(error instanceof Unauthorized)) throw error;
+    if (!server.refreshToken) throw new McpError(server.token ? "The server didn't accept this token." : "This server needs a token.");
+    sessions.delete(sessionKey(server));
+    const token = await server.refreshToken();
+    if (!token) throw new SignInRequired();
+    return withSession({ ...server, token, refreshToken: undefined }, run);
   }
 }
 
@@ -139,11 +168,11 @@ export function forgetServer(server: McpServer): void {
 }
 
 export async function listTools(server: McpServer): Promise<McpTool[]> {
-  return withSession(server, async (session) => {
+  return withSession(server, async (active, session) => {
     const tools: McpTool[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 10; page++) {
-      const { result } = await rpc(server, session, "tools/list", cursor ? { cursor } : {});
+      const { result } = await rpc(active, session, "tools/list", cursor ? { cursor } : {});
       const r = (result ?? {}) as { tools?: unknown; nextCursor?: unknown };
       if (Array.isArray(r.tools)) {
         for (const t of r.tools) {
@@ -162,8 +191,8 @@ export async function callTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<{ text: string; isError: boolean }> {
-  return withSession(server, async (session) => {
-    const { result } = await rpc(server, session, "tools/call", { name, arguments: args });
+  return withSession(server, async (active, session) => {
+    const { result } = await rpc(active, session, "tools/call", { name, arguments: args });
     const r = (result ?? {}) as {
       content?: Array<{ type?: string; text?: string; resource?: { text?: string; uri?: string } }>;
       structuredContent?: unknown;

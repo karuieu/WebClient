@@ -4,7 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { API_URL, JSON_HEADERS, apiFetch, deletionErrorText } from "@/lib/api";
+import { API_URL, JSON_HEADERS, apiFetch, apiJSON, deletionErrorText } from "@/lib/api";
 import { updateUser } from "@/lib/session";
 import {
   changePassword,
@@ -59,7 +59,9 @@ import {
   type MemorySettings as MemoryPrefsState,
 } from "@/lib/memory";
 import { closedSettingsHref, isSettingsTab, settingsHref, SETTINGS_PARAM } from "@/lib/settingsOverlay";
-import { addConnector, loadConnectors, removeConnector, updateConnector, type UserConnector } from "@/lib/userConnectors";
+import { addConnector, connectCatalogConnector, loadConnectors, removeConnector, updateConnector, type UserConnector } from "@/lib/userConnectors";
+import { CONNECTOR_CATALOG, defaultRoute } from "@/lib/connectors";
+import { openSignInWindow } from "@/lib/mcpOAuth";
 import { getToolApprovalMode, setToolApprovalMode, type ToolApprovalMode } from "@/lib/toolApproval";
 import {
   createSkill,
@@ -77,7 +79,7 @@ import { GeneralSettings } from "@/components/app/settings/General";
 import { UsageSettings } from "@/components/app/settings/Usage";
 import { MemoryFiles, MemorySettings } from "@/components/app/settings/Memory";
 import { ProvidersSettings, type ProviderOption } from "@/components/app/settings/Providers";
-import { ConnectorsSettings, type ConnectorItem } from "@/components/app/settings/Connectors";
+import { ConnectError, ConnectorsSettings, type ConnectorItem } from "@/components/app/settings/Connectors";
 import { SkillsSettings } from "@/components/app/settings/Skills";
 import { BillingSettings } from "@/components/app/settings/Billing";
 import { DangerSettings } from "@/components/app/settings/Danger";
@@ -390,25 +392,45 @@ function ProvidersSection() {
 
 type Subscription = { tier: string; started_at?: string; expires_at?: string };
 
-function toConnectorItem(c: UserConnector): ConnectorItem {
-  return {
-    id: c.id,
-    name: c.name,
-    description: "",
-    url: c.url,
-    browser: true,
-    abilities: c.tools.map((t) => ({ label: t.title || t.name, changes: !t.readOnly })),
-    status: "connected",
-    route: c.route,
-    custom: true,
-  };
+function abilitiesOf(c: UserConnector): ConnectorItem["abilities"] {
+  return c.tools.map((t) => ({ label: t.title || t.name, changes: !t.readOnly }));
+}
+
+// Catalog entries keep their catalog id, so the tile finds the logo; connectors added by address keep their own.
+function connectorItems(connectors: UserConnector[], clientIds: Record<string, string>): ConnectorItem[] {
+  const catalog = CONNECTOR_CATALOG.map((info): ConnectorItem => {
+    const mine = connectors.find((c) => c.catalogId === info.id);
+    return {
+      ...info,
+      status: !mine ? "available" : mine.signedOut ? "expired" : "connected",
+      route: mine?.route ?? defaultRoute(info),
+      abilities: mine && info.api !== "docs" ? abilitiesOf(mine) : info.abilities,
+      ready: !info.app || !!clientIds[info.app],
+    };
+  });
+  const own = connectors
+    .filter((c) => !c.catalogId)
+    .map((c): ConnectorItem => ({
+      id: c.id,
+      name: c.name,
+      description: "",
+      url: c.url,
+      browser: true,
+      abilities: abilitiesOf(c),
+      status: "connected",
+      route: c.route,
+      custom: true,
+    }));
+  return [...catalog, ...own];
 }
 
 function ConnectorsSection({ onUpgrade }: { onUpgrade: () => void }) {
   const { user } = useSession();
   const { showError } = useToast();
   const [connectors, setConnectors] = React.useState<UserConnector[] | null>(null);
+  const [clientIds, setClientIds] = React.useState<Record<string, string>>({});
   const [approval, setApproval] = React.useState<ToolApprovalMode>(() => getToolApprovalMode());
+  const locked = (user?.tier ?? "free") !== "pro";
 
   React.useEffect(() => {
     loadConnectors()
@@ -416,14 +438,22 @@ function ConnectorsSection({ onUpgrade }: { onUpgrade: () => void }) {
       .catch(() => setConnectors([]));
   }, []);
 
-  const locked = (user?.tier ?? "free") !== "pro";
+  React.useEffect(() => {
+    if (locked) return;
+    apiJSON<{ client_ids: Record<string, string> }>("/api/connectors/apps")
+      .then((apps) => setClientIds(apps.client_ids))
+      .catch(() => {});
+  }, [locked]);
+
   if (!locked && connectors === null) return null;
+  const list = connectors ?? [];
+  const find = (id: string) => list.find((c) => c.id === id || c.catalogId === id);
 
   return (
     <ConnectorsSettings
       locked={locked}
       onUpgrade={onUpgrade}
-      connectors={(connectors ?? []).map(toConnectorItem)}
+      connectors={connectorItems(list, clientIds)}
       approval={{
         mode: approval,
         onChange: (mode) => {
@@ -431,19 +461,34 @@ function ConnectorsSection({ onUpgrade }: { onUpgrade: () => void }) {
           setApproval(mode);
         },
       }}
-      discover={false}
-      serverRoute={false}
       onAdd={async (c) => {
-        const added = await addConnector(c);
-        setConnectors((list) => [...(list ?? []), added]);
+        await addConnector(c);
+        setConnectors(await loadConnectors());
+      }}
+      onConnect={async (id, route, signal) => {
+        const info = CONNECTOR_CATALOG.find((c) => c.id === id);
+        if (!info) return;
+        const popup = openSignInWindow();
+        if (!popup) throw new ConnectError("Your browser blocked the sign-in window. Allow pop-ups for Karui and try again.");
+        try {
+          setConnectors(await connectCatalogConnector({ info, route, popup, signal }));
+        } catch (error) {
+          throw new ConnectError(error instanceof Error ? error.message : `Couldn't connect ${info.name}.`, info.notice?.href);
+        } finally {
+          popup.close();
+        }
       }}
       onRoute={(id, route) => {
-        updateConnector(id, { route })
+        const connector = find(id);
+        if (!connector) return;
+        updateConnector(connector.id, { route })
           .then(setConnectors)
           .catch(() => showError("Couldn't save that change"));
       }}
       onDisconnect={(id) => {
-        removeConnector(id)
+        const connector = find(id);
+        if (!connector) return;
+        removeConnector(connector.id)
           .then(setConnectors)
           .catch(() => showError("Couldn't remove the connector"));
       }}

@@ -134,7 +134,7 @@ export function ProjectSettingsHost({
       }}
       connectors={{
         locked: isFree,
-        items: connectors.filter((c) => c.route === "browser").map((c) => ({ id: c.id, name: c.name, host: host(c.url) })),
+        items: connectors.map((c) => ({ id: c.id, name: c.name, host: host(c.url), logo: c.catalogId })),
         enabled: settings?.connectorIds ?? [],
         onToggle: (id, on) => void saveSettings({ connectorIds: toggled(settings?.connectorIds ?? [], id, on) }),
         onOpenConnectors: () => openSettings("connectors"),

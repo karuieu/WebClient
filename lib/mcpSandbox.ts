@@ -7,7 +7,14 @@ const RELAY_ORIGIN = new URL(
 
 const LOAD_TIMEOUT_MS = 15000;
 
-export type RelayResponse = { status: number; contentType: string; sessionId: string; body: string };
+export type RelayRequest = {
+  url: string;
+  method?: "GET" | "POST" | "DELETE";
+  headers: Record<string, string>;
+  body?: string;
+};
+
+export type RelayResponse = { status: number; contentType: string; sessionId: string; wwwAuthenticate: string; body: string };
 
 type RelayReply = (RelayResponse & { id: string }) | { id: string; error: string };
 
@@ -58,12 +65,7 @@ function relayPort(): Promise<MessagePort> {
   return portPromise;
 }
 
-export async function relayFetch(request: {
-  url: string;
-  method?: "POST" | "DELETE";
-  headers: Record<string, string>;
-  body?: string;
-}): Promise<RelayResponse> {
+export async function relayFetch(request: RelayRequest): Promise<RelayResponse> {
   const port = await relayPort();
   const id = crypto.randomUUID();
   const reply = await new Promise<RelayReply>((resolve) => {

@@ -106,6 +106,8 @@ type Downloads = {
   onDownloadHtml: (source: string) => void;
   onDownloadDoc: (source: string) => void;
   onDownloadMarkdown?: (source: string) => void;
+  onExportGoogleDocs?: (source: string) => void;
+  exportingGoogleDocs?: boolean;
 };
 
 type Version = { number: number; content: string; savedAt: string };
@@ -139,6 +141,8 @@ function PanelBody({
   onDownloadHtml,
   onDownloadDoc,
   onDownloadMarkdown,
+  onExportGoogleDocs,
+  exportingGoogleDocs,
   mobile,
 }: Downloads & {
   artifact: ArtifactPanelData;
@@ -201,6 +205,9 @@ function PanelBody({
     ...(note && onDownloadMarkdown ? [{ label: "Markdown", hint: ".md", onSelect: () => onDownloadMarkdown(content) }] : []),
     { label: "Web page", hint: ".html", onSelect: () => onDownloadHtml(content) },
     { label: "Word document", hint: ".doc", onSelect: () => onDownloadDoc(content) },
+    ...(onExportGoogleDocs ? exportingGoogleDocs
+      ? [{ type: "header" as const, content: <p role="status" className="text-[13px] text-muted">Exporting to Google Docs…</p> }]
+      : [{ label: "Export to Google Docs", onSelect: () => onExportGoogleDocs(content) }] : []),
   ];
   const print = () => frameRef.current?.contentWindow?.print();
   const canPrint = ready && (tab === "preview" || !!shownVersion);
@@ -352,6 +359,8 @@ export function ArtifactPanel({
   onDownloadHtml,
   onDownloadDoc,
   onDownloadMarkdown,
+  onExportGoogleDocs,
+  exportingGoogleDocs,
 }: Downloads & {
   artifact: ArtifactPanelData | null;
   onClose: () => void;
@@ -416,6 +425,8 @@ export function ArtifactPanel({
     onDownloadHtml,
     onDownloadDoc,
     onDownloadMarkdown,
+    onExportGoogleDocs,
+    exportingGoogleDocs,
   };
 
   return (

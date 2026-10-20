@@ -26,16 +26,16 @@
       return;
     }
 
-    var isDelete = req.method === "DELETE";
+    var method = req.method === "GET" || req.method === "DELETE" ? req.method : "POST";
     var controller = new AbortController();
     var timer = setTimeout(function () {
       controller.abort();
     }, TIMEOUT_MS);
 
     fetch(url.toString(), {
-      method: isDelete ? "DELETE" : "POST",
+      method: method,
       headers: req.headers || {},
-      body: isDelete ? undefined : req.body,
+      body: method === "POST" ? req.body : undefined,
       credentials: "omit",
       cache: "no-store",
       referrerPolicy: "no-referrer",
@@ -47,6 +47,7 @@
             status: res.status,
             contentType: res.headers.get("content-type") || "",
             sessionId: res.headers.get("mcp-session-id") || "",
+            wwwAuthenticate: res.headers.get("www-authenticate") || "",
             body: text.length > MAX_BODY_CHARS ? text.slice(0, MAX_BODY_CHARS) : text,
           });
         });
