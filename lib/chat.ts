@@ -507,6 +507,7 @@ async function memoryFilesFor(chat: Chat | null): ReturnType<typeof getMemoryFil
 
 type TurnContext = Pick<
   E2EStreamOptions,
+  | "displayName"
   | "projectContext"
   | "conversationSummary"
   | "memoryFiles"
@@ -596,6 +597,7 @@ export async function sendMessage(
   const since = await sinceSummary(key, chatId, chatMeta, history);
   const inProject = await projectTurn(chatMeta);
   const ctx: TurnContext = {
+    displayName: getUser()?.display_name ?? "",
     projectContext: inProject?.context ?? "",
     conversationSummary: since.summary,
     memoryFiles: inProject ? inProject.memoryFiles : await memoryFilesFor(chatMeta),
@@ -649,6 +651,7 @@ export async function sendIncognitoMessage(
   files: ChatTextFile[] = []
 ): Promise<Message[]> {
   const ctx: TurnContext = {
+    displayName: "",
     projectContext: "",
     conversationSummary: "",
     memoryFiles: [],
@@ -773,6 +776,7 @@ export async function retryMessage(
       provider: requireProvider(model),
       model,
       turns: turnsForAI(since.history, modelSupportsImages(model)),
+      displayName: getUser()?.display_name ?? "",
       projectContext,
       conversationSummary: since.summary,
       memoryFiles,
