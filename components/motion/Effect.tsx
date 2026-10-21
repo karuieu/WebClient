@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion, type HTMLMotionProps, type Variant } from "motion/react";
+import { motion, useReducedMotion, type HTMLMotionProps, type Variant } from "motion/react";
 
 import { useIsInView, type UseIsInViewOptions } from "./useIsInView";
 import { Slot, type WithAsChild } from "./slot";
@@ -50,6 +50,7 @@ function Effect({
   asChild = false,
   ...props
 }: EffectProps) {
+  const reduce = useReducedMotion();
   const { ref: localRef, isInView } = useIsInView(ref as React.Ref<HTMLElement>, {
     inView,
     inViewOnce,
@@ -116,9 +117,9 @@ function Effect({
       ref={localRef as React.Ref<HTMLDivElement>}
       data-motion-effect=""
       initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
+      animate={reduce || isInView ? "visible" : "hidden"}
       variants={{ hidden: hiddenVariant, visible: visibleVariant }}
-      transition={{
+      transition={reduce ? { duration: 0, delay: 0 } : {
         ...transition,
         delay: (transition?.delay ?? 0) + delay / 1000,
       }}

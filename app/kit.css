@@ -180,12 +180,19 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Show entrance content before hydration, without waiting for Motion to read the preference. */
+  [data-motion-effect] {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }
 

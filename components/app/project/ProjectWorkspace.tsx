@@ -260,18 +260,20 @@ export function ProjectHome({
           <h1 className="text-title overflow-hidden px-1 pb-[0.08em]">
             <motion.span
               key={name}
+              data-motion-effect=""
               className="block truncate"
-              initial={reduce ? { opacity: 0 } : { y: "105%" }}
-              animate={reduce ? { opacity: 1 } : { y: "0%" }}
-              transition={reduce ? { duration: 0.3 } : { ...rise, delay: 0.05 }}
+              initial={{ y: "105%" }}
+              animate={{ y: "0%" }}
+              transition={reduce ? { duration: 0 } : { ...rise, delay: 0.05 }}
             >
               {name}
             </motion.span>
           </h1>
           <motion.div
+            data-motion-effect=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: reduce ? 0 : 0.2 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.5, delay: 0.2 }}
             className="mt-3 px-1"
           >
             {goal ? (
@@ -288,18 +290,20 @@ export function ProjectHome({
           </motion.div>
 
           <motion.div
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.99 }}
+            data-motion-effect=""
+            initial={{ opacity: 0, y: 24, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={reduce ? { duration: 0.3 } : { ...rise, duration: 0.9, delay: 0.25 }}
+            transition={reduce ? { duration: 0 } : { ...rise, duration: 0.9, delay: 0.25 }}
             className="mt-10"
           >
             <Composer autoFocus {...composer} />
           </motion.div>
 
           <motion.p
+            data-motion-effect=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: reduce ? 0 : 0.6 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.6, delay: 0.6 }}
             className="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted"
           >
             <span className="flex items-center gap-2 whitespace-nowrap">

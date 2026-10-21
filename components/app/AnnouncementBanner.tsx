@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { X } from "@/components/kit/icons";
 import { Sheet } from "@/components/kit/Sheet";
@@ -32,14 +32,14 @@ export function AnnouncementBanner({ announcement, open, onDismiss }: { announce
 
 function AnnouncementCard({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
   const { sidebarHidden } = React.useContext(ShellContext);
-  const reduce = useReducedMotion();
 
   return (
     <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
+      data-motion-effect=""
+      initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: 0.15 } }}
-      transition={reduce ? { duration: 0.2 } : { type: "spring", bounce: 0, duration: 0.5 }}
+      transition={{ type: "spring", bounce: 0, duration: 0.5 }}
       className={cx("px-4 pt-3 sm:px-6", sidebarHidden && "md:px-14")}
     >
       <aside

@@ -101,10 +101,11 @@ export function NewChatView({
           {lines?.map((line, i) => (
             <span key={`${line}-${i}`} className="block overflow-hidden pb-[0.08em]">
               <motion.span
+                data-motion-effect=""
                 className={i === 0 ? "block" : cx("block", spooky ? "text-halloween" : "text-muted")}
-                initial={reduce ? { opacity: 0 } : { y: "105%" }}
-                animate={reduce ? { opacity: 1 } : { y: "0%" }}
-                transition={reduce ? { duration: 0.3 } : { ...spring, delay: 0.05 + i * 0.09 }}
+                initial={{ y: "105%" }}
+                animate={{ y: "0%" }}
+                transition={reduce ? { duration: 0 } : { ...spring, delay: 0.05 + i * 0.09 }}
               >
                 {line}
               </motion.span>
@@ -113,18 +114,20 @@ export function NewChatView({
         </h1>
 
         <motion.div
-          initial={reduce ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.99 }}
+          data-motion-effect=""
+          initial={{ opacity: 0, y: 24, scale: 0.99 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={reduce ? { duration: 0.3 } : { ...spring, duration: 0.9, delay: 0.25 }}
+          transition={reduce ? { duration: 0 } : { ...spring, duration: 0.9, delay: 0.25 }}
           className="mt-10"
         >
           <Composer autoFocus {...composer} />
         </motion.div>
 
         <motion.p
+          data-motion-effect=""
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: reduce ? 0 : 0.6 }}
+          transition={reduce ? { duration: 0 } : { duration: 0.6, delay: 0.6 }}
           className="mt-4 flex items-center justify-center gap-2 font-mono text-[11px] text-muted"
         >
           {hidden ? (
