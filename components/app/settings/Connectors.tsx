@@ -342,8 +342,24 @@ function Marketplace(p: ConnectorsSettingsProps) {
   const [view, setView] = React.useState<View>(() => (!discover || connected.length > 0 ? "yours" : "discover"));
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
+  const [disconnecting, setDisconnecting] = React.useState<ConnectorItem | null>(null);
+  const [confirmingDisconnect, setConfirmingDisconnect] = React.useState(false);
+  const pendingDisconnect = React.useRef<string | null>(null);
   const detail = detailId ? p.connectors.find((c) => c.id === detailId) : undefined;
   const addOwn = p.onAdd ? () => setAdding(true) : undefined;
+
+  const requestDisconnect = (id: string): void => {
+    const connector = p.connectors.find((c) => c.id === id);
+    if (!connector) return;
+    pendingDisconnect.current = id;
+    setDisconnecting(connector);
+    setConfirmingDisconnect(true);
+  };
+
+  const closeDisconnect = (): void => {
+    pendingDisconnect.current = null;
+    setConfirmingDisconnect(false);
+  };
 
   return (
     <>
@@ -382,7 +398,7 @@ function Marketplace(p: ConnectorsSettingsProps) {
               onBack={() => setDetailId(null)}
               onConnect={p.onConnect}
               onRoute={p.onRoute}
-              onDisconnect={p.onDisconnect}
+              onDisconnect={requestDisconnect}
             />
           ) : view === "yours" ? (
             <Yours
@@ -390,7 +406,7 @@ function Marketplace(p: ConnectorsSettingsProps) {
               discover={discover}
               serverRoute={serverRoute}
               onRoute={p.onRoute}
-              onDisconnect={p.onDisconnect}
+              onDisconnect={requestDisconnect}
               onOpen={setDetailId}
               onDiscover={() => setView("discover")}
               onAddOwn={addOwn}
@@ -439,6 +455,37 @@ function Marketplace(p: ConnectorsSettingsProps) {
           }}
         />
       )}
+
+      <Dialog
+        open={confirmingDisconnect}
+        onClose={closeDisconnect}
+        title={`Disconnect ${disconnecting?.name ?? "this connector"}?`}
+        description={
+          disconnecting?.custom
+            ? "Chats won't be able to use this connector. Its saved connection will be removed. You can add it again later."
+            : "Chats won't be able to use this connector until you connect it again."
+        }
+        className="max-h-[90dvh] overflow-y-auto [&_h2]:[overflow-wrap:anywhere]"
+        footer={
+          <>
+            <Button variant="secondary" className="min-h-11" onClick={closeDisconnect} data-autofocus>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              className="min-h-11"
+              onClick={() => {
+                const id = pendingDisconnect.current;
+                if (!id) return;
+                closeDisconnect();
+                p.onDisconnect(id);
+              }}
+            >
+              Disconnect
+            </Button>
+          </>
+        }
+      />
     </>
   );
 }
