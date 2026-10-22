@@ -112,7 +112,7 @@ export const CONNECTOR_CATALOG: readonly ConnectorInfo[] = [
     name: "Notion",
     description: "Pages, notes and databases",
     url: "https://mcp.notion.com/mcp",
-    browser: true,
+    browser: false,
     category: "everyday",
     pitch: "Your notes, one question away.",
     abilities: [{ label: "Search your pages and databases" }, { label: "Read a page" }, { label: "Create and edit pages", changes: true }],
