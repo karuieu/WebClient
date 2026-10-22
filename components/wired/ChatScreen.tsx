@@ -8,6 +8,7 @@ import {
   getCompressionGate,
   getMessages,
   invalidateSummaryForMessage,
+  MessageSaveError,
   NotFoundError,
   setChatMemory,
   type Message,
@@ -16,7 +17,7 @@ import {
 import type { CompressionOutcome, CompressionQuota } from "@/lib/compression";
 import { visibleMessages } from "@/lib/conversation";
 import { StoppedError } from "@/lib/errors";
-import { clearChatStream, getChatStream, startRetryStream, startSendStream, stopChatStream, subscribeChatStream } from "@/lib/chatStream";
+import { clearChatStream, getChatStream, startRetryStream, startSaveStream, startSendStream, stopChatStream, subscribeChatStream } from "@/lib/chatStream";
 import { takeFirstMessage, type FirstMessage } from "@/lib/handoff";
 import { registerDraftRescue } from "@/lib/draftRescue";
 import { clearQuoted, markQuoted } from "@/lib/quotedHighlight";
@@ -92,7 +93,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const composer = useComposer({ onSubmit: () => submit(), fixedModel: true });
   const setComposerModel = composer.setModel;
   textRef.current = composer.text;
-  const streaming = stream !== null;
+  const streaming = stream !== null && stream.phase !== "error";
   const model = composer.model as ModelType;
 
   React.useEffect(() => registerDraftRescue(() => textRef.current), []);
@@ -120,6 +121,10 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
 
   const send = React.useCallback(
     (content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean): boolean => {
+      if (getChatStream(chatId)?.error instanceof MessageSaveError) {
+        showError("Save this reply before sending another message.");
+        return false;
+      }
       const history = visibleMessages(messagesRef.current, selectionRef.current);
 
       const shown = new Set(history.map((m) => m.id));
@@ -142,7 +147,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
       setStream({ content: "", activity: null });
       return true;
     },
-    [chatId],
+    [chatId, showError],
   );
 
   function submit() {
@@ -157,8 +162,12 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     const sync = () => {
       const st = getChatStream(chatId);
       if (!st) return;
-      if (st.phase === "streaming") {
-        setStream({ content: st.content, activity: st.activity });
+      if (st.phase === "streaming" || st.phase === "saving" || st.error instanceof MessageSaveError) {
+        const phase = st.phase === "saving" ? "saving" : st.phase === "error" ? "error" : "streaming";
+        setStream({
+          content: st.content, activity: st.activity, phase,
+          error: st.phase === "error" && st.error instanceof MessageSaveError ? st.error.message : undefined,
+        });
         const um = st.userMessage;
         if (um) setMessages((prev) => (prev.some((m) => m.id === um.id) ? prev : [...prev, um]));
         return;
@@ -210,7 +219,8 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     Promise.all([getMessages(chatId), getChat(chatId)])
       .then(([data, chat]) => {
         if (cancelled) return;
-        setMessages(data);
+        const pending = getChatStream(chatId)?.userMessage;
+        setMessages(pending && !data.some((message) => message.id === pending.id) ? [...data, pending] : data);
         setTitle(chat.title);
         const lastModel = data.findLast((m) => m.role === "assistant" && m.model)?.model;
         if (lastModel) setComposerModel(lastModel);
@@ -255,6 +265,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   }, [loading, streaming, messages.length, refreshGate]);
 
   const retry = (messageId: string) => {
+    if (messageId === "streaming" && startSaveStream(chatId)) return;
     if (streaming || getChatStream(chatId)?.phase === "streaming") return;
     const target = messagesRef.current.find((m) => m.id === messageId);
     if (!target || target.role !== "assistant") return;
@@ -395,7 +406,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
         composer={{
           ...composer.props,
           sending: streaming || loading,
-          onStop: streaming ? () => stopChatStream(chatId) : undefined,
+          onStop: streaming && stream?.phase !== "saving" ? () => stopChatStream(chatId) : undefined,
           // Project chats have no user memory.
           memory: composer.memoryAvailable && !projectId ? { on: memoryOn, onToggle: toggleMemory } : undefined,
           project: { name: projectName, onPick: () => library.actions?.onMoveChat(self) },

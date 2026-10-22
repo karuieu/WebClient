@@ -17,10 +17,10 @@ import {
   type MemoryFileForChat,
 } from "./memory";
 import { stripMemoryWriteBlocks } from "./memoryWrite";
-import { parseMessageBlocks } from "./messageBlocks";
+import { lastToolCallFailure, parseMessageBlocks, STOPPED_NOTICE } from "./messageBlocks";
 import { getCustomInstructionsContext } from "./customInstructions";
 import { getSkillsForChat } from "./skills";
-import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock } from "./streamTags";
+import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock, stripToolCalls } from "./streamTags";
 import { resolveReasoningEffort } from "./reasoning";
 import { streamE2EChat, contextBudgetFor, ensureModelAvailable, type E2EStreamOptions } from "./inference";
 import { type AnswerActivity } from "./answerTools";
@@ -118,8 +118,9 @@ export function stripNoticeBlocks(content: string): string {
 }
 
 // Strip UI-only and helper-phase blocks from history. <memory_write> makes the model repeat saved notes; <reasoning> leaks into visible replies. Every path that sends history must go through this function.
-export function stripHiddenBlocks(content: string): string {
-  return stripReasoningBlocks(stripMemoryWriteBlocks(stripNoticeBlocks(content)));
+export function stripHiddenBlocks(content: string, role: ChatTurn["role"] = "assistant"): string {
+  const stripped = stripReasoningBlocks(stripMemoryWriteBlocks(stripNoticeBlocks(content)));
+  return role === "assistant" ? stripToolCalls(stripped) : stripped;
 }
 
 function stripReasoningBlocks(content: string): string {
@@ -129,12 +130,18 @@ function stripReasoningBlocks(content: string): string {
   });
 }
 
+function requireAnswer(content: string): void {
+  const parsed = parseMessageBlocks(content);
+  if (parsed.answer.trim() || (content.includes(STOPPED_NOTICE) && parsed.steps.some((step) => step.kind !== "notice"))) return;
+  throw new Error(lastToolCallFailure(content) ?? "The model returned an empty response");
+}
+
 // The only bottleneck between chat history and the model. Undecryptable turns are dropped here, not in each caller, because a placeholder would be answered by the model.
 function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
   return turns
     .filter((t) => t.content.trim() !== UNDECRYPTABLE_PLACEHOLDER)
     .map((t) => {
-    const { content, images } = turnContentForAI(stripHiddenBlocks(t.content), readsImages);
+    const { content, images } = turnContentForAI(stripHiddenBlocks(t.content, t.role), readsImages);
     return {
       role: t.role,
       content,
@@ -147,7 +154,7 @@ function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
 function modelTurns(messages: HistoryMessage[]): { turns: ChatTurn[]; ids: string[] } {
   const kept = messages.filter((m) => !m.decryptionFailed && m.content.trim() !== UNDECRYPTABLE_PLACEHOLDER);
   return {
-    turns: kept.map((m) => ({ role: m.role, content: turnContentForAI(stripHiddenBlocks(m.content), false).content })),
+    turns: kept.map((m) => ({ role: m.role, content: turnContentForAI(stripHiddenBlocks(m.content, m.role), false).content })),
     ids: kept.map((m) => m.id),
   };
 }
@@ -413,6 +420,13 @@ interface AppendMessageInput {
   tokens?: number;
 }
 
+export class MessageSaveError extends Error {
+  constructor(readonly messages: Message[], readonly retry: () => Promise<Message[]>, cause: unknown) {
+    super("Couldn't save this reply. Copy it before reloading, or retry saving.", { cause });
+    this.name = "MessageSaveError";
+  }
+}
+
 async function appendMessages(
   chatId: string,
   key: CryptoKey,
@@ -433,11 +447,29 @@ async function appendMessages(
       };
     })
   );
-  const raw = await apiCall<RawMessage[]>(`/api/chats/${chatId}/messages/batch`, {
-    method: "POST",
-    body: JSON.stringify({ messages, ...(discard.length > 0 ? { discard } : {}) }),
-  });
-  return Promise.all(raw.map((r) => decryptMessageRow(key, r)));
+  const persist = async (): Promise<Message[]> => {
+    const raw = await apiCall<RawMessage[]>(`/api/chats/${chatId}/messages/batch`, {
+      method: "POST",
+      body: JSON.stringify({ messages, ...(discard.length > 0 ? { discard } : {}) }),
+    });
+    return Promise.all(raw.map((r) => decryptMessageRow(key, r)));
+  };
+  const pending: Message[] = inputs.map((input, i) => ({
+    ...input, id: messages[i].id, chat_id: chatId, pinned: false,
+    tokens: input.tokens ?? 0, created_at: new Date().toISOString(),
+  }));
+  const retry = async (): Promise<Message[]> => {
+    // A lost HTTP response does not mean the transaction failed. Reconcile before reusing its IDs.
+    const existing = await getMessages(chatId);
+    const committed = pending.map((message) => existing.find((row) => row.id === message.id && row.role === message.role && row.content === message.content));
+    if (committed.every((message) => message !== undefined)) return committed as Message[];
+    return persist();
+  };
+  try {
+    return await persist();
+  } catch (error) {
+    throw new MessageSaveError(pending, retry, error);
+  }
 }
 
 interface ProjectTurn {
@@ -566,7 +598,7 @@ async function streamTurn(
   briefFilter?.flush();
 
   const cleanResponse = onTitle || onBrief ? stripTitleBlock(response) : response;
-  if (!parseMessageBlocks(cleanResponse).answer.trim()) throw new Error("The model returned an empty response");
+  requireAnswer(cleanResponse);
 
   return {
     userContent: storedContent,
@@ -794,7 +826,7 @@ export async function retryMessage(
     onToken
   );
 
-  if (!parseMessageBlocks(response).answer.trim()) throw new Error("The model returned an empty response");
+  requireAnswer(response);
 
   if (!origVariantGroup) {
     await apiCall<void>(`/api/chats/${chatId}/messages/${origAssistantId}/variant`, {

@@ -103,6 +103,10 @@ function skillsOf(id: string, drafts: SkillDraft[], skills: SkillContext): Skill
   });
 }
 
+function visibleReplyText(text: string): string {
+  return parseQuestions(parseSkillDrafts(text).text).text;
+}
+
 export function toAssistant(
   id: string,
   content: string,
@@ -111,16 +115,24 @@ export function toAssistant(
   library?: ChatLibrary,
 ): { message: AssistantData; artifacts: Artifact[] } {
   const { artifacts, text } = parseArtifacts(content);
-  const { steps, answer, preparation } = parseMessageBlocks(text);
+  const { steps, answer, preparation, timeline } = parseMessageBlocks(text);
   const { drafts, text: withoutDrafts } = parseSkillDrafts(answer);
   const { questions, text: shown } = parseQuestions(withoutDrafts);
+  const last = timeline?.at(-1);
+  const chronological = timeline?.slice(0, last?.kind === "message" ? -1 : undefined).map((segment) => segment.kind === "message"
+    ? { ...segment, text: visibleReplyText(segment.text) }
+    : segment);
+  const finalText = timeline ? (last?.kind === "message" ? visibleReplyText(last.text) : "") : shown;
+  const prose = timeline?.filter((segment) => segment.kind === "message").map((segment) => visibleReplyText(segment.text)).join("\n\n") ?? shown;
+  const thoughts = steps.filter((step) => step.kind === "thought").map((step) => step.text).join("\n\n");
   return {
     message: {
       id,
       role: "assistant" as const,
-      text: shown,
+      text: finalText,
+      copyText: prose || thoughts,
       steps,
-      preparation,
+      preparation: chronological ?? preparation,
       artifacts: artifactsOf(id, artifacts, library),
       skills: skillsOf(id, drafts, skills),
       questions,
@@ -130,7 +142,7 @@ export function toAssistant(
   };
 }
 
-export type Streaming = { content: string; activity: AnswerActivity | null } | null;
+export type Streaming = { content: string; activity: AnswerActivity | null; phase?: "streaming" | "saving" | "error"; error?: string } | null;
 
 function activityStatus(activity: AnswerActivity | null): string | null {
   if (!activity) return null;
@@ -164,8 +176,10 @@ export function toViewData(
   if (stream) {
     // No Library state while streaming: the note is saved only after the answer ends.
     const { message, artifacts } = toAssistant("streaming", stream.content, {
-      streaming: true,
-      status: activityStatus(stream.activity),
+      streaming: stream.phase !== "error",
+      status: stream.phase === "saving" ? "Saving reply" : activityStatus(stream.activity),
+      error: stream.error,
+      retryLabel: stream.error ? "Retry save" : undefined,
     }, skills);
     artifacts.forEach((a, i) => byId.set(`streaming:${i}`, a));
     data.push(message);

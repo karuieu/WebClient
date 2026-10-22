@@ -1,4 +1,4 @@
-// Minimal MCP client (Streamable HTTP). Requests go through the connector's route (connectorRelay.ts). Only initialize, tools/list and tools/call are implemented.
+// Minimal MCP client (Streamable HTTP). Requests go through the connector's route (connectorRelay.ts). Only initialize, tools/list, tools/call and resources/read are implemented.
 
 import type { ConnectorRoute } from "./connectors";
 import { connectorFetch } from "./connectorRelay";
@@ -206,5 +206,14 @@ export async function callTool(
     let text = parts.join("\n").trim();
     if (!text && r.structuredContent !== undefined) text = JSON.stringify(r.structuredContent);
     return { text, isError: r.isError === true };
+  });
+}
+
+export async function readResource(server: McpServer, uri: string): Promise<string> {
+  return withSession(server, async (active, session) => {
+    const { result } = await rpc(active, session, "resources/read", { uri });
+    const r = (result ?? {}) as { contents?: Array<{ text?: string; mimeType?: string }> };
+    const parts = (Array.isArray(r.contents) ? r.contents : []).map((c) => c.text ?? `[${c.mimeType ?? "binary"} content not shown]`);
+    return parts.join("\n").trim();
   });
 }

@@ -6,7 +6,7 @@ import { getArtifactsEnabled } from "./artifacts";
 import { PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
-import { blockJSON, parseMessageBlocks, STOPPED_NOTICE } from "./messageBlocks";
+import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
@@ -47,7 +47,6 @@ import {
   callIndex,
   createCallFilter,
   createTagFilter,
-  stripMemoryNotes,
   stripTitleBlock,
   type AnswerCall,
 } from "./streamTags";
@@ -491,7 +490,8 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
       }, MEMORY_NOTE_MAX_CHARS);
       // The call filter goes first: it drops what follows a call, as the client cuts the text there.
       const tags = callTags(round, ctx);
-      const callFilter = tags.length > 0 ? createCallFilter(tags, noteFilter.push, (call) => (found.call = call)) : null;
+      const filteredTags = tags.includes("connector_call") ? tags : [...tags, "connector_call" as const];
+      const callFilter = createCallFilter(filteredTags, noteFilter.push, (call) => (found.call = call));
       const turns = [...await turn.buildMessages(round, emit), ...followUps];
       throwIfStopped(opts.signal);
       const result = await stream(
@@ -500,19 +500,24 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
           turns,
           reasoningParams: turn.model.reasoningParams,
           signal: opts.signal,
-          stopAt: callFilter ? (text) => (found.call === undefined ? -1 : callIndex(text, tags)) : undefined,
+          stopAt: (text) => (found.call === undefined ? -1 : callIndex(text, filteredTags)),
         },
-        callFilter?.push ?? noteFilter.push
+        callFilter.push
       );
-      callFilter?.flush();
+      callFilter.flush(opts.signal?.aborted);
       noteFilter.flush();
-      const text = stripMemoryNotes(result.text);
+      const text = pendingText;
       total.text += text;
       pendingText = "";
       total.provider = result.provider;
       total.inputTokens += result.inputTokens;
       total.outputTokens += result.outputTokens;
+      throwIfStopped(opts.signal);
       if (found.call === undefined) break;
+      if (!tags.includes(found.call.tag)) {
+        emit(toolCallFailedNotice("unavailable"));
+        break;
+      }
 
       round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
       // Without its title and brief: seeing them at the start of its own reply, the model wrote them again.
@@ -523,7 +528,8 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
   } catch (error) {
     if (!(error instanceof StoppedError)) throw error;
     total.text += pendingText;
-    if (!parseMessageBlocks(stripTitleBlock(total.text)).answer.trim()) throw error;
+    const stopped = parseMessageBlocks(stripTitleBlock(total.text));
+    if (!stopped.answer.trim() && !stopped.steps.some((step) => step.kind !== "notice")) throw error;
     if (!total.text.includes(STOPPED_NOTICE)) emit(STOPPED_NOTICE);
     return total;
   }

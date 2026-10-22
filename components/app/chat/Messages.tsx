@@ -61,6 +61,7 @@ export type AssistantMessageData = {
   id: string;
   role: "assistant";
   text: string;
+  copyText?: string;
   steps?: ProcessingStep[];
   preparation?: PreparationSegment[];
   artifacts?: ArtifactData[];
@@ -71,6 +72,7 @@ export type AssistantMessageData = {
   streaming?: boolean;
   status?: string | null;
   error?: string | null;
+  retryLabel?: string;
   variant?: { index: number; total: number };
   decryptionFailed?: boolean;
 };
@@ -426,21 +428,21 @@ export function AssistantMessage({
                 onClick={onRetry}
                 className="h-8 shrink-0 cursor-pointer rounded-full px-3 font-medium transition-colors duration-150 hover:bg-danger/10"
               >
-                Try again
+                {message.retryLabel ?? "Try again"}
               </button>
             )}
           </div>
         )}
 
-        {!busy && !message.error && (
+        {!busy && (
           <div
             className={cx(
               "-ml-2 mt-3 flex items-center gap-0.5 transition-opacity duration-150",
               isLast ? "opacity-100" : "opacity-0 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100",
             )}
           >
-            {!message.decryptionFailed && <CopyButton text={message.text} />}
-            {onRetry && (
+            {!message.decryptionFailed && <CopyButton text={message.copyText ?? message.text} />}
+            {onRetry && !message.error && (
               <ActionButton label="Retry" onClick={onRetry}>
                 <RotateCcw className="size-3.5" />
               </ActionButton>

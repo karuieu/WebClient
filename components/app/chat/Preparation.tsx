@@ -13,7 +13,7 @@ export function Preparation({ segments, status }: { segments: PreparationSegment
   return (
     <div className="[&_button]:min-h-11 [&_a]:min-h-11">
       {segments.map((segment, index) => segment.kind === "message" ? (
-        <div key={index} className="mb-4 text-[0.9375rem] leading-[1.75] [overflow-wrap:anywhere]">
+        <div key={index} data-answer className="mb-4 text-[0.9375rem] leading-[1.75] [overflow-wrap:anywhere]">
           <Markdown>{segment.text}</Markdown>
         </div>
       ) : (

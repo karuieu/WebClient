@@ -9,6 +9,36 @@ export function blockJSON(value: unknown): string {
 
 export const STOPPED_NOTICE = `<notice>${JSON.stringify({ kind: "stopped" })}</notice>`;
 
+export type ToolCallFailure = "format" | "unfinished" | "unknown_tool" | "unavailable";
+
+const TOOL_CALL_FAILED_TEXT: Record<ToolCallFailure, string> = {
+  format: "The model wrote a connector call in a format the app can't run. No action was taken for that call.",
+  unfinished: "The model's connector call broke off before it was complete. No action was taken for that call.",
+  unknown_tool: "The model asked for a connector tool that isn't available. No action was taken for that call.",
+  unavailable: "The model wrote a connector call when connector calls weren't available for this answer. No action was taken for that call.",
+};
+
+// Answers saved before the reasons existed have a notice without one.
+const TOOL_CALL_FAILED_MESSAGE = "The model sent a connector call that couldn't be run. No action was taken for that call.";
+
+export function toolCallFailedNotice(failure: ToolCallFailure): string {
+  return `<notice>${JSON.stringify({ kind: "tool_call_failed", reason: failure })}</notice>`;
+}
+
+function toolCallFailedText(reason: unknown): string {
+  return typeof reason === "string" && Object.hasOwn(TOOL_CALL_FAILED_TEXT, reason) ? TOOL_CALL_FAILED_TEXT[reason as ToolCallFailure] : TOOL_CALL_FAILED_MESSAGE;
+}
+
+export function lastToolCallFailure(content: string): string | null {
+  const last = [...content.matchAll(/<notice>(\{"kind":"tool_call_failed"[^<]*\})<\/notice>/g)].at(-1);
+  if (!last) return null;
+  try {
+    return toolCallFailedText((JSON.parse(last[1]) as { reason?: unknown }).reason);
+  } catch {
+    return TOOL_CALL_FAILED_MESSAGE;
+  }
+}
+
 export const SEARCH_UNAVAILABLE_NOTICE_KIND = "search_unavailable";
 
 export type MessageStep =
@@ -105,6 +135,8 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
                 ? searchNoticeText(d.reason, d.resetAt)
                 : d.kind === "stopped"
                 ? "You stopped this answer."
+                : d.kind === "tool_call_failed"
+                ? toolCallFailedText(d.reason)
                 : d.kind === "skills_skipped"
                 ? skillsNoticeText(d.reason, d.provider_name)
                 : noticeText({
@@ -169,7 +201,27 @@ export type PreparationSegment =
 
 const HELPER_MESSAGES = /<helper_message>([\s\S]*?)(?:<\/helper_message>|$)/g;
 
-export function parseMessageBlocks(content: string): { steps: MessageStep[]; answer: string; preparation?: PreparationSegment[] } {
+function chronologicalBlocks(content: string): PreparationSegment[] {
+  const segments: PreparationSegment[] = [];
+  const append = ({ steps, answer }: ReturnType<typeof parseBlocks>): void => {
+    if (steps.length > 0) {
+      const previous = segments.at(-1);
+      if (previous?.kind === "processing") previous.steps.push(...steps);
+      else segments.push({ kind: "processing", steps });
+    }
+    if (answer) segments.push({ kind: "message", text: answer });
+  };
+  let cursor = 0;
+  for (const match of content.matchAll(BLOCKS)) {
+    append(parseBlocks(content.slice(cursor, match.index)));
+    append(parseBlocks(match[0]));
+    cursor = match.index + match[0].length;
+  }
+  append(parseBlocks(content.slice(cursor)));
+  return segments;
+}
+
+export function parseMessageBlocks(content: string): { steps: MessageStep[]; answer: string; preparation?: PreparationSegment[]; timeline?: PreparationSegment[] } {
   const parsed = parseBlocks(content.replace(HELPER_MESSAGES, ""));
   const preparation: PreparationSegment[] = [];
   let cursor = 0;
@@ -183,7 +235,10 @@ export function parseMessageBlocks(content: string): { steps: MessageStep[]; ans
     }
     cursor = match.index + match[0].length;
   }
-  if (cursor === 0) return parsed;
+  if (cursor === 0) {
+    const timeline = chronologicalBlocks(content);
+    return timeline.some((segment, index) => segment.kind === "message" && index < timeline.length - 1) ? { ...parsed, timeline } : parsed;
+  }
   const steps = parseBlocks(content.slice(cursor)).steps;
   if (steps.length > 0) preparation.push({ kind: "processing", steps });
   return { ...parsed, preparation };

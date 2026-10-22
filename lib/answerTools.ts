@@ -1,18 +1,18 @@
 // What the answering model can do while it writes: load context from the indexes (<read>), search the web (<search_query>),
-// read a web page (<fetch_url>), call the user's connectors (<tool_call>) and leave a memory note. The browser runs each call and the model
+// read a web page (<fetch_url>), call the user's connectors (<connector_call>) and leave a memory note. The browser runs each call and the model
 // continues with the result.
 
 import { getUser } from "./session";
 import { loadConnectors, serverFor, type UserConnector, type UserConnectorTool } from "./userConnectors";
-import { callTool, SignInRequired } from "./mcpClient";
+import { callTool, readResource, SignInRequired } from "./mcpClient";
 import { callGoogleTool } from "./googleWorkspace";
 import { getToolApprovalMode, requestToolApproval } from "./toolApproval";
 import { type MemoryFileForChat } from "./memory";
 import { type MemoryWriteRequest } from "./helperPhases";
-import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND } from "./messageBlocks";
+import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND, toolCallFailedNotice, type ToolCallFailure } from "./messageBlocks";
 import { API_URL, apiFetch } from "./api";
 import { throwIfStopped } from "./errors";
-import type { AnswerCall, CallTag } from "./streamTags";
+import type { AnswerCall, CallProblem, CallTag } from "./streamTags";
 
 const MAX_ANSWER_SEARCHES = 3;
 const MAX_ANSWER_FETCHES = 3;
@@ -98,7 +98,17 @@ export interface ConnectorTool {
   connector: UserConnector;
   tool: UserConnectorTool;
   definition: { name: string; description: string; parameters: Record<string, unknown> };
+  readsResource: boolean;
 }
+
+// MCP tool descriptions can point to a resource (such as notion://docs/…) that only resources/read returns.
+const READ_RESOURCE: UserConnectorTool = {
+  name: "read_resource",
+  title: "Read resource",
+  description: "Read a resource this app provides, by its URI, for example one a tool description tells you to read first. Not for web addresses.",
+  inputSchema: { type: "object", properties: { uri: { type: "string", description: "The resource URI, exactly as the app gives it." } }, required: ["uri"] },
+  readOnly: true,
+};
 
 // Pro only; a connector that was signed out waits until the user signs in again. A project limits them to its own picks.
 export async function loadConnectorTools(allowedIds?: string[]): Promise<Map<string, ConnectorTool>> {
@@ -108,7 +118,7 @@ export async function loadConnectorTools(allowedIds?: string[]): Promise<Map<str
     (c) => !c.signedOut && (!allowedIds || allowedIds.includes(c.id))
   );
   connectors.forEach((connector, i) => {
-    for (const tool of connector.tools) {
+    for (const tool of connector.api ? connector.tools : [...connector.tools, READ_RESOURCE]) {
       if (tools.size >= MAX_CONNECTOR_TOOLS) return;
       const name = `c${i}_${tool.name.replace(/[^a-zA-Z0-9_-]/g, "_")}`.slice(0, 64);
       if (tools.has(name)) continue;
@@ -120,6 +130,7 @@ export async function loadConnectorTools(allowedIds?: string[]): Promise<Map<str
           description: `[${connector.name}] ${tool.description || tool.title || tool.name}`.slice(0, 1024),
           parameters: tool.inputSchema && typeof tool.inputSchema === "object" ? tool.inputSchema : { type: "object", properties: {} },
         },
+        readsResource: tool === READ_RESOURCE,
       });
     }
   });
@@ -145,9 +156,13 @@ const SKILL_RULES =
   `<skill_index> lists skills the user saved, each their own instructions for a kind of task (id, name, when to use it). Load the skills whose "when to use it" ` +
   `matches what the latest message asks for, at most ${MAX_SKILLS_PER_TURN}. Load none when no skill clearly fits: a skill loaded by mistake changes how the whole answer is written.`;
 
+const CALL_FORMAT = '<connector_call>{"name":"<tool name>","arguments":{...}}</connector_call>';
+
 const CONNECTOR_RULES =
-  "<connector_tools> lists tools from the user's connected apps. To call one, write " +
-  '<tool_call>{"name":"<tool name>","arguments":{...}}</tool_call> on one line and write nothing after it: the result arrives in the next message. ' +
+  `<connector_tools> lists tools from the user's connected apps. To call one, write ${CALL_FORMAT} and write nothing after it: the result arrives in the next message. ` +
+  'Between the tags goes one JSON object with "name", exactly as listed, and "arguments", an object ({} for a tool without inputs). ' +
+  "The app runs only this format: don't write <tool_call>, a tool name right after the tag, or <arg_key>/<arg_value> tags. " +
+  "When a tool description points to a resource by URI (for example notion://…), read it with that app's read_resource tool, not <fetch_url>. " +
   `Call a tool only when the latest message needs data or an action from that app, up to ${MAX_CONNECTOR_CALLS} calls per answer.`;
 
 const MEMORY_NOTE_RULES = `If the latest message contains a durable fact about the user (identity, preferences, expertise, ongoing projects or goals, constraints, tools), end your reply with a note for their long-term memory, after everything else:
@@ -237,7 +252,7 @@ export function callTags(round: AnswerRound, ctx: Pick<AnswerCallContext, "alias
   if (round.searchesLeft > 0) tags.push("search_query");
   if (round.fetchesLeft > 0) tags.push("fetch_url");
   if (canRead(round, ctx)) tags.push("read");
-  if (canCallTools(round, ctx)) tags.push("tool_call");
+  if (canCallTools(round, ctx)) tags.push("connector_call");
   return tags;
 }
 
@@ -285,7 +300,7 @@ export function answerStatusBlock(round: AnswerRound, ctx: Pick<AnswerCallContex
   if (round.finalAnswer) {
     return contextStatus(round, ctx) +
       "\n\n<final_answer>This is the final response round for this user message. No further searches, page reads, context reads or connector calls are available, regardless of the earlier tool instructions. " +
-      "Write the final answer now using the context and results already available. Do not write <search_query>, <fetch_url>, <read> or <tool_call> calls. " +
+      "Write the final answer now using the context and results already available. Do not write <search_query>, <fetch_url>, <read> or <connector_call> calls. " +
       "If information is missing or the task is incomplete, state that plainly; do not invent results or claim actions you did not perform.</final_answer>";
   }
   return (webSearch ? webStatus(round) : "") + contextStatus(round, ctx);
@@ -311,7 +326,7 @@ export async function runAnswerCall(call: AnswerCall, round: AnswerRound, ctx: A
       : "Nothing new was loaded: those ids aren't in the indexes, or they are already loaded.";
   }
   round.toolCalls++;
-  return runToolCall(call.value, round, ctx);
+  return runToolCall(call, round, ctx);
 }
 
 interface SearchResult {
@@ -422,15 +437,31 @@ async function runFetchCall(url: string, round: AnswerRound, ctx: AnswerCallCont
   );
 }
 
-function parseToolCall(value: string): { name: string; args: Record<string, unknown> } | null {
+type ToolCallCheck = { entry: ConnectorTool; args: Record<string, unknown> } | { failure: ToolCallFailure; problem: string };
+
+const CALL_PROBLEMS: Record<CallProblem, { failure: ToolCallFailure; problem: string }> = {
+  not_json: { failure: "format", problem: "Between the call tags you wrote something other than one JSON object, such as a tool name, XML argument tags or a list." },
+  unfinished: { failure: "unfinished", problem: "Your connector call ended before its JSON object and closing tag were complete." },
+  too_long: { failure: "unfinished", problem: "Your connector call is longer than the app accepts. Send shorter arguments, and split long content across several calls if the tool allows it." },
+};
+
+// The model reads the exact reason, so it can fix the call instead of repeating it.
+function checkToolCall(call: AnswerCall, tools: Map<string, ConnectorTool>): ToolCallCheck {
+  if (call.problem) return CALL_PROBLEMS[call.problem];
+  let data: unknown;
   try {
-    const data = JSON.parse(value) as { name?: unknown; arguments?: unknown };
-    if (typeof data.name !== "string") return null;
-    const args = data.arguments && typeof data.arguments === "object" && !Array.isArray(data.arguments) ? (data.arguments as Record<string, unknown>) : {};
-    return { name: data.name, args };
-  } catch {
-    return null;
+    data = JSON.parse(call.value);
+  } catch (error) {
+    return { failure: "format", problem: `The call isn't valid JSON (${error instanceof Error ? error.message : "it can't be parsed"}).` };
   }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return { failure: "format", problem: "The call isn't one JSON object." };
+  const { name, arguments: args } = data as { name?: unknown; arguments?: unknown };
+  if (typeof name !== "string") return { failure: "format", problem: 'The call has no "name" string.' };
+  if (!args || typeof args !== "object" || Array.isArray(args)) return { failure: "format", problem: 'The call has no "arguments" object; use {} for a tool without inputs.' };
+  const entry = tools.get(name);
+  if (!entry) return { failure: "unknown_tool", problem: `There is no tool named ${JSON.stringify(name)} in <connector_tools>; use a name exactly as listed.` };
+  if (entry.readsResource && typeof (args as { uri?: unknown }).uri !== "string") return { failure: "format", problem: `${name} needs "uri", the resource address as a string.` };
+  return { entry, args: args as Record<string, unknown> };
 }
 
 function escapeAttr(value: string): string {
@@ -450,22 +481,30 @@ async function approveAndCall(entry: ConnectorTool, args: Record<string, unknown
   throwIfStopped(signal);
   try {
     const server = await serverFor(connector);
+    throwIfStopped(signal);
     if (!server) throw new SignInRequired();
     const result = connector.api
       ? await callGoogleTool(server, connector.api, { name: tool.name, args })
+      : entry.readsResource
+      ? { text: await readResource(server, String(args.uri)), isError: false }
       : await callTool(server, tool.name, args);
-    return { status: result.isError ? "error" : "ok", text: result.text.slice(0, MAX_TOOL_RESULT_CHARS) || "(no output)" };
+    const text = result.text.length > MAX_TOOL_RESULT_CHARS ? `${result.text.slice(0, MAX_TOOL_RESULT_CHARS)}\n[The result was cut here, at ${MAX_TOOL_RESULT_CHARS} characters.]` : result.text;
+    return { status: result.isError ? "error" : "ok", text: text || "(no output)" };
   } catch (error) {
+    throwIfStopped(signal);
     return { status: "error", text: error instanceof Error ? error.message : "The call failed." };
   }
 }
 
-async function runToolCall(value: string, round: AnswerRound, ctx: AnswerCallContext): Promise<string> {
-  const request = parseToolCall(value);
-  const entry = request ? ctx.connectorTools.get(request.name) : undefined;
-  if (!request || !entry) return "That isn't a call to one of the tools in <connector_tools>.";
+async function runToolCall(call: AnswerCall, round: AnswerRound, ctx: AnswerCallContext): Promise<string> {
+  const checked = checkToolCall(call, ctx.connectorTools);
+  if ("failure" in checked) {
+    ctx.emit(toolCallFailedNotice(checked.failure));
+    return `${checked.problem} No tool was executed. Write the call again as ${CALL_FORMAT}, or answer without it. Use only known arguments; do not guess missing inputs or claim the action succeeded.`;
+  }
+  const { entry, args } = checked;
   throwIfStopped(ctx.signal);
-  const { status, text } = await approveAndCall(entry, request.args, round, ctx.signal);
+  const { status, text } = await approveAndCall(entry, args, round, ctx.signal);
   const { connector, tool } = entry;
   ctx.emit(`<tool>${blockJSON({ connector: connector.name, tool: tool.title || tool.name, status })}</tool>`);
   throwIfStopped(ctx.signal);

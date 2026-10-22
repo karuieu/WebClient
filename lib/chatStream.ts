@@ -3,6 +3,7 @@
 import {
   sendMessage,
   retryMessage,
+  MessageSaveError,
   setChatBrief,
   type Message,
   type ModelType,
@@ -14,7 +15,7 @@ import { applyChatTitle, fallbackTitleChat, getChatTitleMode } from "./chatTitle
 import { throwIfStopped } from "./errors";
 import { type AnswerActivity } from "./answerTools";
 
-export type StreamPhase = "streaming" | "done" | "error";
+export type StreamPhase = "streaming" | "saving" | "done" | "error";
 
 export interface ChatStreamState {
   phase: StreamPhase;
@@ -83,7 +84,7 @@ export function startSendStream(opts: {
   ready?: Promise<void>;
 }): boolean {
   const { chatId } = opts;
-  if (controllers.has(chatId)) return false;
+  if (controllers.has(chatId) || streams.get(chatId)?.error instanceof MessageSaveError) return false;
   const state: ChatStreamState = {
     phase: "streaming",
     kind: "send",
@@ -93,7 +94,7 @@ export function startSendStream(opts: {
     activity: null,
     saved: null,
     retryResponse: null,
-    discarded: [],
+    discarded: opts.discard ?? [],
     error: null,
   };
   streams.set(chatId, state);
@@ -149,6 +150,7 @@ export function startSendStream(opts: {
     } catch (error) {
       state.phase = "error";
       state.error = error;
+      if (error instanceof MessageSaveError) state.content = error.messages.find((message) => message.role === "assistant")?.content ?? state.content;
     }
     controllers.delete(chatId);
     notify(chatId);
@@ -164,7 +166,7 @@ export function startRetryStream(opts: {
   history: HistoryMessage[];
 }): boolean {
   const { chatId } = opts;
-  if (controllers.has(chatId)) return false;
+  if (controllers.has(chatId) || streams.get(chatId)?.error instanceof MessageSaveError) return false;
   const state: ChatStreamState = {
     phase: "streaming",
     kind: "retry",
@@ -199,9 +201,30 @@ export function startRetryStream(opts: {
     } catch (error) {
       state.phase = "error";
       state.error = error;
+      if (error instanceof MessageSaveError) state.content = error.messages.find((message) => message.role === "assistant")?.content ?? state.content;
     }
     controllers.delete(chatId);
     notify(chatId);
   })();
+  return true;
+}
+
+export function startSaveStream(chatId: string): boolean {
+  const state = streams.get(chatId);
+  const error = state?.error;
+  if (!state || !(error instanceof MessageSaveError) || controllers.has(chatId)) return false;
+  startController(chatId);
+  state.phase = "saving";
+  notify(chatId);
+  void error.retry().then((saved) => {
+    if (state.kind === "send") state.saved = saved;
+    else state.retryResponse = saved.find((message) => message.role === "assistant")?.content ?? state.content;
+    state.error = null;
+    state.phase = "done";
+    window.dispatchEvent(new CustomEvent("karui-reload-chats"));
+  }).catch(() => { state.phase = "error"; }).finally(() => {
+    controllers.delete(chatId);
+    notify(chatId);
+  });
   return true;
 }
