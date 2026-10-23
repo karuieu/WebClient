@@ -28,13 +28,13 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: "phala",
     name: "Phala",
     description:
-      "Messages go only to model hosts on Phala's own attested hardware. Your browser checks that the gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
+      "Messages go to model hosts on Phala's own attested hardware. When Phala has no host of its own for Heavy, its gateway passes the message to Tinfoil's enclaves after verifying them. Your browser checks that the gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
     tag: "USA",
     models: [
       { name: "GLM 5.3", region: "USA", tier: "heavy" },
       { name: "Qwen 3.8 27B", region: "USA" },
     ],
-    links: ["https://phala.com/"],
+    links: ["https://phala.com/", "https://tinfoil.sh/"],
   },
   nearai: {
     id: "nearai",
