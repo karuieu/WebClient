@@ -69,6 +69,7 @@ export type AssistantMessageData = {
   /** Asked at the end of the answer; shown in place of the composer while this is the latest message. */
   questions?: QuestionData[];
   model?: string;
+  stopped?: boolean;
   streaming?: boolean;
   status?: string | null;
   error?: string | null;
@@ -437,7 +438,7 @@ export function AssistantMessage({
         {!busy && (
           <div
             className={cx(
-              "-ml-2 mt-3 flex items-center gap-0.5 transition-opacity duration-150",
+              "-ml-2 mt-3 flex flex-wrap items-center gap-0.5 transition-opacity duration-150",
               isLast ? "opacity-100" : "opacity-0 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100",
             )}
           >
@@ -460,7 +461,11 @@ export function AssistantMessage({
                 </ActionButton>
               </div>
             )}
-            {message.model && <span className="ml-2 font-mono text-[11.5px] text-muted">{message.model}</span>}
+            {(message.model || message.stopped) && (
+              <span className="ml-2 font-mono text-[11.5px] text-muted">
+                {[message.model, message.stopped ? "You stopped this answer." : undefined].filter(Boolean).join(" · ")}
+              </span>
+            )}
           </div>
         )}
       </div>

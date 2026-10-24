@@ -7,7 +7,7 @@ import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
 import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactMarkdown, parseArtifacts, type Artifact } from "@/lib/artifacts";
 import type { ArtifactPanel } from "@/components/app/chat/ArtifactPanel";
-import { modelLabel, parseMessageBlocks, splitQuote } from "@/lib/messageBlocks";
+import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messageBlocks";
 import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/skills";
 import { parseQuestions } from "@/lib/questions";
 import type { AnswerActivity } from "@/lib/answerTools";
@@ -115,7 +115,8 @@ export function toAssistant(
   library?: ChatLibrary,
 ): { message: AssistantData; artifacts: Artifact[] } {
   const { artifacts, text } = parseArtifacts(content);
-  const { steps, answer, preparation, timeline } = parseMessageBlocks(text);
+  const stopped = text.includes(STOPPED_NOTICE);
+  const { steps, answer, preparation, timeline } = parseMessageBlocks(text.replaceAll(STOPPED_NOTICE, ""));
   const { drafts, text: withoutDrafts } = parseSkillDrafts(answer);
   const { questions, text: shown } = parseQuestions(withoutDrafts);
   const last = timeline?.at(-1);
@@ -131,6 +132,7 @@ export function toAssistant(
       role: "assistant" as const,
       text: finalText,
       copyText: prose || thoughts,
+      stopped,
       steps,
       preparation: chronological ?? preparation,
       artifacts: artifactsOf(id, artifacts, library),

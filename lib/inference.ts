@@ -6,7 +6,7 @@ import { getArtifactsEnabled } from "./artifacts";
 import { PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
-import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice, UNVERIFIED_NOTICE } from "./messageBlocks";
+import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice, UNVERIFIED_ANSWER_CONTEXT, UNVERIFIED_NOTICE } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
@@ -465,6 +465,7 @@ export async function streamE2EChat(
 async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (token: string) => void): Promise<E2EStreamResult> {
   const stream = opts.provider === "nearai" ? streamNearAIChat : streamPhalaChat;
   const round = startAnswerRound(opts.webSearch);
+  round.untrusted = opts.turns.some((turn) => turn.role === "assistant" && turn.content.includes(UNVERIFIED_ANSWER_CONTEXT));
   const followUps: ModelMessage[] = [];
   const total = { text: "", provider: opts.provider as string, inputTokens: 0, outputTokens: 0 };
   const memory: { note?: MemoryWriteRequest } = {};

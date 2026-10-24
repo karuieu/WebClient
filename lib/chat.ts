@@ -17,7 +17,7 @@ import {
   type MemoryFileForChat,
 } from "./memory";
 import { stripMemoryWriteBlocks } from "./memoryWrite";
-import { isUnverifiedAnswer, lastToolCallFailure, parseMessageBlocks, STOPPED_NOTICE } from "./messageBlocks";
+import { isUnverifiedAnswer, lastToolCallFailure, parseMessageBlocks, STOPPED_NOTICE, unverifiedAnswerContext } from "./messageBlocks";
 import { getCustomInstructionsContext } from "./customInstructions";
 import { getSkillsForChat } from "./skills";
 import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock, stripToolCalls } from "./streamTags";
@@ -136,29 +136,27 @@ function requireAnswer(content: string): void {
   throw new Error(lastToolCallFailure(content) ?? "The model returned an empty response");
 }
 
-// Undecryptable turns are dropped because a placeholder would be answered by the model; unverified ones because
-// whoever relayed them may have written them, and the model would take them as its own words.
-function reachesModel(turn: ChatTurn): boolean {
+function canBeSummarised(turn: ChatTurn): boolean {
   return turn.content.trim() !== UNDECRYPTABLE_PLACEHOLDER && !(turn.role === "assistant" && isUnverifiedAnswer(turn.content));
 }
 
-// The only bottleneck between chat history and the model, so turns are dropped here, not in each caller.
+// A stopped answer stays a quote, never a verified assistant turn.
 function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
   return turns
-    .filter(reachesModel)
-    .map((t) => {
-    const { content, images } = turnContentForAI(stripHiddenBlocks(t.content, t.role), readsImages);
-    return {
-      role: t.role,
-      content,
-      ...(images && images.length > 0 ? { images } : {}),
-    };
-  });
+    .filter((turn) => turn.content.trim() !== UNDECRYPTABLE_PLACEHOLDER)
+    .map((turn) => {
+      const { content, images } = turnContentForAI(stripHiddenBlocks(turn.content, turn.role), readsImages);
+      return {
+        role: turn.role,
+        content: turn.role === "assistant" && isUnverifiedAnswer(turn.content) ? unverifiedAnswerContext(content) : content,
+        ...(images && images.length > 0 ? { images } : {}),
+      };
+    });
 }
 
-// Turns as the model reads them, for measuring and summarising. Images count as their description; counting base64 would trip the compression gate.
+// Unverified answers stay out of summaries and memory. Images count as their description; counting base64 would trip the compression gate.
 function modelTurns(messages: HistoryMessage[]): { turns: ChatTurn[]; ids: string[] } {
-  const kept = messages.filter((m) => !m.decryptionFailed && reachesModel(m));
+  const kept = messages.filter((m) => !m.decryptionFailed && canBeSummarised(m));
   return {
     turns: kept.map((m) => ({ role: m.role, content: turnContentForAI(stripHiddenBlocks(m.content, m.role), false).content })),
     ids: kept.map((m) => m.id),
