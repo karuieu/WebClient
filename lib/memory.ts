@@ -10,6 +10,7 @@ import {
   type MemoryOperation,
 } from "./helperPhases";
 import { annotateMemoryWrites } from "./memoryWrite";
+import { isUnverifiedAnswer } from "./messageBlocks";
 import { API_URL, JSON_HEADERS, apiFetch } from "./api";
 import { getProvider } from "./providers";
 import {
@@ -558,6 +559,7 @@ async function chatBlocks(key: CryptoKey, pending: PendingMemoryChat[]): Promise
         continue;
       }
       if (m.role === "assistant") {
+        if (isUnverifiedAnswer(content)) continue;
         content = stripAssistantBlocks(content);
       } else {
         const parsed = parseMessageContent(content);

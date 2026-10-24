@@ -1,8 +1,8 @@
 import type { InferenceClient } from "@nearai/inference-sdk";
 import { isSignedIn, onSessionCleared } from "./session";
 import { API_URL, assertProxiedAPIURL } from "./api";
-import { createLoopGuard, REPETITION_NOTICE, type StopAt } from "./repetition";
-import { StoppedError } from "./errors";
+import { CALL_DRAIN_LIMIT_MS, createLoopGuard, REPETITION_NOTICE, type StopAt } from "./repetition";
+import { StoppedError, UnverifiedAnswerError } from "./errors";
 import { STOPPED_NOTICE } from "./messageBlocks";
 import { parseToolResponse, withToolInstructions, type JsonTool, type ToolResponse } from "./jsonTools";
 
@@ -96,14 +96,30 @@ async function verifiedClient(providerModelID: string): Promise<InferenceClient>
   return c;
 }
 
+// The SDK decrypts with whatever key the answer names, and our public key travels in the clear. Only the model's
+// signature over the exact request and response bytes shows the answer came from the attested model.
+async function verifyCompletion(c: InferenceClient, completionId: string | undefined): Promise<void> {
+  try {
+    if (!completionId) throw new Error("no completion id");
+    const { signatureKind } = await c.verifyResponse(completionId);
+    if (signatureKind !== "provider_tee") throw new Error(`signed by the ${signatureKind}, not the model`);
+  } catch (error) {
+    console.warn("[karui] NEAR AI signature:", error);
+    throw new UnverifiedAnswerError();
+  }
+}
+
 export interface NearAIStreamResult {
   text: string;
   provider: string;
   inputTokens: number;
   outputTokens: number;
+  // False when the answer was cut off (Stop, repetition) and so has no signature to check.
+  verified: boolean;
 }
 
 interface StreamChunk {
+  id?: string;
   choices?: Array<{ delta?: { content?: string | null; reasoning_content?: string | null; reasoning?: string | null } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
@@ -141,13 +157,25 @@ export async function streamNearAIChat(
   let outputTokens = 0;
   let inReasoning = false;
   let loopStopped = false;
+  let completionId: string | undefined;
+  let drainUntil: number | null = null;
+  let drainTimedOut = false;
   const loopCut = createLoopGuard();
 
   try {
     for await (const chunk of stream) {
+      completionId ??= chunk.id;
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
         outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+      }
+      // Past a tool call the rest is read only for the signature; nothing more is shown.
+      if (drainUntil !== null) {
+        if (Date.now() > drainUntil) {
+          drainTimedOut = true;
+          break;
+        }
+        continue;
       }
       const delta = chunk.choices?.[0]?.delta;
       if (!delta) continue;
@@ -185,7 +213,7 @@ export async function streamNearAIChat(
       const call = opts.stopAt?.(text) ?? -1;
       if (call !== -1) {
         text = text.slice(0, call);
-        break;
+        drainUntil = Date.now() + CALL_DRAIN_LIMIT_MS;
       }
     }
   } catch (error) {
@@ -193,6 +221,9 @@ export async function streamNearAIChat(
   }
   // The OpenAI SDK under NEAR's ends the stream quietly on abort instead of throwing, so Stop is read from the signal.
   const stopped = opts.signal?.aborted === true;
+  if (drainTimedOut) throw new UnverifiedAnswerError();
+  const verified = !loopStopped && !stopped;
+  if (verified) await verifyCompletion(c, completionId);
 
   if (inReasoning) {
     text += "</reasoning>";
@@ -208,7 +239,7 @@ export async function streamNearAIChat(
     onToken(STOPPED_NOTICE);
   }
 
-  return { text, provider: "nearai", inputTokens, outputTokens };
+  return { text, provider: "nearai", inputTokens, outputTokens, verified };
 }
 
 // One non-streaming call, optionally with tools. Tool definitions and calls are encrypted like messages.
@@ -238,7 +269,8 @@ export async function nearAICompletion(opts: {
   const response = (await c.chat.completions.create(
     request as unknown as CreateParams,
     Object.keys(headers).length > 0 ? { headers } : undefined
-  )) as unknown as { choices?: Array<{ message?: { content?: string | null } }> };
+  )) as unknown as { id?: string; choices?: Array<{ message?: { content?: string | null } }> };
+  await verifyCompletion(c, response.id);
 
   const content = response.choices?.[0]?.message?.content ?? "";
   if (tools.length === 0) return { content, toolCalls: [] };

@@ -1,9 +1,9 @@
 import nacl from "tweetnacl";
-import type { AttestationReport, WorkloadKeyset } from "@phala/aci-verifier";
+import type { AttestationReport, ReceiptEnvelope, WorkloadKeyset } from "@phala/aci-verifier";
 import { onSessionCleared } from "./session";
 import { API_URL, apiFetch, assertProxiedAPIURL } from "./api";
-import { createLoopGuard, REPETITION_NOTICE, type StopAt } from "./repetition";
-import { RateLimitError, StoppedError } from "./errors";
+import { CALL_DRAIN_LIMIT_MS, createLoopGuard, REPETITION_NOTICE, type StopAt } from "./repetition";
+import { RateLimitError, StoppedError, UnverifiedAnswerError } from "./errors";
 import { STOPPED_NOTICE } from "./messageBlocks";
 import { parseToolResponse, withToolInstructions, type JsonTool, type ToolResponse } from "./jsonTools";
 
@@ -81,10 +81,18 @@ export async function decryptField(hex: string, secret: Uint8Array, aad: string)
   }
 }
 
+interface GatewayKey {
+  hex: string;
+  bytes: Uint8Array;
+  // What the gateway's receipts must be signed under.
+  keyset: WorkloadKeyset;
+  keysetDigest: string;
+}
+
 // Responses are encrypted to this key. Per session, so the next account on the
 // tab doesn't inherit it.
 let clientKeys: nacl.BoxKeyPair | null = null;
-let gatewayKey: { hex: string; bytes: Uint8Array; staleAfter: number } | null = null;
+let gatewayKey: (GatewayKey & { staleAfter: number }) | null = null;
 
 onSessionCleared(() => {
   clientKeys = null;
@@ -109,7 +117,7 @@ interface ReportExtras {
 const REQUIRED_CHECKS = ["id-1", "id-2", "id-3", "id-4", "policy-os"];
 
 // Intel's quote collateral comes through /api/pccs, the only host the CSP allows. Intel signs it, so the relay cannot forge it.
-async function verifiedGatewayKeyset(report: AttestationReport, nonce: string): Promise<WorkloadKeyset> {
+async function verifiedGatewayKeyset(report: AttestationReport, nonce: string): Promise<{ keyset: WorkloadKeyset; digest: string }> {
 
   const { reportTranscript } = await import("@phala/aci-verifier");
   const transcript = await reportTranscript(report, nonce, {
@@ -124,13 +132,14 @@ async function verifiedGatewayKeyset(report: AttestationReport, nonce: string): 
       throw new Error("Phala's attestation didn't verify in your browser, so nothing was sent.");
     }
   }
-  if (!transcript.verification.ok || !transcript.verification.keyset) {
+  const { ok, keyset, workloadKeysetDigest } = transcript.verification;
+  if (!ok || !keyset || !workloadKeysetDigest) {
     throw new Error("Phala's attestation didn't verify in your browser, so nothing was sent.");
   }
-  return transcript.verification.keyset;
+  return { keyset, digest: workloadKeysetDigest };
 }
 
-async function getGatewayKey(): Promise<{ hex: string; bytes: Uint8Array }> {
+async function getGatewayKey(): Promise<GatewayKey> {
   const now = Math.floor(Date.now() / 1000);
   if (gatewayKey && gatewayKey.staleAfter > now) return gatewayKey;
 
@@ -144,7 +153,7 @@ async function getGatewayKey(): Promise<{ hex: string; bytes: Uint8Array }> {
   if (!report.service_capabilities?.supported_e2ee_versions?.includes("2")) {
     throw new Error("Phala no longer offers the encryption Karui uses");
   }
-  const keyset = await verifiedGatewayKeyset(report, nonce);
+  const { keyset, digest } = await verifiedGatewayKeyset(report, nonce);
   const entry = keyset.e2ee_public_keys.find((k) => k.algo === PHALA_E2EE_ALGO);
   if (!entry?.public_key) throw new Error("Phala's attestation has no browser encryption key");
   const bytes = fromHex(entry.public_key);
@@ -152,8 +161,36 @@ async function getGatewayKey(): Promise<{ hex: string; bytes: Uint8Array }> {
 
   // Re-fetched once the report says it's stale, at the latest after an hour.
   const staleAfter = Math.min(report.attestation?.freshness?.stale_after ?? now + 3600, now + 3600);
-  gatewayKey = { hex: toHex(bytes), bytes, staleAfter };
+  gatewayKey = { hex: toHex(bytes), bytes, keyset, keysetDigest: digest, staleAfter };
   return gatewayKey;
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+// The response key comes from the answer itself and our public key travels in the clear, so anyone relaying the
+// answer could encrypt their own text to us. The receipt is what ties these exact bytes to the attested gateway.
+async function verifyReceipt(response: Response, body: Uint8Array, gateway: GatewayKey): Promise<void> {
+  try {
+    const id = response.headers.get("X-Receipt-Id");
+    if (!id) throw new Error("no X-Receipt-Id");
+    const fetched = await apiFetch(`${API_URL}/api/phala/receipts/${encodeURIComponent(id)}`);
+    if (!fetched.ok) throw new Error(`receipt HTTP ${fetched.status}`);
+    const { verifyReceipt: verify, checkResponseBodyHash } = await import("@phala/aci-verifier");
+    const result = await verify((await fetched.json()) as ReceiptEnvelope, gateway.keyset, gateway.keysetDigest);
+    if (!result.ok || !result.payload) throw new Error(JSON.stringify(result.checks));
+    if (!(await checkResponseBodyHash(result.payload, body))) throw new Error("response bytes don't match the receipt");
+  } catch (error) {
+    console.warn("[karui] Phala receipt:", error);
+    throw new UnverifiedAnswerError();
+  }
 }
 
 export interface PhalaTurn {
@@ -183,6 +220,7 @@ interface SealedRequest {
   nonce: string;
   ts: number;
   secret: Uint8Array;
+  gateway: GatewayKey;
 }
 
 async function sealRequest(
@@ -219,12 +257,13 @@ async function sealRequest(
     nonce,
     ts,
     secret: keys.secretKey,
+    gateway,
   };
 }
 
 async function throwForStatus(response: Response): Promise<void> {
   if (response.ok) {
-    // The gateway could answer in the clear (E2EE not applied) — we'd rather fail.
+    // Turns away an answer in the clear early. Any relay can set this header, so the receipt is the proof.
     if (response.headers.get("X-E2EE-Applied") !== "true") {
       throw new Error("Phala answered without end-to-end encryption, so Karui refused the answer.");
     }
@@ -244,6 +283,8 @@ export interface PhalaStreamResult {
   provider: string;
   inputTokens: number;
   outputTokens: number;
+  // False when the answer was cut off (Stop, repetition) and so has no receipt to check.
+  verified: boolean;
 }
 
 interface StreamChunk {
@@ -282,28 +323,29 @@ export async function streamPhalaChat(
   await throwForStatus(response);
   if (!response.body) throw new Error("Empty response body");
 
+  const reader = response.body.getReader();
   const open = async (chunk: StreamChunk, index: number, name: string, value: string): Promise<string> => {
     const field = `choices.${index}.delta.${name}`;
     const text = await decryptField(value, sealed.secret, responseAad(model, chunk.id ?? "", field, sealed.nonce, sealed.ts));
-    // Not thrown: one bad chunk mustn't sink the answer. But it has to leave a
-    // trace, or a swapped key just looks like a short answer.
-    if (text === null) console.warn("[karui] Phala: a response field didn't decrypt (wrong key or tampered)");
-    return text ?? "";
+    if (text !== null) return text;
+    await reader.cancel();
+    throw new UnverifiedAnswerError();
   };
 
-  const reader = response.body.getReader();
   const streamDecoder = new TextDecoder();
+  const received: Uint8Array[] = [];
   let buffer = "";
   let text = "";
   let inputTokens = 0;
   let outputTokens = 0;
   let inReasoning = false;
   let loopStopped = false;
-  let calledTool = false;
+  let drainUntil: number | null = null;
+  let drainTimedOut = false;
   let stopped = false;
   const loopCut = createLoopGuard();
 
-  while (!loopStopped && !calledTool) {
+  while (!loopStopped && !drainTimedOut) {
     let read: ReadableStreamReadResult<Uint8Array>;
     try {
       read = await reader.read();
@@ -313,6 +355,7 @@ export async function streamPhalaChat(
       break;
     }
     if (read.done) break;
+    received.push(read.value);
 
     buffer += streamDecoder.decode(read.value, { stream: true });
     const lines = buffer.split("\n");
@@ -332,6 +375,15 @@ export async function streamPhalaChat(
       if (chunk.usage) {
         inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
         outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+      }
+      // Past a tool call the rest is read only for the receipt; nothing more is shown.
+      if (drainUntil !== null) {
+        if (Date.now() > drainUntil) {
+          drainTimedOut = true;
+          await reader.cancel();
+          break;
+        }
+        continue;
       }
 
       const choice = chunk.choices?.[0];
@@ -376,12 +428,13 @@ export async function streamPhalaChat(
       const call = opts.stopAt?.(text) ?? -1;
       if (call !== -1) {
         text = text.slice(0, call);
-        calledTool = true;
-        await reader.cancel();
-        break;
+        drainUntil = Date.now() + CALL_DRAIN_LIMIT_MS;
       }
     }
   }
+  if (drainTimedOut) throw new UnverifiedAnswerError();
+  const verified = !loopStopped && !stopped;
+  if (verified) await verifyReceipt(response, concatBytes(received), sealed.gateway);
 
   if (inReasoning) {
     text += "</reasoning>";
@@ -397,7 +450,7 @@ export async function streamPhalaChat(
     onToken(STOPPED_NOTICE);
   }
 
-  return { text, provider: "phala", inputTokens, outputTokens };
+  return { text, provider: "phala", inputTokens, outputTokens, verified };
 }
 
 export async function phalaCompletion(opts: {
@@ -428,8 +481,10 @@ export async function phalaCompletion(opts: {
     body: sealed.body,
   });
   await throwForStatus(response);
+  const body = new Uint8Array(await response.arrayBuffer());
+  await verifyReceipt(response, body, sealed.gateway);
 
-  const data = (await response.json()) as {
+  const data = JSON.parse(decoder.decode(body)) as {
     id?: string;
     choices?: Array<{ index?: number; message?: { content?: string | null } }>;
   };
@@ -439,7 +494,7 @@ export async function phalaCompletion(opts: {
   if (sealedContent) {
     const field = `choices.${choice?.index ?? 0}.message.content`;
     const opened = await decryptField(sealedContent, sealed.secret, responseAad(model, data.id ?? "", field, sealed.nonce, sealed.ts));
-    if (opened === null) throw new Error("Phala's answer didn't decrypt");
+    if (opened === null) throw new UnverifiedAnswerError();
     content = opened;
   }
 

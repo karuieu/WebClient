@@ -17,7 +17,7 @@ import {
   type MemoryFileForChat,
 } from "./memory";
 import { stripMemoryWriteBlocks } from "./memoryWrite";
-import { lastToolCallFailure, parseMessageBlocks, STOPPED_NOTICE } from "./messageBlocks";
+import { isUnverifiedAnswer, lastToolCallFailure, parseMessageBlocks, STOPPED_NOTICE } from "./messageBlocks";
 import { getCustomInstructionsContext } from "./customInstructions";
 import { getSkillsForChat } from "./skills";
 import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stripTitleBlock, stripToolCalls } from "./streamTags";
@@ -136,10 +136,16 @@ function requireAnswer(content: string): void {
   throw new Error(lastToolCallFailure(content) ?? "The model returned an empty response");
 }
 
-// The only bottleneck between chat history and the model. Undecryptable turns are dropped here, not in each caller, because a placeholder would be answered by the model.
+// Undecryptable turns are dropped because a placeholder would be answered by the model; unverified ones because
+// whoever relayed them may have written them, and the model would take them as its own words.
+function reachesModel(turn: ChatTurn): boolean {
+  return turn.content.trim() !== UNDECRYPTABLE_PLACEHOLDER && !(turn.role === "assistant" && isUnverifiedAnswer(turn.content));
+}
+
+// The only bottleneck between chat history and the model, so turns are dropped here, not in each caller.
 function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
   return turns
-    .filter((t) => t.content.trim() !== UNDECRYPTABLE_PLACEHOLDER)
+    .filter(reachesModel)
     .map((t) => {
     const { content, images } = turnContentForAI(stripHiddenBlocks(t.content, t.role), readsImages);
     return {
@@ -152,7 +158,7 @@ function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
 
 // Turns as the model reads them, for measuring and summarising. Images count as their description; counting base64 would trip the compression gate.
 function modelTurns(messages: HistoryMessage[]): { turns: ChatTurn[]; ids: string[] } {
-  const kept = messages.filter((m) => !m.decryptionFailed && m.content.trim() !== UNDECRYPTABLE_PLACEHOLDER);
+  const kept = messages.filter((m) => !m.decryptionFailed && reachesModel(m));
   return {
     turns: kept.map((m) => ({ role: m.role, content: turnContentForAI(stripHiddenBlocks(m.content, m.role), false).content })),
     ids: kept.map((m) => m.id),
@@ -570,9 +576,11 @@ async function streamTurn(
   const storedContent = packMessageContent(content, images, files);
 
   // The <chat_title> block is extracted from the stream and never shown. Filter order matters: the title filter runs before the project-brief filter.
-  const briefFilter = onBrief ? createTagFilter(BRIEF_OPEN, BRIEF_CLOSE, onToken, onBrief) : null;
+  // Both are applied only once the answer is verified.
+  const written: { title?: string; brief?: string } = {};
+  const briefFilter = onBrief ? createTagFilter(BRIEF_OPEN, BRIEF_CLOSE, onToken, (brief) => (written.brief = brief)) : null;
   const afterTitle = briefFilter ? briefFilter.push : onToken;
-  const titleFilter = onTitle ? createTagFilter(TITLE_OPEN, TITLE_CLOSE, afterTitle, onTitle) : null;
+  const titleFilter = onTitle ? createTagFilter(TITLE_OPEN, TITLE_CLOSE, afterTitle, (title) => (written.title = title)) : null;
   const emitToken = titleFilter ? titleFilter.push : afterTitle;
 
   const turns: ChatTurn[] = [...history, { role: "user", content: storedContent }];
@@ -599,6 +607,10 @@ async function streamTurn(
 
   const cleanResponse = onTitle || onBrief ? stripTitleBlock(response) : response;
   requireAnswer(cleanResponse);
+  if (!isUnverifiedAnswer(cleanResponse)) {
+    if (written.title !== undefined) onTitle?.(written.title);
+    if (written.brief !== undefined) onBrief?.(written.brief);
+  }
 
   return {
     userContent: storedContent,
@@ -652,8 +664,10 @@ export async function sendMessage(
       : undefined;
 
   const turn = await streamTurn(content, model, since.history, onToken, ctx, webSearch, onActivity, images, files, onTitle, onBrief);
-  // Retries don't save: a retry repeats the answer, not its actions.
-  const assistantContent = inProject ? await inProject.saveArtifacts(turn.assistantContent) : turn.assistantContent;
+  // Retries don't save: a retry repeats the answer, not its actions. Neither does an unverified answer.
+  const assistantContent = inProject && !isUnverifiedAnswer(turn.assistantContent)
+    ? await inProject.saveArtifacts(turn.assistantContent)
+    : turn.assistantContent;
   return appendMessages(
     chatId,
     key,

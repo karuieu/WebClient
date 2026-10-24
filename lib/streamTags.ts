@@ -18,6 +18,14 @@ export function trailingTagPrefixLen(s: string, tag: string): number {
   return 0;
 }
 
+// GLM sometimes writes the tag while thinking, too; only the block outside <reasoning> counts.
+function indexOutsideReasoning(text: string, tag: string, inReasoning: boolean): number {
+  for (let at = text.indexOf(tag); at !== -1; at = text.indexOf(tag, at + 1)) {
+    if (!reasoningAt(text, at, inReasoning)) return at;
+  }
+  return -1;
+}
+
 export function createTagFilter(
   open: string,
   close: string,
@@ -27,6 +35,14 @@ export function createTagFilter(
 ) {
   let pending = "";
   let done = false;
+  let inReasoning = false;
+  let tagTail = "";
+  const forward = (text: string): void => {
+    const seen = tagTail + text;
+    inReasoning = reasoningAt(seen, seen.length, inReasoning);
+    tagTail = seen.slice(-"</reasoning>".length);
+    emit(text);
+  };
 
   const push = (token: string) => {
     if (done) {
@@ -35,12 +51,12 @@ export function createTagFilter(
     }
     pending += token;
 
-    const openIdx = pending.indexOf(open);
+    const openIdx = indexOutsideReasoning(pending, open, inReasoning);
     if (openIdx === -1) {
       const hold = trailingTagPrefixLen(pending, open);
       const out = pending.slice(0, pending.length - hold);
       pending = pending.slice(pending.length - hold);
-      if (out) emit(out);
+      if (out) forward(out);
       return;
     }
 
@@ -56,7 +72,7 @@ export function createTagFilter(
 
       const out = pending.slice(0, openIdx);
       pending = pending.slice(openIdx);
-      if (out) emit(out);
+      if (out) forward(out);
       return;
     }
 
@@ -78,11 +94,14 @@ export function createTagFilter(
   return { push, flush };
 }
 
+function withoutFirstBlock(text: string, open: string, close: string): string {
+  const start = indexOutsideReasoning(text, open, false);
+  const end = start === -1 ? -1 : text.indexOf(close, start + open.length);
+  return end === -1 ? text : text.slice(0, start) + text.slice(end + close.length);
+}
+
 export function stripTitleBlock(response: string): string {
-  return response
-    .replace(/<chat_title>[\s\S]*?<\/chat_title>/, "")
-    .replace(/<chat_brief>[\s\S]*?<\/chat_brief>/, "")
-    .trimStart();
+  return withoutFirstBlock(withoutFirstBlock(response, TITLE_OPEN, TITLE_CLOSE), BRIEF_OPEN, BRIEF_CLOSE).trimStart();
 }
 
 export function stripMemoryNotes(text: string): string {

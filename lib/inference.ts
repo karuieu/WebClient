@@ -6,7 +6,7 @@ import { getArtifactsEnabled } from "./artifacts";
 import { PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
-import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice } from "./messageBlocks";
+import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice, UNVERIFIED_NOTICE } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
@@ -460,6 +460,7 @@ export async function streamE2EChat(
 
 // A call the model writes ends the round: it is cut from the stream, the app runs it, and the model continues with the result.
 // The memory note doesn't end the round; it is cut from the stream and saved once the answer is complete.
+// A round runs its call and keeps its note only once the stream client verified it.
 async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (token: string) => void): Promise<E2EStreamResult> {
   const stream = opts.provider === "nearai" ? streamNearAIChat : streamPhalaChat;
   const round = startAnswerRound(opts.webSearch);
@@ -478,7 +479,7 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
     for (let request = 0; request < MAX_ANSWER_ROUNDS; request++) {
       throwIfStopped(opts.signal);
       round.finalAnswer = request === MAX_ANSWER_ROUNDS - 1;
-      const found: { call?: AnswerCall } = {};
+      const found: { call?: AnswerCall; note?: MemoryWriteRequest } = {};
       pendingText = "";
       const forward = (token: string) => {
         pendingText += token;
@@ -486,7 +487,7 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
       };
       // Filtered even when writes are off: a note the model writes anyway must not show up.
       const noteFilter = createTagFilter(MEMORY_NOTE_OPEN, MEMORY_NOTE_CLOSE, forward, (value) => {
-        if (opts.memoryWrites) memory.note ??= parseMemoryNote(value, ctx.aliases) ?? undefined;
+        if (opts.memoryWrites) found.note ??= parseMemoryNote(value, ctx.aliases) ?? undefined;
       }, MEMORY_NOTE_MAX_CHARS);
       // The call filter goes first: it drops what follows a call, as the client cuts the text there.
       const tags = callTags(round, ctx);
@@ -512,6 +513,12 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
       total.provider = result.provider;
       total.inputTokens += result.inputTokens;
       total.outputTokens += result.outputTokens;
+      if (!result.verified) {
+        emit(UNVERIFIED_NOTICE);
+        throwIfStopped(opts.signal);
+        break;
+      }
+      memory.note ??= found.note;
       throwIfStopped(opts.signal);
       if (found.call === undefined) break;
       if (!tags.includes(found.call.tag)) {
@@ -519,7 +526,7 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
         break;
       }
 
-      round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text);
+      round.titleWritten ||= /<\/chat_(title|brief)>/.test(total.text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, ""));
       // Without its title and brief: seeing them at the start of its own reply, the model wrote them again.
       const partial = stripTitleBlock(text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, "")).trim();
       if (partial) followUps.push({ role: "assistant", content: partial });
@@ -530,6 +537,8 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
     total.text += pendingText;
     const stopped = parseMessageBlocks(stripTitleBlock(total.text));
     if (!stopped.answer.trim() && !stopped.steps.some((step) => step.kind !== "notice")) throw error;
+    // Whatever the round Stop broke off had streamed, its thinking for one, was never checked.
+    if (pendingText) emit(UNVERIFIED_NOTICE);
     if (!total.text.includes(STOPPED_NOTICE)) emit(STOPPED_NOTICE);
     return total;
   }

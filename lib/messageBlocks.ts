@@ -9,6 +9,14 @@ export function blockJSON(value: unknown): string {
 
 export const STOPPED_NOTICE = `<notice>${JSON.stringify({ kind: "stopped" })}</notice>`;
 
+// A cut-off answer has no signature to check, so it stays on screen but never reaches a model, memory or project files.
+const UNVERIFIED_NOTICE_KIND = "unverified";
+export const UNVERIFIED_NOTICE = `<notice>${JSON.stringify({ kind: UNVERIFIED_NOTICE_KIND })}</notice>`;
+
+export function isUnverifiedAnswer(content: string): boolean {
+  return content.includes(UNVERIFIED_NOTICE);
+}
+
 export type ToolCallFailure = "format" | "unfinished" | "unknown_tool" | "unavailable";
 
 const TOOL_CALL_FAILED_TEXT: Record<ToolCallFailure, string> = {
@@ -135,6 +143,8 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
                 ? searchNoticeText(d.reason, d.resetAt)
                 : d.kind === "stopped"
                 ? "You stopped this answer."
+                : d.kind === UNVERIFIED_NOTICE_KIND
+                ? "This answer was cut off before Karui could verify it came from the model, so it's left out of the conversation."
                 : d.kind === "tool_call_failed"
                 ? toolCallFailedText(d.reason)
                 : d.kind === "skills_skipped"

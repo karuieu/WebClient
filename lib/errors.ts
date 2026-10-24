@@ -29,6 +29,14 @@ export function statusOf(error: unknown): number | undefined {
   return typeof status === "number" ? status : undefined;
 }
 
+// The answer's signature didn't check out against the attested model, so whoever relayed it may have written it.
+export class UnverifiedAnswerError extends Error {
+  constructor() {
+    super("Karui couldn't verify that this answer came from the attested model, so it was discarded. Try again.");
+    this.name = "UnverifiedAnswerError";
+  }
+}
+
 export class StoppedError extends Error {
   constructor() {
     super("Stopped");
