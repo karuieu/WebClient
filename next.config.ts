@@ -64,6 +64,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders() },
+      // Old ?token= links must not leak the token to subresources in Referer.
+      { source: "/:route(verify-email|reset-password|delete-account)", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
       // Later rules override earlier ones key by key. frame-ancestors makes browsers
       // ignore the X-Frame-Options: DENY inherited from the rule above.
       {

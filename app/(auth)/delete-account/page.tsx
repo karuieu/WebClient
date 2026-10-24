@@ -1,24 +1,21 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { confirmAccountDeletion } from "@/lib/auth";
+import { takeLinkToken } from "@/lib/linkToken";
 import { clearSession } from "@/lib/session";
 import { DeleteAccountView } from "@/components/auth/DeleteAccountView";
 
-export default function DeleteAccountPage() {
-  return (
-    <Suspense fallback={null}>
-      <DeleteAccountContent />
-    </Suspense>
-  );
-}
-
-function DeleteAccountContent() {
-  const token = useSearchParams().get("token");
-  const [state, setState] = useState<"confirm" | "success" | "error">(token ? "confirm" : "error");
-  const [error, setError] = useState(token ? "" : "Missing confirmation token.");
+export default function DeleteAccountPage(): React.JSX.Element | null {
+  const [token, setToken] = useState<string | undefined>(undefined);
+  const [state, setState] = useState<"confirm" | "success" | "error">("confirm");
+  const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const found = takeLinkToken();
+    setToken((prev) => prev ?? found ?? "");
+  }, []);
 
   const confirm = async () => {
     if (!token || deleting) return;
@@ -34,5 +31,6 @@ function DeleteAccountContent() {
     setDeleting(false);
   };
 
-  return <DeleteAccountView state={state} error={error} deleting={deleting} onConfirm={confirm} />;
+  if (token === undefined) return null;
+  return <DeleteAccountView state={token === "" ? "error" : state} error={token === "" ? "Missing confirmation token." : error} deleting={deleting} onConfirm={confirm} />;
 }

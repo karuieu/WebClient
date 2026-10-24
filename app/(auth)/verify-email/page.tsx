@@ -1,30 +1,27 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { verifyEmail } from "@/lib/auth";
+import { takeLinkToken } from "@/lib/linkToken";
 import { StatusView } from "@/components/auth/StatusView";
 import { useAuthControls } from "@/components/auth/useAuthControls";
 
 type Status = "verifying" | "success" | "error";
 
-export default function VerifyEmailPage() {
-  return (
-    <Suspense fallback={<StatusView label="Verify email" state="working" title="Confirming your email…" />}>
-      <VerifyEmailContent />
-    </Suspense>
-  );
-}
-
-function VerifyEmailContent() {
-  const searchParams = useSearchParams();
+export default function VerifyEmailPage(): React.JSX.Element {
   const controls = useAuthControls();
+  const [token, setToken] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<Status>("verifying");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    if (!token) {
+    const found = takeLinkToken();
+    setToken((prev) => prev ?? found ?? "");
+  }, []);
+
+  useEffect(() => {
+    if (token === undefined) return;
+    if (token === "") {
       setStatus("error");
       setError("Missing verification token.");
       return;
@@ -37,8 +34,7 @@ function VerifyEmailContent() {
         setError(result.error || "This link is invalid or has expired.");
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   if (controls?.registration_enabled === false) {
     return <StatusView label="Verify email" state="error" title="Registrations are paused." text="Try again after registrations resume. This link expires after one hour." />;

@@ -3,12 +3,13 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiHttpError, completePasswordReset, startPasswordReset, type PasswordResetStart } from "@/lib/auth";
+import { takeLinkToken } from "@/lib/linkToken";
 import { StatusView } from "@/components/auth/StatusView";
 import { ResetPasswordView, type ResetErrors, type ResetMode, type ResetValues } from "@/components/auth/ResetPasswordView";
 
 const LABEL = "Reset password";
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordPage(): React.JSX.Element {
   return (
     <Suspense fallback={<StatusView label={LABEL} state="working" title="Opening your link…" />}>
       <ResetPasswordContent />
@@ -20,7 +21,7 @@ function ResetPasswordContent() {
   const params = useSearchParams();
   const done = params.get("done");
   if (done === "phrase" || done === "fresh") return <ResetDone mode={done} />;
-  return <ResetForm token={params.get("token") ?? ""} />;
+  return <ResetForm />;
 }
 
 function ResetDone({ mode }: { mode: ResetMode }) {
@@ -39,7 +40,8 @@ function ResetDone({ mode }: { mode: ResetMode }) {
   );
 }
 
-function ResetForm({ token }: { token: string }) {
+function ResetForm() {
+  const [token, setToken] = useState<string | undefined>(undefined);
   const [start, setStart] = useState<PasswordResetStart | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [mode, setMode] = useState<ResetMode>("phrase");
@@ -48,7 +50,13 @@ function ResetForm({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!token) {
+    const found = takeLinkToken();
+    setToken((prev) => prev ?? found ?? "");
+  }, []);
+
+  useEffect(() => {
+    if (token === undefined) return;
+    if (token === "") {
       setLinkError("This link is missing its token. Open it straight from the email.");
       return;
     }
@@ -61,7 +69,7 @@ function ResetForm({ token }: { token: string }) {
   }, [token]);
 
   const handleSubmit = async () => {
-    if (!start) return;
+    if (!start || !token) return;
     setErrors({});
     if (values.password.length < 8) {
       setErrors({ password: "Password must be at least 8 characters" });
