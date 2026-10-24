@@ -1,8 +1,6 @@
-// Fragments keep emailed tokens out of requests and Referer; query tokens support older links.
-// Replace the current history entry so neither format stays in the address bar.
+// Fragments keep emailed tokens out of requests, server-rendered payloads and Referer.
 export function takeLinkToken(): string | null {
-  const fromHash = new URLSearchParams(window.location.hash.slice(1)).get("token");
-  const fromQuery = new URLSearchParams(window.location.search).get("token");
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
   window.history.replaceState(null, "", window.location.pathname);
-  return fromHash || fromQuery || null;
+  return token;
 }

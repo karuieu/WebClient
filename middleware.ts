@@ -20,6 +20,7 @@ const publicRoutes = [
   // MCP sign-in servers fetch this client description without cookies.
   "/oauth/client.json",
 ];
+const emailedLinkRoutes = new Set(["/verify-email", "/reset-password", "/delete-account"]);
 
 // The documents moved to the landing page; links from e-mails, bookmarks and Polar still lead there.
 const LANDING_PAGES = new Set(["/security", "/privacy", "/privacy/en", "/terms", "/terms/en"]);
@@ -100,6 +101,17 @@ export function middleware(request: NextRequest) {
   }
 
   if (LANDING_PAGES.has(pathname)) return NextResponse.redirect(`${LANDING_URL}${pathname}`, 308);
+
+  // Reject legacy query tokens before Next.js can serialize them into HTML or RSC payloads.
+  if (emailedLinkRoutes.has(pathname) && request.nextUrl.searchParams.has("token")) {
+    const cleanUrl = new URL(pathname, REDIRECT_BASE || request.url);
+    cleanUrl.search = request.nextUrl.search;
+    cleanUrl.searchParams.delete("token");
+    const response = NextResponse.redirect(cleanUrl, 308);
+    response.headers.set("Cache-Control", "private, no-cache, no-store, max-age=0, must-revalidate");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
 
   // Only a hint for redirects: the session itself is an HttpOnly cookie on the API host, checked by the backend.
   const isLoggedIn = request.cookies.has("karui_signed_in");
