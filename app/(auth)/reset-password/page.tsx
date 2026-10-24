@@ -20,6 +20,12 @@ export default function ResetPasswordPage(): React.JSX.Element {
 function ResetPasswordContent() {
   const params = useSearchParams();
   const done = params.get("done");
+
+  useEffect(() => {
+    if (done !== "phrase" && done !== "fresh") return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }, [done]);
+
   if (done === "phrase" || done === "fresh") return <ResetDone mode={done} />;
   return <ResetForm />;
 }
