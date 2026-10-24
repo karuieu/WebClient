@@ -31,7 +31,7 @@ export function findLoopCut(text: string): number {
 // Where a stream client should end the answer (the start of a tool call the model just finished), or -1 to go on.
 export type StopAt = (text: string) => number;
 
-// After a tool call the stream is still read to its end, because only a complete answer has a signature to check.
+// After a tool call or repetition cut, the stream is read to its end because only a complete answer has a signature.
 // A model that keeps writing longer than this fails the round.
 export const CALL_DRAIN_LIMIT_MS = 30_000;
 

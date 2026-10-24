@@ -114,7 +114,7 @@ export interface NearAIStreamResult {
   provider: string;
   inputTokens: number;
   outputTokens: number;
-  // False when the answer was cut off (Stop, repetition) and so has no signature to check.
+  // False when the user stopped the answer before its signature could be checked.
   verified: boolean;
 }
 
@@ -169,7 +169,7 @@ export async function streamNearAIChat(
         inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
         outputTokens = chunk.usage.completion_tokens ?? outputTokens;
       }
-      // Past a tool call the rest is read only for the signature; nothing more is shown.
+      // Past a tool call or repetition cut, the rest is read only for the signature; nothing more is shown.
       if (drainUntil !== null) {
         if (Date.now() > drainUntil) {
           drainTimedOut = true;
@@ -202,13 +202,13 @@ export async function streamNearAIChat(
         onToken(delta.content);
       }
 
-      // Breaking out of the iterator aborts the request, so a looping model
-      // stops burning tokens.
+      // Only a complete answer has a signature; CALL_DRAIN_LIMIT_MS bounds the cost of reading past a loop.
       const cut = loopCut(text);
       if (cut !== -1) {
         text = text.slice(0, cut);
         loopStopped = true;
-        break;
+        drainUntil = Date.now() + CALL_DRAIN_LIMIT_MS;
+        continue;
       }
       const call = opts.stopAt?.(text) ?? -1;
       if (call !== -1) {
@@ -222,7 +222,7 @@ export async function streamNearAIChat(
   // The OpenAI SDK under NEAR's ends the stream quietly on abort instead of throwing, so Stop is read from the signal.
   const stopped = opts.signal?.aborted === true;
   if (drainTimedOut) throw new UnverifiedAnswerError();
-  const verified = !loopStopped && !stopped;
+  const verified = !stopped;
   if (verified) await verifyCompletion(c, completionId);
 
   if (inReasoning) {

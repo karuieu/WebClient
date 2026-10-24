@@ -34,6 +34,7 @@ import {
 } from "./answerTools";
 import { buildReasoningParams, type ReasoningEffort } from "./reasoning";
 import { StoppedError, throwIfStopped } from "./errors";
+import { REPETITION_NOTICE } from "./repetition";
 import { contextBudget, trimTurns } from "./context";
 import { libraryBlock } from "./projectFiles";
 import { skillsPromptBlock, type SkillForChat } from "./skills";
@@ -518,6 +519,7 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
         throwIfStopped(opts.signal);
         break;
       }
+      if (result.text.includes(REPETITION_NOTICE)) break;
       memory.note ??= found.note;
       throwIfStopped(opts.signal);
       if (found.call === undefined) break;

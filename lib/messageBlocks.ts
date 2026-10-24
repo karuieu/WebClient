@@ -9,7 +9,7 @@ export function blockJSON(value: unknown): string {
 
 export const STOPPED_NOTICE = `<notice>${JSON.stringify({ kind: "stopped" })}</notice>`;
 
-// A cut-off answer has no signature to check, so it stays on screen but never reaches a model, memory or project files.
+// An answer cut off by the user's Stop stays on screen but never reaches a model, memory or project files.
 const UNVERIFIED_NOTICE_KIND = "unverified";
 export const UNVERIFIED_NOTICE = `<notice>${JSON.stringify({ kind: UNVERIFIED_NOTICE_KIND })}</notice>`;
 
