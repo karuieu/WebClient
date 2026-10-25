@@ -145,7 +145,8 @@ const CONNECTOR_OPEN = "<connector_call>";
 // The longest wrapped call: a page address with two wrappers and its tags.
 const WRAPPED_MAX_CHARS = CALL_MAX_CHARS.fetch_url + 64;
 // GLM's native <tool_call> also opens a connector call: JSON in it is the older Karui format and Qwen's native one.
-const CONNECTOR_OPENERS = "(?:<(?:connector|tool)_call>\\s*)+";
+// It can also repeat the connector tag without "<" before emitting native arguments.
+const CONNECTOR_OPENERS = "(?:<(?:connector|tool)_call>\\s*)+(?:connector_call>\\s*)?";
 const CONNECTOR_CLOSE = "\\s*</(?:connector|tool)_call>";
 // An opening tag at the end, possibly with the start of a tool name.
 const CONNECTOR_OPENER_TAIL = new RegExp(`${CONNECTOR_OPENERS}(?:c\\d*)?$`);
