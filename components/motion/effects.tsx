@@ -43,7 +43,6 @@ function Magnetic({
   const y = useSpring(rawY, springOptions);
 
   React.useEffect(() => {
-    // Check window in an effect rather than during prerender, when it does not exist.
     if (window.matchMedia("(pointer: coarse)").matches) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 

@@ -442,6 +442,5 @@ export const IncognitoVampire = (p: IconProps) => (
   </Icon>
 );
 
-// Incognito's Halloween costumes; the event draws one at random (`pickCostume` in greeting.ts).
 export const incognitoCostumes = { witch: IncognitoWitch, ghost: IncognitoGhost, vampire: IncognitoVampire };
 export type Costume = keyof typeof incognitoCostumes;

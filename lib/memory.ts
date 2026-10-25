@@ -379,12 +379,14 @@ function clip(text: string): string {
   return text.slice(0, TRANSCRIPT_MESSAGE_MAX_CHARS) + " […]";
 }
 
+const TRANSCRIPT_ENTRY_OVERHEAD_CHARS = 16;
+
 function turnChars(turn: ChatBlock["turns"][number]): number {
-  return clip(turn.content).length + 16;
+  return clip(turn.content).length + TRANSCRIPT_ENTRY_OVERHEAD_CHARS;
 }
 
 function headerChars(block: ChatBlock): number {
-  return block.title.length + 16;
+  return block.title.length + TRANSCRIPT_ENTRY_OVERHEAD_CHARS;
 }
 
 // Splits a chat into blocks that each fit a transcript, each with its own cursor, so no part is cut off while its cursor still advances.
