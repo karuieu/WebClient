@@ -10,10 +10,10 @@
   },
   "dependencies": {
     "@nearai/inference-sdk": "0.1.0",
-    "@phala/aci-verifier": "^0.7.3",
+    "@phala/aci-verifier": "^0.8.0",
     "cap-widget": "0.1.58",
-    "geist": "^1.7.2",
-    "jose": "^6.2.12",
+    "geist": "^1.8.2",
+    "jose": "^6.2.13",
     "motion": "^13.5.1",
     "next": "15.5.28",
     "pdfjs-dist": "^6.4.299",
