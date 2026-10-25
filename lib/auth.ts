@@ -56,7 +56,6 @@ export class ApiHttpError extends Error {
 }
 
 interface AuthResponse {
-  token?: string;
   encrypted_aes_key?: string;
   two_factor_required?: boolean;
   challenge?: string;
