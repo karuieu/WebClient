@@ -1,5 +1,5 @@
-const MIN_LOOP_CHARS = 1000;
-const MIN_LOOP_REPEATS = 5;
+const LOOP_REPEAT_LIMIT = 4;
+const LOOP_MIN_PHRASE = 4;
 const MAX_PHRASE_CHARS = 400;
 const CHECK_EVERY_CHARS = 200;
 
@@ -7,14 +7,15 @@ export const REPETITION_NOTICE_KIND = "repetition_stopped";
 export const REPETITION_NOTICE = `<notice>${JSON.stringify({ kind: REPETITION_NOTICE_KIND })}</notice>`;
 
 /**
- * Finds a degenerate loop at the end of the text: one phrase repeated back to back
- * at least MIN_LOOP_REPEATS times and MIN_LOOP_CHARS long. Returns the index to cut
- * at so a single copy of the phrase survives, or -1 when the tail isn't a loop.
- * Only exact repeats count, so ordinary prose, lists and tables never trip it.
+ * Finds a degenerate loop at the end of the text: a phrase of at least
+ * LOOP_MIN_PHRASE repeated back to back at least LOOP_REPEAT_LIMIT times.
+ * Returns the index to cut at so a single copy of the phrase survives, or -1
+ * when the tail isn't a loop. Only exact repeats count, so ordinary prose,
+ * lists and tables never trip it.
  */
 export function findLoopCut(text: string): number {
-  for (let phrase = 1; phrase <= MAX_PHRASE_CHARS; phrase++) {
-    const span = phrase * Math.max(MIN_LOOP_REPEATS, Math.ceil(MIN_LOOP_CHARS / phrase));
+  for (let phrase = LOOP_MIN_PHRASE; phrase <= MAX_PHRASE_CHARS; phrase++) {
+    const span = phrase * LOOP_REPEAT_LIMIT;
     if (span > text.length) continue;
 
     let i = text.length - span + phrase;
