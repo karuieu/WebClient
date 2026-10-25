@@ -138,6 +138,8 @@ body {
 
 :is(input, textarea, button, [tabindex])[data-focus="within"]:focus-visible {
   outline-style: none !important;
+  /* Keep the control's radius instead of the generic focus rule's 6px. */
+  border-radius: revert-layer;
 }
 
 .code-mono {
