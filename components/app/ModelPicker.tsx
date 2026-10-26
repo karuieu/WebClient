@@ -12,7 +12,7 @@ export type ModelOption = {
   id: string;
   name: string;
   description?: string;
-  tier?: "light" | "heavy";
+  tier?: "light" | "heavy" | "more";
   more?: boolean;
   pro?: boolean;
   efforts?: { value: string; label: string }[];
@@ -116,7 +116,7 @@ export function ModelPicker({
           <span className={cx("relative min-w-0 flex-1", locked && "opacity-50")}>
             <span className="flex items-center gap-2">
               <span className="truncate text-sm font-medium tracking-[-0.01em]">{o.name}</span>
-              {o.tier && <Badge>{o.tier}</Badge>}
+              {o.tier && o.tier !== "more" && <Badge>{o.tier}</Badge>}
               {o.pro && locked && <Badge solid>Pro</Badge>}
             </span>
             {o.description && <span className="mt-0.5 block truncate text-[12.5px] text-muted">{o.description}</span>}
@@ -136,7 +136,7 @@ export function ModelPicker({
       {!mobile && <p className="text-label mb-4 px-0.5 text-muted">Model</p>}
       <div className="flex items-center gap-2 px-0.5">
         <span className="truncate text-sm font-medium tracking-[-0.01em]">{current?.name}</span>
-        {current?.tier && <Badge>{current.tier}</Badge>}
+        {current?.tier && current.tier !== "more" && <Badge>{current.tier}</Badge>}
       </div>
       <p className="mt-1 px-0.5 text-[12.5px] leading-snug text-muted">Each chat keeps its model. Start a new chat to switch.</p>
     </div>
@@ -240,10 +240,21 @@ export function ModelPicker({
   const label = (
     <>
       <span className="text-fg">{current?.name}</span>
-      {current?.tier && <span className="@max-[26rem]:hidden">· {current.tier === "light" ? "Light" : "Heavy"}</span>}
+      {current?.tier && current.tier !== "more" && (
+        <span className="@max-[26rem]:hidden">· {current.tier === "light" ? "Light" : "Heavy"}</span>
+      )}
       {effortLabel && <span className="@max-[26rem]:hidden">· {effortLabel}</span>}
     </>
   );
+
+  if (!options.length) {
+    return (
+      <span className="flex h-9 select-none items-center gap-1.5 px-3 font-mono text-[12px] tracking-[-0.01em] text-muted">
+        <span className="text-fg">DeepSeek V4.1 Flash</span>
+        <span className="@max-[26rem]:hidden">· Light</span>
+      </span>
+    );
+  }
 
   if (fixed && !(efforts.length > 0 && onEffortChange)) {
     return <span className="flex h-9 items-center gap-1.5 px-3 font-mono text-[12px] tracking-[-0.01em] text-muted">{label}</span>;

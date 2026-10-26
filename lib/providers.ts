@@ -1,6 +1,9 @@
-// Chooses the inference provider. The model decides it: Light runs only at NEAR AI, Heavy only at Phala, and a model both offer goes to the user's pick. A whole turn, including its memory and compression helpers, goes to one provider, with no fallback: a failure is shown as itself. A provider joins only with a browser-driven E2E path that encrypts to its attested key. Settings are local (localStorage, per device).
+// The model decides the provider: Light and Heavy go only to Phala, GLM Flash
+// only to NEAR AI, Qwen to the user's pick. A turn never switches providers mid-flight;
+// a failure is shown as itself.
+// Settings are local (localStorage, per device).
 
-import { accountSettingKey, getUser } from "./session";
+import { accountSettingKey } from "./session";
 
 export type ProviderId = "nearai" | "phala";
 
@@ -28,9 +31,10 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: "phala",
     name: "Phala",
     description:
-      "Messages go to model hosts on Phala's own attested hardware. When Phala has no host of its own for Heavy, its gateway passes the message to Tinfoil's enclaves after verifying them. Your browser checks that the gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
+      "Messages go to model hosts on Phala's own attested hardware. When Phala has no host of its own for Light or Heavy, its gateway passes the message to Tinfoil's enclaves after verifying them. Your browser checks that the gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
     tag: "USA",
     models: [
+      { name: "DeepSeek V4.1 Flash", region: "USA", tier: "light" },
       { name: "GLM 5.3", region: "USA", tier: "heavy" },
       { name: "Qwen 3.8 27B", region: "USA" },
     ],
@@ -54,17 +58,18 @@ export const DEFAULT_PROVIDER: ProviderId = "phala";
 
 export const ALL_PROVIDERS: ProviderId[] = ["phala", "nearai"];
 
-export const PRO_ONLY_PROVIDERS: ReadonlySet<ProviderId> = new Set<ProviderId>(["phala"]);
+export const PRO_ONLY_PROVIDERS: ReadonlySet<ProviderId> = new Set<ProviderId>([]);
 
 // Mirror of the backend's offerings. Drift here sends a model to a provider that does not serve it.
 export const MODEL_PROVIDERS: Record<string, ProviderId[]> = {
-  fast: ["nearai"],
+  fast: ["phala"],
   smart: ["phala"],
+  "glm-flash": ["nearai"],
   "qwen3-8-27b": ["phala", "nearai"],
 };
 
 function providerAllowed(provider: ProviderId): boolean {
-  return !PRO_ONLY_PROVIDERS.has(provider) || getUser()?.tier === "pro";
+  return !PRO_ONLY_PROVIDERS.has(provider);
 }
 
 export function getProvider(): ProviderId {

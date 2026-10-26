@@ -281,6 +281,7 @@ export function toBlockquote(text: string): string {
 
 const EXTRA_NAMES: Record<string, string> = {
   "qwen3-8-27b": "Qwen 3.8 27B",
+  "glm-flash": "GLM 5.3 Flash",
   "glm-5-3-flash": "GLM 5.3 Flash",
   "glm-5-3": "GLM 5.3"
 };

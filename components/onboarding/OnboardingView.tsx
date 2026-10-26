@@ -167,7 +167,7 @@ export function OnboardingView(p: OnboardingViewProps) {
           {...common}
           label="Provider"
           title="Where should your chats run?"
-          lead="Both run models inside hardware enclaves. Light runs on NEAR AI and Heavy on Phala; your pick is for models both offer. Karui only ever uses that one, even when it can't answer."
+          lead="Free starts on Light. Pro unlocks Heavy plus more models. Both run models inside hardware enclaves; your pick is for models both offer. Karui only ever uses that one, even when it can't answer."
         >
           <ChoiceCards
             label="Provider"

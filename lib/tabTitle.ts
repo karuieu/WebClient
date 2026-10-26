@@ -3,7 +3,7 @@ import { accountSettingKey } from "./session";
 
 const STORAGE_KEY = "karui_tab_names";
 
-//Off by default: the browser keeps tab titles in its history.
+// Off by default: the browser keeps tab titles in its history.
 export function getTabNamesEnabled(): boolean {
   if (typeof window === "undefined") return false;
   try {

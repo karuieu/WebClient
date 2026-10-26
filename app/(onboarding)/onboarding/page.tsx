@@ -21,7 +21,7 @@ const PLANS = [
     tier: "free" as const,
     name: "Free",
     price: "€0",
-    limits: "10,000 tokens a day, roughly 5 messages. Our system prompt is on us.",
+    limits: "30,000 tokens a day, roughly 5 messages. Our system prompt is on us.",
     highlight: "Light model",
   },
   {

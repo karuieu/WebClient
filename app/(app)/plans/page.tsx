@@ -14,7 +14,7 @@ const PLANS: PlanCard[] = [
     price: "€0",
     period: "forever",
     line: "To try Karui and ask the occasional question.",
-    note: "10,000 tokens a day, roughly 5 messages",
+    note: "30,000 tokens a day, roughly 5 messages",
     features: ["End-to-end encryption", "Light model", "Advanced Memory & one project", "Web search, 10 a day", "Artifacts & images"],
   },
   {

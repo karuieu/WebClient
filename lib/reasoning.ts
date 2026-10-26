@@ -5,7 +5,10 @@ import { accountSettingKey } from "./session";
 
 export type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 
-// GLM 5.3 and GLM 5.3 Flash, at both providers: the chat template reads "low" as about no thinking, "high" as a
+// DeepSeek V4.1 Flash (Light) at Tinfoil accepts none/low/high/xhigh/max; unsupported values return 400.
+const DEEPSEEK: ReasoningEffort[] = ["none", "low", "high", "xhigh", "max"];
+
+// GLM 5.3 and GLM 5.3 Flash: the chat template reads "low" as about no thinking, "high" as a
 // short thought, and anything else as "max", full thinking like sending no level (measured 2026-10-09). So the
 // picker names them by effect: Off, Low, High. Real off (enable_thinking: false) makes GLM think inside the
 // answer instead, so Off sends "low".
@@ -19,14 +22,15 @@ export const REASONING_EFFORT_LEVELS: Record<
   string,
   Partial<Record<ProviderId, ReasoningEffort[]>>
 > = {
-  fast: { nearai: GLM },
+  fast: { phala: DEEPSEEK },
   smart: { phala: GLM },
+  "glm-flash": { nearai: GLM },
   "qwen3-8-27b": { nearai: QWEN, phala: QWEN },
 };
 
 // What a model's template is sent for a picker level; a model without an entry gets the level itself.
 const TEMPLATE_EFFORT: Record<string, Partial<Record<ReasoningEffort, string>>> = {
-  fast: GLM_TEMPLATE,
+  "glm-flash": GLM_TEMPLATE,
   smart: GLM_TEMPLATE,
 };
 
@@ -41,7 +45,7 @@ const REASONING_TEMPLATE_KWARGS: Record<
   string,
   Partial<Record<ProviderId, { thinkingKey: string; effortInKwargs: boolean }>>
 > = {
-  fast: { nearai: NEAR_KWARGS },
+  "glm-flash": { nearai: NEAR_KWARGS },
   "qwen3-8-27b": { nearai: NEAR_KWARGS },
 };
 

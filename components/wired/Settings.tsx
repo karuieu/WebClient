@@ -374,7 +374,7 @@ function ProvidersSection() {
     description: PROVIDERS[id].description,
     region: PROVIDERS[id].tag,
     verification: VERIFICATION[id],
-    models: PROVIDERS[id].models.map((m) => ({ name: m.name, tier: m.tier })),
+    models: PROVIDERS[id].models.map((m) => ({ name: m.name, tier: m.tier === "light" || m.tier === "heavy" ? m.tier : undefined })),
     links: PROVIDERS[id].links,
     locked: PRO_ONLY_PROVIDERS.has(id) && tier !== "pro",
   }));

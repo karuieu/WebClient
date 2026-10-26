@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { getSession } from "@/lib/session";
 import { getModelProvider, getProviderSettings, isModelAvailable, PROVIDERS } from "@/lib/providers";
 import {
   clampReasoningEffort,
@@ -21,10 +20,10 @@ import type { ModelOption } from "@/components/app/ModelPicker";
 
 const MAIN = ["fast", "smart"] as const;
 const EXTRA: { id: string; name: string; description: string }[] = [
+  { id: "glm-flash", name: "GLM 5.3 Flash", description: "Fast reasoning model on NEAR AI" },
   { id: "qwen3-8-27b", name: "Qwen 3.8 27B", description: "Open model that reads images" },
 ];
 const ALL = [...MAIN, ...EXTRA.map((m) => m.id)];
-const PRO_ONLY = new Set(["smart", ...EXTRA.map((m) => m.id)]);
 
 function tierName(id: string, tier: "light" | "heavy") {
   const provider = getModelProvider(id);
@@ -44,7 +43,7 @@ export function buildModelOptions(): ModelOption[] {
   return [
     { id: "fast", name: tierName("fast", "light"), tier: "light", description: "Solid default for everyday conversations", efforts: efforts("fast") },
     { id: "smart", name: tierName("smart", "heavy"), tier: "heavy", description: "More depth when the answer is hard", efforts: efforts("smart"), pro: true },
-    ...EXTRA.map((m) => ({ ...m, more: true, description: unavailable(m.id) ?? m.description, efforts: efforts(m.id) })),
+    ...EXTRA.map((m) => ({ ...m, tier: "more" as const, more: true, pro: true, description: unavailable(m.id) ?? m.description, efforts: efforts(m.id) })),
   ];
 }
 
@@ -57,14 +56,11 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
     if (ALL.includes(id)) setModel(id);
   }, []);
   const [effort, setEffort] = React.useState<ReasoningEffort | null>(null);
-  const [tier, setTier] = React.useState("free");
   const [webSearch, setWebSearch] = React.useState(false);
   const [memoryAvailable, setMemoryAvailable] = React.useState(false);
   const [options, setOptions] = React.useState<ModelOption[]>([]);
 
-  const activeModel = tier !== "pro" && PRO_ONLY.has(model) ? MAIN[0] : model;
-  const imagesOn = modelSupportsImages(activeModel);
-  const imgs = useImageAttachments(showError, imagesOn);
+  const imgs = useImageAttachments(showError, true);
   const docs = useTextFileAttachments(showError);
   const addAny = React.useCallback(
     (list: FileList | File[]) => {
@@ -80,14 +76,6 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
     setWebSearch(getProviderSettings().autoWebSearch);
     setMemoryAvailable(getMemorySettings().enabled);
     setOptions(buildModelOptions());
-    const syncTier = () => setTier(getSession()?.user?.tier || "free");
-    syncTier();
-    window.addEventListener("storage", syncTier);
-    window.addEventListener("focus", syncTier);
-    return () => {
-      window.removeEventListener("storage", syncTier);
-      window.removeEventListener("focus", syncTier);
-    };
   }, []);
 
   const attachments: ComposerAttachment[] = [
@@ -101,6 +89,8 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
   ];
 
   const busy = imgs.isProcessing || docs.isProcessing;
+  const activeModel = model;
+  const imagesOn = modelSupportsImages(activeModel);
   const activeEffort = clampReasoningEffort(activeModel, effort);
 
   const props: React.ComponentProps<typeof Composer> = {
@@ -120,7 +110,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
     imagesEnabled: imagesOn,
     attachNote: imagesOn
       ? `Up to ${MAX_IMAGES_PER_MESSAGE} images and ${MAX_TEXT_FILES_PER_MESSAGE} text files per message`
-      : `Up to ${MAX_TEXT_FILES_PER_MESSAGE} text files per message. Heavy can't read images.`,
+      : `Up to ${MAX_TEXT_FILES_PER_MESSAGE} text files per message. This model can't read images.`,
     onAttach: addAny,
     onRemoveAttachment: (id) => {
       const [kind, index] = id.split("-");
@@ -144,7 +134,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
         setEffort(e as ReasoningEffort);
         setReasoningEffort(e as ReasoningEffort);
       },
-      moreLocked: tier !== "pro",
+      moreLocked: false,
       onUpgrade: () => router.push("/plans"),
       fixed: fixedModel,
     },
