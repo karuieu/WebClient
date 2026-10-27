@@ -58,7 +58,7 @@ import {
   type MemoryCategory,
   type MemorySettings as MemoryPrefsState,
 } from "@/lib/chat/memory";
-import { closedSettingsHref, isSettingsTab, settingsHref, SETTINGS_PARAM } from "@/lib/ui/settingsOverlay";
+import { closedSettingsHref, isSettingsTab, setSettingsUrl, settingsHref, SETTINGS_PARAM } from "@/lib/ui/settingsOverlay";
 import { addConnector, connectCatalogConnector, loadConnectors, removeConnector, updateConnector, type UserConnector } from "@/lib/connectors/userConnectors";
 import { CONNECTOR_CATALOG, defaultRoute } from "@/lib/connectors/connectors";
 import { openSignInWindow } from "@/lib/connectors/mcpOAuth";
@@ -871,7 +871,7 @@ export function SettingsOverlay() {
     if (isSettingsTab(requested)) setTab(requested);
   }, [requested]);
 
-  const close = () => router.replace(closedSettingsHref(pathname, params), { scroll: false });
+  const close = () => setSettingsUrl(closedSettingsHref(pathname, params), "replace");
   const upgrade = () => router.push("/plans");
   const createSkillWithKarui = () => {
     offerDraft(CREATE_SKILL_STARTER);
@@ -880,7 +880,7 @@ export function SettingsOverlay() {
 
   const showTab = (t: SettingsTab) => {
     setTab(t);
-    router.replace(settingsHref(pathname, t, params), { scroll: false });
+    setSettingsUrl(settingsHref(pathname, t, params), "replace");
   };
 
   return (

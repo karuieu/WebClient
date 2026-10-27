@@ -6,7 +6,7 @@ import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
 import { isOnboardingPending } from "@/lib/account/session";
 import { logout } from "@/lib/account/auth";
-import { settingsHref } from "@/lib/ui/settingsOverlay";
+import { setSettingsUrl, settingsHref } from "@/lib/ui/settingsOverlay";
 import { useAnnouncement } from "@/lib/ui/announcement";
 import { AnnouncementBanner } from "@/components/app/AnnouncementBanner";
 import { AppShell } from "@/components/app/AppShell";
@@ -43,7 +43,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             isFree,
           },
           ...library.actions,
-          onOpenSettings: () => router.push(settingsHref(pathname, "general", new URLSearchParams(window.location.search))),
+          onOpenSettings: () => setSettingsUrl(settingsHref(pathname, "general", new URLSearchParams(window.location.search)), "push"),
           onOpenSearch: () => setSearchOpen(true),
           onUpgrade: () => router.push("/plans"),
           onLogout: logout,

@@ -17,6 +17,12 @@ export function settingsHref(pathname: string, tab: SettingsTab, current?: URLSe
   return `${pathname}?${params.toString()}`;
 }
 
+// Not router.push/replace: a navigation re-resolves the page metadata and the tab shows the URL for a moment.
+export function setSettingsUrl(href: string, mode: "push" | "replace"): void {
+  if (mode === "push") window.history.pushState(null, "", href);
+  else window.history.replaceState(null, "", href);
+}
+
 export function closedSettingsHref(pathname: string, current?: URLSearchParams): string {
   const params = new URLSearchParams(current?.toString() ?? "");
   params.delete(SETTINGS_PARAM);

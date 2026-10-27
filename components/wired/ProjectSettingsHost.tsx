@@ -4,7 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getMemorySettings, copyYouIntoProject, hasYouFolder } from "@/lib/chat/memory";
 import { getProject, listProjectFiles, updateProject, type LibraryListing, type Project, type ProjectSettings as Settings } from "@/lib/projects/projects";
-import { settingsHref } from "@/lib/ui/settingsOverlay";
+import { setSettingsUrl, settingsHref } from "@/lib/ui/settingsOverlay";
 import { loadConnectors, type UserConnector } from "@/lib/connectors/userConnectors";
 import { listSkills, type Skill } from "@/lib/chat/skills";
 import { useSession } from "@/components/SessionProvider";
@@ -89,7 +89,7 @@ export function ProjectSettingsHost({
   const toggled = (ids: string[], id: string, on: boolean) => (on ? [...ids.filter((x) => x !== id), id] : ids.filter((x) => x !== id));
   const openSettings = (target: "connectors" | "skills") => {
     onClose();
-    router.push(settingsHref(pathname, target, new URLSearchParams(window.location.search)));
+    setSettingsUrl(settingsHref(pathname, target, new URLSearchParams(window.location.search)), "push");
   };
   const shown = project ?? { name: "", goal: "", settings: null };
   const settings = project?.settings;
