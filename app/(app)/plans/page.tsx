@@ -27,7 +27,6 @@ const PLANS: PlanCard[] = [
     features: [
       "Everything in Free",
       "Heavy and every other model",
-      "Your choice of provider",
       "Unlimited projects, longer conversations",
       "50 web searches a day",
       "Bring your own MCP connectors",
