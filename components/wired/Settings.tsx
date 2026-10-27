@@ -4,7 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { API_URL, JSON_HEADERS, apiFetch, apiJSON, deletionErrorText } from "@/lib/core/api";
+import { API_URL, JSON_HEADERS, NotConfirmedError, apiFetch, apiJSON, deletionErrorText } from "@/lib/core/api";
 import { updateUser } from "@/lib/account/session";
 import {
   changePassword,
@@ -756,7 +756,7 @@ function SecuritySection() {
 
 function DangerSection() {
   const router = useRouter();
-  const { showSuccess } = useToast();
+  const { showSuccess, showError } = useToast();
   const [busy, setBusy] = React.useState<"data" | "account" | null>(null);
   const [dataError, setDataError] = React.useState<string | null>(null);
   const [accountError, setAccountError] = React.useState<string | null>(null);
@@ -775,7 +775,9 @@ function DangerSection() {
           showSuccess("All data deleted. Your account is still active.");
           router.replace("/new");
         } catch (error) {
-          setDataError(error instanceof Error ? error.message : "Failed to delete data");
+          // The password was right; only the two-factor code was skipped, so the password field shows no error.
+          if (error instanceof NotConfirmedError) showError(error.message);
+          else setDataError(error instanceof Error ? error.message : "Failed to delete data");
         } finally {
           setBusy(null);
         }
@@ -790,7 +792,8 @@ function DangerSection() {
           await requestAccountDeletion(password);
           setRequested(true);
         } catch (error) {
-          setAccountError(error instanceof Error ? error.message : "Failed to send the confirmation email");
+          if (error instanceof NotConfirmedError) showError(error.message);
+          else setAccountError(error instanceof Error ? error.message : "Failed to send the confirmation email");
         } finally {
           setBusy(null);
         }
