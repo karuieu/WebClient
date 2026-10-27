@@ -439,34 +439,23 @@ export async function startPasswordReset(token: string): Promise<PasswordResetSt
   return apiCall<PasswordResetStart>("/api/auth/reset-password/start", { method: "POST", body: JSON.stringify({ token }) });
 }
 
-// With the recovery phrase the AES key is re-wrapped, so chats survive. A fresh start makes a new key, and the server deletes data encrypted under the old one.
-export async function completePasswordReset(
-  token: string,
-  start: PasswordResetStart,
-  mode: "phrase" | "fresh",
-  phrase: string,
-  password: string
-): Promise<void> {
+// The recovery phrase re-wraps the same AES key under the new password, so chats survive.
+export async function completePasswordReset(token: string, start: PasswordResetStart, phrase: string, password: string): Promise<void> {
+  if (!start.recovery_envelope) throw new Error("This account has no recovery phrase.");
   const authKeyPromise = deriveAuthKey(start.email, password);
+  const opened = await openWithPhrase(phrase, start.recovery_envelope);
   let encryptedAESKey: string;
-  let recoveryKey: string | undefined;
-  if (mode === "phrase") {
-    if (!start.recovery_envelope) throw new Error("This account has no recovery phrase.");
-    const opened = await openWithPhrase(phrase, start.recovery_envelope);
-    try {
-      encryptedAESKey = await wrapRawAESKey(opened.rawKey, password);
-    } finally {
-      opened.rawKey.fill(0);
-    }
-    recoveryKey = opened.recoveryKey;
-  } else {
-    ({ encryptedAESKey } = await generateEncryptedAESKey(password));
+  try {
+    encryptedAESKey = await wrapRawAESKey(opened.rawKey, password);
+  } finally {
+    opened.rawKey.fill(0);
   }
+  const recoveryKey = opened.recoveryKey;
   await apiCall<void>("/api/auth/reset-password/complete", {
     method: "POST",
     body: JSON.stringify({
       token,
-      mode,
+      mode: "phrase",
       auth_key: await authKeyPromise,
       encrypted_aes_key: encryptedAESKey,
       recovery_key: recoveryKey,

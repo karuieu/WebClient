@@ -22,25 +22,21 @@ function ResetPasswordContent() {
   const done = params.get("done");
 
   useEffect(() => {
-    if (done !== "phrase" && done !== "fresh") return;
+    if (done !== "phrase") return;
     window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   }, [done]);
 
-  if (done === "phrase" || done === "fresh") return <ResetDone mode={done} />;
+  if (done === "phrase") return <ResetDone />;
   return <ResetForm />;
 }
 
-function ResetDone({ mode }: { mode: ResetMode }) {
+function ResetDone() {
   return (
     <StatusView
       label={LABEL}
       state="success"
       title="Password changed."
-      text={
-        mode === "phrase"
-          ? "Your chats are just as you left them. You've been signed out everywhere else."
-          : "Your account starts fresh. You've been signed out everywhere else."
-      }
+      text="Your chats are just as you left them. You've been signed out everywhere else."
       action={{ href: "/login", label: "Sign in" }}
     />
   );
@@ -51,7 +47,7 @@ function ResetForm() {
   const [start, setStart] = useState<PasswordResetStart | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [mode, setMode] = useState<ResetMode>("phrase");
-  const [values, setValues] = useState<ResetValues>({ phrase: "", password: "", confirm: "", understood: false });
+  const [values, setValues] = useState<ResetValues>({ phrase: "", password: "", confirm: "" });
   const [errors, setErrors] = useState<ResetErrors>({});
   const [loading, setLoading] = useState(false);
 
@@ -69,7 +65,7 @@ function ResetForm() {
     startPasswordReset(token)
       .then((s) => {
         setStart(s);
-        if (!s.recovery_envelope) setMode("fresh");
+        if (!s.recovery_envelope) setMode("support");
       })
       .catch((e) => setLinkError(e instanceof Error ? e.message : "This link is invalid or has expired."));
   }, [token]);
@@ -87,9 +83,9 @@ function ResetForm() {
     }
     setLoading(true);
     try {
-      await completePasswordReset(token, start, mode, values.phrase, values.password);
+      await completePasswordReset(token, start, values.phrase, values.password);
       // Reload to clear revoked session caches and remove the spent reset token from browser history.
-      window.location.replace(`/reset-password?done=${mode}`);
+      window.location.replace("/reset-password?done=phrase");
     } catch (e) {
       if (e instanceof ApiHttpError && e.status === 410) setLinkError(e.message);
       else setErrors({ form: e instanceof Error ? e.message : "Couldn't reset the password" });

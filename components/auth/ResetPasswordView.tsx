@@ -1,19 +1,19 @@
 "use client";
 
-import { Button } from "@/components/kit/Button";
-import { Checkbox, Field, TextAreaField } from "@/components/kit/Field";
+import { Button, ButtonLink } from "@/components/kit/Button";
+import { Field, TextAreaField } from "@/components/kit/Field";
 import { Label } from "@/components/kit/Frame";
 import { Rise } from "@/components/kit/Rise";
 import { Segmented } from "@/components/kit/Segmented";
 import { FormAlert } from "./FormAlert";
 
-export type ResetMode = "phrase" | "fresh";
-export type ResetValues = { phrase: string; password: string; confirm: string; understood: boolean };
+export type ResetMode = "phrase" | "support";
+export type ResetValues = { phrase: string; password: string; confirm: string };
 export type ResetErrors = Partial<Record<"form" | "password" | "confirm", string | null>>;
 
 /**
- * Recovery phrases preserve encrypted chats; without one, reset creates a fresh account key and deletes
- * unreadable data.
+ * Only the recovery phrase can reset the password; without it the screen points to support, because an emailed
+ * link alone must not be enough to wipe the account.
  */
 export function ResetPasswordView({
   mode,
@@ -32,8 +32,8 @@ export function ResetPasswordView({
   onChange: <K extends keyof ResetValues>(field: K, value: ResetValues[K]) => void;
   onSubmit: () => void;
 }) {
-  const fresh = mode === "fresh";
-  const canSubmit = !!values.password && !!values.confirm && (fresh ? values.understood : !!values.phrase.trim());
+  const support = mode === "support";
+  const canSubmit = !!values.password && !!values.confirm && !!values.phrase.trim();
 
   return (
     <div>
@@ -45,7 +45,7 @@ export function ResetPasswordView({
       </Rise>
       <Rise delay={0.12}>
         <p className="mt-4 text-pretty text-[1.0625rem] leading-relaxed text-muted">
-          {fresh
+          {support
             ? "Without your recovery phrase, nothing can decrypt what you've stored, not even us."
             : "Your recovery phrase unlocks your chats again, so nothing is lost."}
         </p>
@@ -65,7 +65,7 @@ export function ResetPasswordView({
             label="Recovery phrase"
             options={[
               { value: "phrase", label: "I have my recovery phrase" },
-              { value: "fresh", label: "I don't have it" },
+              { value: "support", label: "I don't have it" },
             ]}
             value={mode}
             onChange={onModeChange}
@@ -73,65 +73,56 @@ export function ResetPasswordView({
 
           <FormAlert message={errors.form} />
 
-          {fresh ? (
-            <p className="rounded-2xl border border-danger/35 bg-danger/[0.06] px-4 py-3.5 text-pretty text-[13.5px] leading-relaxed">
-              Resetting deletes your chats, projects, memory and custom instructions. Your account, your plan and two-factor stay.
-            </p>
+          {support ? (
+            <>
+              <p className="rounded-2xl border border-line bg-surface px-4 py-3.5 text-pretty text-[13.5px] leading-relaxed">
+                We can&apos;t reset your password without the phrase. Write to support@karui.eu from this email address.
+              </p>
+              <ButtonLink href="mailto:support@karui.eu" size="lg" variant="secondary" className="mt-3 w-full">
+                Email support
+              </ButtonLink>
+            </>
           ) : (
-            <TextAreaField
-              id="reset-phrase"
-              label="Recovery phrase"
-              rows={3}
-              autoComplete="off"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="12 words, separated by spaces"
-              value={values.phrase}
-              onChange={(e) => onChange("phrase", e.target.value)}
-              className="font-mono"
-            />
+            <>
+              <TextAreaField
+                id="reset-phrase"
+                label="Recovery phrase"
+                rows={3}
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="12 words, separated by spaces"
+                value={values.phrase}
+                onChange={(e) => onChange("phrase", e.target.value)}
+                className="font-mono"
+              />
+              <Field
+                id="reset-password"
+                label="New password"
+                type="password"
+                autoComplete="new-password"
+                hint="At least 8 characters."
+                value={values.password}
+                error={errors.password}
+                onChange={(e) => onChange("password", e.target.value)}
+              />
+              <Field
+                id="reset-confirm"
+                label="Confirm new password"
+                type="password"
+                autoComplete="new-password"
+                value={values.confirm}
+                error={errors.confirm}
+                onChange={(e) => onChange("confirm", e.target.value)}
+              />
+              <div className="mt-3">
+                <Button type="submit" size="lg" arrow loading={loading} disabled={!canSubmit} className="w-full">
+                  Reset password
+                </Button>
+              </div>
+            </>
           )}
-
-          <Field
-            id="reset-password"
-            label="New password"
-            type="password"
-            autoComplete="new-password"
-            hint="At least 8 characters."
-            value={values.password}
-            error={errors.password}
-            onChange={(e) => onChange("password", e.target.value)}
-          />
-          <Field
-            id="reset-confirm"
-            label="Confirm new password"
-            type="password"
-            autoComplete="new-password"
-            value={values.confirm}
-            error={errors.confirm}
-            onChange={(e) => onChange("confirm", e.target.value)}
-          />
-
-          {fresh && (
-            <Checkbox id="reset-understood" checked={values.understood} onChange={(e) => onChange("understood", e.target.checked)}>
-              <span className="text-fg">I understand my chats and data will be deleted</span>
-            </Checkbox>
-          )}
-
-          <div className="mt-3">
-            <Button
-              type="submit"
-              size="lg"
-              arrow={!fresh}
-              variant={fresh ? "danger" : "primary"}
-              loading={loading}
-              disabled={!canSubmit}
-              className="w-full"
-            >
-              {fresh ? "Reset and start fresh" : "Reset password"}
-            </Button>
-          </div>
         </form>
       </Rise>
     </div>
