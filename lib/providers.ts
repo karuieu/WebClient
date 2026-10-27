@@ -1,6 +1,5 @@
-// The model decides the provider: Light and Heavy go only to Phala, GLM Flash
-// only to NEAR AI, Qwen to the user's pick. A turn never switches providers mid-flight;
-// a failure is shown as itself.
+// Chat models have a fixed provider. getProvider is the separate helper-provider
+// choice used by memory, compression and other helper phases.
 // Settings are local (localStorage, per device).
 
 import { accountSettingKey } from "./session";
@@ -31,12 +30,11 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: "phala",
     name: "Phala",
     description:
-      "Messages go to model hosts on Phala's own attested hardware. When Phala has no host of its own for Light or Heavy, its gateway passes the message to Tinfoil's enclaves after verifying them. Your browser checks that the gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
+      "Messages are encrypted in your browser to Phala's gateway. Light and Heavy can continue to Tinfoil's enclaves; the Gemma helper runs through NEAR AI's gateway. Your browser checks that Phala's gateway runs on genuine Intel TDX hardware, but doesn't yet pin which release of its code that is.",
     tag: "USA",
     models: [
       { name: "DeepSeek V4.1 Flash", region: "USA", tier: "light" },
       { name: "GLM 5.3", region: "USA", tier: "heavy" },
-      { name: "Qwen 3.8 27B", region: "USA" },
     ],
     links: ["https://phala.com/", "https://tinfoil.sh/"],
   },
@@ -48,7 +46,6 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     tag: "USA",
     models: [
       { name: "GLM 5.3 Flash", region: "USA", tier: "light" },
-      { name: "Qwen 3.8 27B", region: "USA" },
     ],
     links: ["https://near.ai/"],
   },
@@ -65,7 +62,6 @@ export const MODEL_PROVIDERS: Record<string, ProviderId[]> = {
   fast: ["phala"],
   smart: ["phala"],
   "glm-flash": ["nearai"],
-  "qwen3-8-27b": ["phala", "nearai"],
 };
 
 function providerAllowed(provider: ProviderId): boolean {
@@ -79,10 +75,7 @@ export function getProvider(): ProviderId {
 }
 
 export function getModelProvider(modelId: string): ProviderId | null {
-  const offering = (MODEL_PROVIDERS[modelId] ?? []).filter(providerAllowed);
-  if (offering.length === 0) return null;
-  const chosen = getProvider();
-  return offering.includes(chosen) ? chosen : offering[0];
+  return (MODEL_PROVIDERS[modelId] ?? []).find(providerAllowed) ?? null;
 }
 
 export function isModelAvailable(modelId: string): boolean {

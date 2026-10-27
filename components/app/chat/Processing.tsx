@@ -11,6 +11,7 @@ export type ProcessingStep =
   | { kind: "page"; url: string; title: string; status: "ok" | "error" }
   | { kind: "vision"; name: string; description: string }
   | { kind: "memory"; action: "edit" | "proposal"; file?: string | null; text: string }
+  | { kind: "memoryRead"; files: string[] }
   | { kind: "notice"; text: string }
   | { kind: "tool"; connector: string; tool: string; status: "ok" | "error" | "declined" }
   | { kind: "skills"; names: string[] }
@@ -38,6 +39,8 @@ function summarize(steps: ProcessingStep[]): string {
   if (unopened) parts.push(unopened === 1 ? "1 page not opened" : `${unopened} pages not opened`);
   const images = steps.filter((s) => s.kind === "vision").length;
   if (images) parts.push(images === 1 ? "1 image" : `${images} images`);
+  const memoryReads = steps.reduce((n, s) => (s.kind === "memoryRead" ? n + s.files.length : n), 0);
+  if (memoryReads) parts.push("Memory read");
   const memory = steps.filter((s) => s.kind === "memory");
   if (memory.some((m) => m.kind === "memory" && m.action === "edit")) parts.push("Memory updated");
   else if (memory.length) parts.push("Memory suggestion");
@@ -116,6 +119,19 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
         <div>
           <StepLabel live={live}>Looked at {step.name}</StepLabel>
           <p className="pl-3.5 text-[14px] leading-relaxed text-muted">{step.description}</p>
+        </div>
+      );
+    case "memoryRead":
+      return (
+        <div>
+          <StepLabel live={live}>Read {step.files.length === 1 ? "1 memory file" : `${step.files.length} memory files`}</StepLabel>
+          <ul className="flex flex-col gap-1 pl-3.5">
+            {step.files.map((file) => (
+              <li key={file} className="truncate font-mono text-[12.5px] text-fg" title={file}>
+                {file}
+              </li>
+            ))}
+          </ul>
         </div>
       );
     case "memory":

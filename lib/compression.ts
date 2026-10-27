@@ -3,7 +3,7 @@
 import { encryptField, fieldAad } from "./crypto";
 import { estimateTokens } from "./context";
 import { compressHistoryE2E, type CompressionTurn } from "./helperPhases";
-import { getModelProvider } from "./providers";
+import { getModelProvider, getProvider } from "./providers";
 import { chatModelAsHelper } from "./inference";
 import { API_URL, apiFetch } from "./api";
 
@@ -109,15 +109,24 @@ function isQuotaExhausted(error: unknown): boolean {
   return error instanceof Error && error.message.includes("429");
 }
 
-// Runs in the enclave of the provider serving this model, like the turn it belongs to.
+// Runs at the helper provider chosen in settings. The chat model may serve as a
+// fallback only when it uses that same provider.
 async function runCompression(
   modelId: string,
   turns: CompressionTurn[],
   previousSummary: string
 ): Promise<string> {
-  const provider = getModelProvider(modelId);
-  if (!provider) throw new Error("Unknown model — no provider to ask for a summary");
-  return compressHistoryE2E({ provider, main: chatModelAsHelper(modelId, provider) }, turns, previousSummary);
+  const chatProvider = getModelProvider(modelId);
+  const helperProvider = getProvider();
+  if (!chatProvider) throw new Error("Unknown model — no provider to ask for a summary");
+  return compressHistoryE2E(
+    {
+      provider: helperProvider,
+      main: helperProvider === chatProvider ? chatModelAsHelper(modelId, chatProvider) : undefined,
+    },
+    turns,
+    previousSummary
+  );
 }
 
 export async function saveChatSummary(

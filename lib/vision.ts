@@ -61,13 +61,13 @@ export async function fileToChatTextFile(file: File): Promise<ChatTextFile> {
 
 // Models with image input. Keep in sync with the live catalogues. Light and Heavy at Phala are text only;
 // DeepSeek V4.1 Flash advertises image input, but no live turn is verified yet, so images stay off.
-const IMAGE_MODELS = new Set<string>(["glm-flash", "qwen3-8-27b"]);
+const IMAGE_MODELS = new Set<string>(["glm-flash"]);
 
 export function modelSupportsImages(modelId: string): boolean {
   return IMAGE_MODELS.has(modelId);
 }
 
-export const IMAGES_UNSUPPORTED_NOTE = "This model can't read images. Switch to GLM 5.3 Flash or Qwen 3.8 27B to send one.";
+export const IMAGES_UNSUPPORTED_NOTE = "This model can't read images. Switch to GLM 5.3 Flash to send one.";
 
 // Plain messages remain strings for compatibility; attachments use a karui_att JSON envelope before encryption.
 

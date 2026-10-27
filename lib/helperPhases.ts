@@ -1,5 +1,5 @@
-// Helper phases run on the provider's smaller helper model, in the browser, through the attested enclave of the turn's provider:
-// merging a memory note into its file, organising memory from recent chats and compressing old turns. The chat's own model answers and calls its tools itself (answerTools.ts).
+// Helper phases run at the provider selected in settings. The chat model answers
+// at its own provider and can replace a failed helper only when both match.
 
 import { nearAICompletion } from "./nearaiClient";
 import { phalaCompletion } from "./phalaClient";
@@ -34,7 +34,8 @@ export interface HelperModel {
   reasoningParams: Record<string, unknown>;
 }
 
-// The helper model at the turn's provider. If it fails, the chat's own model does the call.
+// The helper at the selected provider. A chat model at that same provider can
+// replace it after a failure.
 export interface HelperTurn {
   provider: ProviderId;
   main?: () => Promise<HelperModel>;
@@ -92,7 +93,7 @@ onSessionCleared(() => {
   helperModelsCache = null;
 });
 
-// Always the turn's own provider: helper phases see the memory index and message content, so routing them elsewhere would widen who sees the data.
+// The selected helper provider sees memory and message content for helper calls.
 async function helperModel(provider: ProviderId): Promise<HelperModel | null> {
   if (!helperModelsCache) {
     const response = await apiFetch(`${API_URL}/api/ai/helper-models`);
@@ -114,6 +115,62 @@ export interface MemoryWriteRequest {
   fileId: string | null;
   explicit: boolean;
   note: string;
+}
+
+const EXPLICIT_MEMORY_REQUEST = /\b(?:zapamiętaj|zapisz|zanotuj)\b|\bremember\s*[:,]?\s*(?:that\s+)?(?:i|we|my|our|this|the)\b|\b(?:save|note)\s*[:,]?\s*(?:(?:to|in)\s+(?:your\s+)?memory\s*[:,]?\s*)?(?:that\s+)?(?:i|we|my|our|this|the)\b/iu;
+
+export function isExplicitMemoryRequest(message: string): boolean {
+  return EXPLICIT_MEMORY_REQUEST.test(message);
+}
+
+const RECOVER_MEMORY_WRITE_TOOL = {
+  name: "recover_memory_write",
+  description: "Recover a direct request to save a durable fact to long-term memory.",
+  parameters: {
+    type: "object",
+    properties: {
+      file: { type: "string", description: "The memory file id where the fact belongs, or an empty string when no file fits." },
+      note: { type: "string", description: "The fact to save, one sentence in third person." },
+    },
+    required: ["file", "note"],
+  },
+};
+
+const RECOVER_MEMORY_WRITE_PROMPT = `The answering model may have omitted a memory save request. Inspect the user's latest message and the memory file index.
+
+Call recover_memory_write only when the user directly asks to remember, save or note a durable fact. Do nothing for a negation, a question about memory, or a fact merely mentioned in passing. Choose a writable file from the index, or an empty file value when none fits. Write one sentence in third person. Never invent facts or record secrets, passwords or API keys.`;
+
+export async function recoverMemoryWrite(
+  target: HelperTarget,
+  files: MemoryFileForChat[],
+  lastUserMessage: string
+): Promise<MemoryWriteRequest | null> {
+  const writable = files.filter((file) => !file.readOnly);
+  const index = writable.map((file) => ({ id: file.id, category: file.category, name: file.name, description: file.description }));
+  try {
+    const { toolCalls } = await decide(
+      target,
+      [
+        { role: "system", content: RECOVER_MEMORY_WRITE_PROMPT },
+        { role: "user", content: `<memory_index>${JSON.stringify(index)}</memory_index>\n\n<latest_user_message>\n${lastUserMessage}\n</latest_user_message>` },
+      ],
+      [RECOVER_MEMORY_WRITE_TOOL]
+    );
+    for (const call of toolCalls) {
+      if (call.name !== RECOVER_MEMORY_WRITE_TOOL.name) continue;
+      try {
+        const args = JSON.parse(call.arguments) as { file?: unknown; note?: unknown };
+        const note = typeof args.note === "string" ? args.note.trim() : "";
+        if (!note || note.length > 1000) continue;
+        const fileId = typeof args.file === "string" && writable.some((file) => file.id === args.file) ? args.file : null;
+        return { fileId, explicit: true, note };
+      } catch {
+      }
+    }
+  } catch (error) {
+    if (error instanceof StoppedError) throw error;
+  }
+  return null;
 }
 
 // The write phase sees one file's full content and no other file.
@@ -210,7 +267,7 @@ export function parseMemoryWriteDecision(
   return null;
 }
 
-// Same provider as the conversation, since it sees memory content. Returns null on error: a failed memory write must not stop the answer.
+// Uses the selected helper provider. Returns null on error: a failed memory write must not stop the answer.
 export async function decideMemoryWrite(
   target: HelperTarget,
   file: MemoryFileForChat,

@@ -5,16 +5,14 @@ import { MotionConfig, motion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
 import { ArrowUpRight, Check } from "@/components/kit/icons";
+import { InfoHint } from "@/components/kit/InfoHint";
 import { cx } from "@/lib/cx";
-import { Group, Row, SectionIntro } from "./Layout";
+import { Group, Row } from "./Layout";
 
 export type ProviderOption = {
   id: string;
   name: string;
-  description: string;
-  region: string;
-  verification: string;
-  models: { name: string; tier?: "light" | "heavy" }[];
+  model: string;
   links: string[];
   /** Pro only for this account: shown, but can't be picked. */
   locked?: boolean;
@@ -58,7 +56,12 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
   return (
     <MotionConfig reducedMotion="user">
       <section>
-        <h3 className="text-label mb-3 px-1 text-fg/80">Provider</h3>
+        <div className="relative mb-3 flex items-center gap-1 px-1">
+          <h3 className="text-label text-fg/80">Helper model</h3>
+          <InfoHint label="About the helper model" className="-my-3">
+            Only memory updates and conversation summaries use this provider. Your chat model keeps its own provider.
+          </InfoHint>
+        </div>
         {p.error ? (
           <div className="rounded-2xl border border-line bg-elevated p-5">
             <p role="alert" className="text-[14px] leading-relaxed">{p.error}</p>
@@ -72,7 +75,7 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
             {p.onRetry && <Button variant="secondary" size="lg" className="mt-4" onClick={p.onRetry}>Reload providers</Button>}
           </div>
         ) : (
-          <div ref={group} role="radiogroup" aria-label="Provider" className="grid gap-3 sm:grid-cols-2">
+          <div ref={group} role="radiogroup" aria-label="Helper model provider" className="flex flex-col gap-3">
             {providers.map((o) => {
               const active = o.id === p.provider;
               return (
@@ -111,29 +114,20 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
                         )}
                       </span>
                     </span>
-                    <span className="mt-1 font-mono text-[11px] text-muted">
-                      {o.region} · {o.verification}
-                    </span>
-                    <span id={`${radioId}-${o.id}`} className="mt-3 text-pretty text-[13px] leading-relaxed text-muted">{o.description}</span>
-                    <span className="mt-4 flex flex-wrap gap-1.5">
-                      {o.models.map((m) => (
-                        <span key={m.name} className="rounded-full border border-line px-2 py-0.5 font-mono text-[10.5px] text-muted">
-                          {m.name}
-                          {m.tier && <span className="text-fg/70"> · {m.tier}</span>}
-                        </span>
-                      ))}
+                    <span id={`${radioId}-${o.id}`} className="mt-1 font-mono text-[11px] text-muted">
+                      {o.model} · hardware verified in your browser
                     </span>
                   </button>
                   <div className="absolute bottom-3 left-5 flex gap-3">
-                    {o.links.map((l) => (
+                    {o.links.map((link) => (
                       <a
-                        key={l}
-                        href={l}
+                        key={link}
+                        href={link}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex min-h-11 items-center gap-1 font-mono text-[11px] text-muted underline-offset-4 hover:text-fg hover:underline"
                       >
-                        {host(l)}
+                        {host(link)}
                         <ArrowUpRight className="size-3" />
                       </a>
                     ))}
@@ -160,9 +154,6 @@ export function ProvidersSettings(p: ProvidersSettingsProps): React.JSX.Element 
         />
       </Group>
 
-      <SectionIntro>
-        Every provider runs inside hardware enclaves. For models both offer, pick where your chats are processed. Karui only ever uses that one, even when it&apos;s down.
-      </SectionIntro>
     </MotionConfig>
   );
 }

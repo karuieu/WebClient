@@ -48,11 +48,14 @@ const ALIAS_PREFIX: Record<ContextKind, string> = { memory: "m", library: "f", s
 const aliasOf = (kind: ContextKind, i: number): string => `${ALIAS_PREFIX[kind]}${i + 1}`;
 
 // Short aliases instead of UUIDs save tokens in every prompt. They map back to real ids only here, so an invented id never reaches the app.
-export type ContextAliases = Map<string, { kind: ContextKind; id: string }>;
+export type ContextAliases = Map<string, { kind: ContextKind; id: string; label?: string }>;
 
 export function contextAliases(index: ContextIndex): ContextAliases {
   const lists: Array<[ContextKind, { id: string }[]]> = [["memory", index.memory], ["library", index.library], ["skill", index.skills]];
-  return new Map(lists.flatMap(([kind, items]) => items.map((item, i) => [aliasOf(kind, i), { kind, id: item.id }] as const)));
+  return new Map(lists.flatMap(([kind, items]) => items.map((item, i) => {
+    const label = kind === "memory" ? [index.memory[i].category, index.memory[i].name].filter(Boolean).join(" / ") : undefined;
+    return [aliasOf(kind, i), { kind, id: item.id, label }] as const;
+  })));
 }
 
 export interface ContextSelection {
@@ -321,6 +324,10 @@ export async function runAnswerCall(call: AnswerCall, round: AnswerRound, ctx: A
     const read = readContext(call.value, ctx.aliases, round.selection);
     round.selection = read.selection;
     round.loaded.push(...read.loaded);
+    const files = read.loaded
+      .filter((alias) => ctx.aliases.get(alias)?.kind === "memory")
+      .map((alias) => ctx.aliases.get(alias)!.label || "Memory");
+    if (files.length > 0) ctx.emit(`<memory_read>${blockJSON({ files })}</memory_read>`);
     return read.loaded.length > 0
       ? `Loaded ${read.loaded.join(", ")}; the content is now in the system prompt.`
       : "Nothing new was loaded: those ids aren't in the indexes, or they are already loaded.";

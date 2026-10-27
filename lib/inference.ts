@@ -3,13 +3,15 @@
 
 import { getUser, onSessionCleared } from "./session";
 import { getArtifactsEnabled } from "./artifacts";
-import { PROVIDERS, type ProviderId } from "./providers";
+import { getProvider, PROVIDERS, type ProviderId } from "./providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "./memoryWrite";
 import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice, UNVERIFIED_ANSWER_CONTEXT, UNVERIFIED_NOTICE } from "./messageBlocks";
 import {
   decideMemoryWrite,
   helperReasoningParams,
+  isExplicitMemoryRequest,
+  recoverMemoryWrite,
   type HelperModel,
   type HelperTurn,
   type MemoryWriteRequest,
@@ -317,16 +319,25 @@ export interface E2EStreamOptions {
 }
 
 // Never throws, except on Stop: a failed memory write must not cost the answer.
-async function resolveMemoryWrite(opts: E2EStreamOptions, model: HelperModel, request: MemoryWriteRequest): Promise<string> {
+async function resolveMemoryWrite(opts: E2EStreamOptions, model: HelperModel, request?: MemoryWriteRequest): Promise<string> {
   throwIfStopped(opts.signal);
-  const file = request.fileId ? opts.memoryFiles.find((f) => f.id === request.fileId && !f.readOnly) : undefined;
+  const lastUserMessage = [...opts.turns].reverse().find((t) => t.role === "user")?.content ?? "";
+  const helperProvider = getProvider();
+  const helperTurn: HelperTurn = {
+    provider: helperProvider,
+    main: helperProvider === opts.provider ? async () => model : undefined,
+    signal: opts.signal,
+  };
+  if (!request && isExplicitMemoryRequest(lastUserMessage)) {
+    request = (await recoverMemoryWrite(helperTurn, opts.memoryFiles, lastUserMessage)) ?? undefined;
+  }
+  if (!request) return "";
 
+  const file = request.fileId ? opts.memoryFiles.find((f) => f.id === request.fileId && !f.readOnly) : undefined;
   if (!file) {
     return encodeMemoryWriteBlock({ action: "proposal", file_id: null, category: null, file: null, text: request.note });
   }
 
-  const helperTurn: HelperTurn = { provider: opts.provider, main: async () => model, signal: opts.signal };
-  const lastUserMessage = [...opts.turns].reverse().find((t) => t.role === "user")?.content ?? "";
   let decision;
   try {
     decision = await decideMemoryWrite(helperTurn, file, lastUserMessage, request);
@@ -469,6 +480,7 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
   const followUps: ModelMessage[] = [];
   const total = { text: "", provider: opts.provider as string, inputTokens: 0, outputTokens: 0 };
   const memory: { note?: MemoryWriteRequest } = {};
+  let answerComplete = false;
   let pendingText = "";
   // Blocks go on screen and into the saved answer, in stream order.
   const emit = (block: string) => {
@@ -523,7 +535,10 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
       if (result.text.includes(REPETITION_NOTICE)) break;
       memory.note ??= found.note;
       throwIfStopped(opts.signal);
-      if (found.call === undefined) break;
+      if (found.call === undefined) {
+        answerComplete = true;
+        break;
+      }
       if (!tags.includes(found.call.tag)) {
         emit(toolCallFailedNotice("unavailable"));
         break;
@@ -546,8 +561,9 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
     return total;
   }
 
-  // The answer is complete, so Stop now only skips the write.
-  if (memory.note) {
+  // The answer is complete, so Stop now only skips the write. A direct save
+  // request still reaches the helper when the answering model omitted its note.
+  if (opts.memoryWrites && (memory.note || answerComplete)) {
     const block = await resolveMemoryWrite(opts, turn.model, memory.note).catch((error: unknown) => {
       if (error instanceof StoppedError) return "";
       throw error;

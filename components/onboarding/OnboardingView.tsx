@@ -7,6 +7,7 @@ import { LANDING_URL } from "@/app/siteUrl";
 import { Checkbox } from "@/components/kit/Field";
 import { RecoveryPhrase } from "@/components/kit/RecoveryPhrase";
 import { Lock } from "@/components/kit/icons";
+import { InfoHint } from "@/components/kit/InfoHint";
 import { BigInput, ChoiceCards, OnboardingShell } from "./OnboardingShell";
 
 export type OnboardingValues = {
@@ -32,7 +33,7 @@ export type OnboardingViewProps = {
   saving?: boolean;
   error?: string | null;
   nameMax: number;
-  providers: { id: string; name: string; meta: string; description: string; recommended?: boolean }[];
+  providers: { id: string; name: string; model: string }[];
   plans: { tier: "free" | "pro"; name: string; price: string; limits: string; highlight: string }[];
   recoveryPhrase: string[] | null;
 };
@@ -165,20 +166,22 @@ export function OnboardingView(p: OnboardingViewProps) {
       return (
         <OnboardingShell
           {...common}
-          label="Provider"
-          title="Where should your chats run?"
-          lead="Free starts on Light. Pro unlocks Heavy plus more models. Both run models inside hardware enclaves; your pick is for models both offer. Karui only ever uses that one, even when it can't answer."
+          label="Helper model"
+          title="Which provider?"
+          titleHint={
+            <InfoHint label="About the helper model">
+              Only memory updates and conversation summaries use this provider. Your chat model keeps its own provider.
+            </InfoHint>
+          }
         >
           <ChoiceCards
-            label="Provider"
+            label="Helper model provider"
             value={v.provider}
             onChange={(id) => p.onChange({ provider: id })}
             options={p.providers.map((o) => ({
               value: o.id,
               title: o.name,
-              meta: o.meta,
-              description: o.description,
-              badge: o.recommended ? "Recommended" : undefined,
+              meta: `${o.model} · hardware verified in your browser`,
             }))}
           />
         </OnboardingShell>

@@ -114,6 +114,7 @@ export function stripNoticeBlocks(content: string): string {
     .replace(/<tool>[\s\S]*?<\/tool>/g, "")
     .replace(/<library>[\s\S]*?<\/library>/g, "")
     .replace(/<skills_used>[\s\S]*?<\/skills_used>/g, "")
+    .replace(/<memory_read>[\s\S]*?<\/memory_read>/g, "")
     .replace(/<helper_message>[\s\S]*?(?:<\/helper_message>|$)/g, "");
 }
 

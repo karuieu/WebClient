@@ -14,9 +14,6 @@ const DEEPSEEK: ReasoningEffort[] = ["none", "low", "high", "xhigh", "max"];
 // answer instead, so Off sends "low".
 const GLM: ReasoningEffort[] = ["none", "low", "high"];
 const GLM_TEMPLATE: Partial<Record<ReasoningEffort, string>> = { none: "low", low: "high", high: "max" };
-// Qwen 3.8 27B: the template reads low, medium and xhigh and REJECTS any other
-// value; "none" turns thinking off (enable_thinking: false).
-const QWEN: ReasoningEffort[] = ["none", "low", "medium", "xhigh"];
 
 export const REASONING_EFFORT_LEVELS: Record<
   string,
@@ -25,7 +22,6 @@ export const REASONING_EFFORT_LEVELS: Record<
   fast: { phala: DEEPSEEK },
   smart: { phala: GLM },
   "glm-flash": { nearai: GLM },
-  "qwen3-8-27b": { nearai: QWEN, phala: QWEN },
 };
 
 // What a model's template is sent for a picker level; a model without an entry gets the level itself.
@@ -46,7 +42,6 @@ const REASONING_TEMPLATE_KWARGS: Record<
   Partial<Record<ProviderId, { thinkingKey: string; effortInKwargs: boolean }>>
 > = {
   "glm-flash": { nearai: NEAR_KWARGS },
-  "qwen3-8-27b": { nearai: NEAR_KWARGS },
 };
 
 export function buildReasoningParams(

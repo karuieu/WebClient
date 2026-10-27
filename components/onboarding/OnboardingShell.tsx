@@ -15,6 +15,7 @@ export function OnboardingShell({
   direction,
   label,
   title,
+  titleHint,
   lead,
   canContinue = true,
   continueLabel = "Continue",
@@ -31,6 +32,7 @@ export function OnboardingShell({
   direction: 1 | -1;
   label: string;
   title: string;
+  titleHint?: React.ReactNode;
   lead?: React.ReactNode;
   canContinue?: boolean;
   continueLabel?: string;
@@ -85,7 +87,10 @@ export function OnboardingShell({
               transition={{ type: "spring", bounce: 0, duration: 0.45 }}
             >
               <Label>{label}</Label>
-              <h1 className="text-title mt-6 text-balance">{title}</h1>
+              <div className="relative mt-6 flex items-center gap-1">
+                <h1 className="text-title text-balance">{title}</h1>
+                {titleHint}
+              </div>
               {lead && <p className="mt-4 text-pretty text-[1.0625rem] leading-relaxed text-muted">{lead}</p>}
               <div className="mt-10">{children}</div>
             </motion.div>
@@ -134,7 +139,7 @@ export function ChoiceCards<T extends string>({
   label: string;
   value: T;
   onChange: (v: T) => void;
-  options: { value: T; title: string; description: React.ReactNode; meta?: string; badge?: string }[];
+  options: { value: T; title: string; description?: React.ReactNode; meta?: React.ReactNode; badge?: string }[];
 }) {
   return (
     <div role="radiogroup" aria-label={label} className="flex flex-col gap-3">
@@ -162,7 +167,7 @@ export function ChoiceCards<T extends string>({
                 )}
               </span>
               {o.meta && <span className="mt-1 block font-mono text-[11px] text-muted">{o.meta}</span>}
-              <span className="mt-2 block text-pretty text-[13.5px] leading-relaxed text-muted">{o.description}</span>
+              {o.description && <span className="mt-2 block text-pretty text-[13.5px] leading-relaxed text-muted">{o.description}</span>}
             </span>
             <span
               aria-hidden="true"

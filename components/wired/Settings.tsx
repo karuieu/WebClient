@@ -357,9 +357,9 @@ function MemoryFilesSection() {
   );
 }
 
-const VERIFICATION: Record<ProviderId, string> = {
-  nearai: "hardware verified in your browser",
-  phala: "hardware verified in your browser",
+const HELPER_MODELS: Record<ProviderId, string> = {
+  nearai: "GLM 5.3 Flash",
+  phala: "Gemma 4 31B",
 };
 
 function ProvidersSection() {
@@ -371,10 +371,7 @@ function ProvidersSection() {
   const providers: ProviderOption[] = ALL_PROVIDERS.map((id) => ({
     id,
     name: PROVIDERS[id].name,
-    description: PROVIDERS[id].description,
-    region: PROVIDERS[id].tag,
-    verification: VERIFICATION[id],
-    models: PROVIDERS[id].models.map((m) => ({ name: m.name, tier: m.tier === "light" || m.tier === "heavy" ? m.tier : undefined })),
+    model: HELPER_MODELS[id],
     links: PROVIDERS[id].links,
     locked: PRO_ONLY_PROVIDERS.has(id) && tier !== "pro",
   }));

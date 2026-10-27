@@ -11,9 +11,9 @@ import { setMemorySettings, DEFAULT_MEMORY_SETTINGS } from "@/lib/memory";
 import { API_URL, apiFetch } from "@/lib/api";
 import { OnboardingView, onboardingSteps, type OnboardingValues } from "@/components/onboarding/OnboardingView";
 
-const PROVIDER_OPTIONS: { id: ProviderId; recommended?: boolean; verification: string }[] = [
-  { id: "phala", recommended: true, verification: "hardware verified in your browser" },
-  { id: "nearai", verification: "hardware verified in your browser" },
+const PROVIDER_OPTIONS: { id: ProviderId; model: string }[] = [
+  { id: "phala", model: "Gemma 4 31B" },
+  { id: "nearai", model: "GLM 5.3 Flash" },
 ];
 
 const PLANS = [
@@ -143,9 +143,7 @@ export default function OnboardingPage() {
       providers={PROVIDER_OPTIONS.map((o) => ({
         id: o.id,
         name: PROVIDERS[o.id].name,
-        meta: `${PROVIDERS[o.id].tag} · ${o.verification}`,
-        description: PROVIDERS[o.id].description,
-        recommended: o.recommended,
+        model: o.model,
       }))}
       plans={PLANS}
       recoveryPhrase={recoveryWords}

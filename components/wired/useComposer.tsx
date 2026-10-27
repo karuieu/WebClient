@@ -21,7 +21,6 @@ import type { ModelOption } from "@/components/app/ModelPicker";
 const MAIN = ["fast", "smart"] as const;
 const EXTRA: { id: string; name: string; description: string }[] = [
   { id: "glm-flash", name: "GLM 5.3 Flash", description: "Fast reasoning model on NEAR AI" },
-  { id: "qwen3-8-27b", name: "Qwen 3.8 27B", description: "Open model that reads images" },
 ];
 const ALL = [...MAIN, ...EXTRA.map((m) => m.id)];
 

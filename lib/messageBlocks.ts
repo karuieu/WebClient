@@ -61,6 +61,7 @@ export type MessageStep =
   | { kind: "page"; url: string; title: string; status: "ok" | "error" }
   | { kind: "vision"; name: string; description: string }
   | { kind: "memory"; action: "edit" | "proposal"; file?: string | null; text: string }
+  | { kind: "memoryRead"; files: string[] }
   | { kind: "notice"; text: string }
   | { kind: "tool"; connector: string; tool: string; status: "ok" | "error" | "declined" }
   | { kind: "skills"; names: string[] }
@@ -73,7 +74,7 @@ function noticeText(d: Notice): string {
   if (d.reason === "decision") return "The memory step failed this time, so this answer was written without your memory.";
   const provider = d.providerName || "The selected provider";
   if (d.e2e) {
-    return `${provider} has no model for the memory step, so this answer was written without your memory. The memory step always runs at the same provider as the chat. Pick a different provider in the model picker.`;
+    return `${provider} has no model for the memory step, so this answer was written without your memory. Pick a different helper provider in Settings.`;
   }
   if (d.reason === "provider_offline") {
     return `${provider} isn't configured on the server right now, so this answer was written without your memory.`;
@@ -109,12 +110,12 @@ function thoughtOf(inner: string): { text: string; rest: string | null } {
 }
 
 const BLOCKS =
-  /<reasoning>([\s\S]*?)<\/reasoning>|<search>([\s\S]*?)<\/search>|<vision>([\s\S]*?)<\/vision>|<notice>([\s\S]*?)<\/notice>|<memory_write>([\s\S]*?)<\/memory_write>|<tool>([\s\S]*?)<\/tool>|<library>([\s\S]*?)<\/library>|<skills_used>([\s\S]*?)<\/skills_used>|<fetched_page>([\s\S]*?)<\/fetched_page>|<kept_version>([\s\S]*?)<\/kept_version>|<\/?keep_version\b[^>]*>/g;
+  /<reasoning>([\s\S]*?)<\/reasoning>|<search>([\s\S]*?)<\/search>|<vision>([\s\S]*?)<\/vision>|<notice>([\s\S]*?)<\/notice>|<memory_write>([\s\S]*?)<\/memory_write>|<memory_read>([\s\S]*?)<\/memory_read>|<tool>([\s\S]*?)<\/tool>|<library>([\s\S]*?)<\/library>|<skills_used>([\s\S]*?)<\/skills_used>|<fetched_page>([\s\S]*?)<\/fetched_page>|<kept_version>([\s\S]*?)<\/kept_version>|<\/?keep_version\b[^>]*>/g;
 
 function parseBlocks(content: string): { steps: MessageStep[]; answer: string } {
   const steps: MessageStep[] = [];
 
-  let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, tool?: string, library?: string, skills?: string, page?: string, kept?: string) => {
+  let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, memoryRead?: string, tool?: string, library?: string, skills?: string, page?: string, kept?: string) => {
     if (reasoning !== undefined) {
       const { text, rest } = thoughtOf(reasoning);
       if (text) steps.push({ kind: "thought", text });
@@ -172,6 +173,11 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
             text: d.text,
           });
         }
+      } else if (memoryRead !== undefined) {
+        const d = JSON.parse(memoryRead);
+        const files = Array.isArray(d?.files) ? d.files.filter((file: unknown): file is string => typeof file === "string" && file.trim().length > 0) : [];
+        if (files.length > 0) steps.push({ kind: "memoryRead", files });
+        else if (Number.isInteger(d?.count) && d.count > 0) steps.push({ kind: "memoryRead", files: Array.from({ length: d.count }, () => "Memory") });
       } else if (tool !== undefined) {
         const d = JSON.parse(tool);
         if (d && typeof d.connector === "string" && typeof d.tool === "string") {
