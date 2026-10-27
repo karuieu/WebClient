@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { AlertCircle, Eye, EyeOff } from "./icons";
 
 type FieldProps = Omit<React.ComponentProps<"input">, "id"> & {

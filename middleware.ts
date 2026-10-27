@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { LANDING_URL } from "@/app/siteUrl";
-import { API_URL } from "@/lib/api";
+import { API_URL } from "@/lib/core/api";
 
 /**
  * Cookie-only middleware must not redirect signed-in auth visitors: the client also needs the IndexedDB AES

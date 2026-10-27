@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { CapWidget } from "cap-widget";
-import { attachCaptchaWidget, CAPTCHA_ENDPOINT, loadCap } from "@/lib/captcha";
+import { attachCaptchaWidget, CAPTCHA_ENDPOINT, loadCap } from "@/lib/account/captcha";
 
 const capTheme = {
   "--cap-widget-width": "100%",

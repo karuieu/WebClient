@@ -4,8 +4,8 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { API_URL, JSON_HEADERS, apiFetch, apiJSON, deletionErrorText } from "@/lib/api";
-import { updateUser } from "@/lib/session";
+import { API_URL, JSON_HEADERS, apiFetch, apiJSON, deletionErrorText } from "@/lib/core/api";
+import { updateUser } from "@/lib/account/session";
 import {
   changePassword,
   createRecoveryPhrase,
@@ -26,12 +26,12 @@ import {
   updateProfile,
   type RecoveryStatus,
   type TwoFactorStatus,
-} from "@/lib/auth";
-import { getBillingStatus, type BillingStatus } from "@/lib/chat";
-import { getChatTitleMode, setChatTitleMode, type ChatTitleMode } from "@/lib/chatTitle";
-import { getArtifactsEnabled, setArtifactsEnabled } from "@/lib/artifacts";
-import { getTabNamesEnabled, setTabNamesEnabled } from "@/lib/tabTitle";
-import { CUSTOM_INSTRUCTIONS_MAX_CHARS, getCustomInstructionsDoc, saveCustomInstructions } from "@/lib/customInstructions";
+} from "@/lib/account/auth";
+import { getBillingStatus, type BillingStatus } from "@/lib/chat/chat";
+import { getChatTitleMode, setChatTitleMode, type ChatTitleMode } from "@/lib/chat/chatTitle";
+import { getArtifactsEnabled, setArtifactsEnabled } from "@/lib/artifacts/artifacts";
+import { getTabNamesEnabled, setTabNamesEnabled } from "@/lib/ui/tabTitle";
+import { CUSTOM_INSTRUCTIONS_MAX_CHARS, getCustomInstructionsDoc, saveCustomInstructions } from "@/lib/chat/customInstructions";
 import {
   ALL_PROVIDERS,
   PROVIDERS,
@@ -41,7 +41,7 @@ import {
   setProviderSettings,
   type ProviderId,
   type ProviderSettings,
-} from "@/lib/providers";
+} from "@/lib/models/providers";
 import {
   createMemoryCategory,
   createMemoryFile,
@@ -57,12 +57,12 @@ import {
   updateMemoryFile,
   type MemoryCategory,
   type MemorySettings as MemoryPrefsState,
-} from "@/lib/memory";
-import { closedSettingsHref, isSettingsTab, settingsHref, SETTINGS_PARAM } from "@/lib/settingsOverlay";
-import { addConnector, connectCatalogConnector, loadConnectors, removeConnector, updateConnector, type UserConnector } from "@/lib/userConnectors";
-import { CONNECTOR_CATALOG, defaultRoute } from "@/lib/connectors";
-import { openSignInWindow } from "@/lib/mcpOAuth";
-import { getToolApprovalMode, setToolApprovalMode, type ToolApprovalMode } from "@/lib/toolApproval";
+} from "@/lib/chat/memory";
+import { closedSettingsHref, isSettingsTab, settingsHref, SETTINGS_PARAM } from "@/lib/ui/settingsOverlay";
+import { addConnector, connectCatalogConnector, loadConnectors, removeConnector, updateConnector, type UserConnector } from "@/lib/connectors/userConnectors";
+import { CONNECTOR_CATALOG, defaultRoute } from "@/lib/connectors/connectors";
+import { openSignInWindow } from "@/lib/connectors/mcpOAuth";
+import { getToolApprovalMode, setToolApprovalMode, type ToolApprovalMode } from "@/lib/connectors/toolApproval";
 import {
   createSkill,
   deleteSkill,
@@ -72,8 +72,8 @@ import {
   SKILL_LIMITS,
   updateSkill,
   type Skill,
-} from "@/lib/skills";
-import { offerDraft } from "@/lib/draftRescue";
+} from "@/lib/chat/skills";
+import { offerDraft } from "@/lib/ui/draftRescue";
 import { SettingsDialog, type SettingsTab } from "@/components/app/settings/SettingsDialog";
 import { GeneralSettings } from "@/components/app/settings/General";
 import { UsageSettings } from "@/components/app/settings/Usage";

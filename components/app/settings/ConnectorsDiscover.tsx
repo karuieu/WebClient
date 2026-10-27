@@ -6,8 +6,8 @@ import { Dialog } from "@/components/kit/Dialog";
 import { AlertCircle, ArrowUpRight, Check, ChevronDown, ChevronLeft, Plus, Search } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Segmented } from "@/components/kit/Segmented";
-import { cx } from "@/lib/cx";
-import { CONNECTOR_CATEGORIES, categoryLabel, defaultRoute, type ConnectorCategory, type ConnectorRoute } from "@/lib/connectors";
+import { cx } from "@/lib/ui/cx";
+import { CONNECTOR_CATEGORIES, categoryLabel, defaultRoute, type ConnectorCategory, type ConnectorRoute } from "@/lib/connectors/connectors";
 import { Group, Row } from "./Layout";
 import { ConnectError, ConnectionControls, host, routeNote, routeOptions, Tile, type ConnectorItem } from "./ConnectorParts";
 

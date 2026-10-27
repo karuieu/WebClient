@@ -10,7 +10,7 @@ import { Enter, cascade } from "@/components/kit/Enter";
 import { Label } from "@/components/kit/Frame";
 import { Check } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export type PlanCard = {
   tier: "free" | "pro";

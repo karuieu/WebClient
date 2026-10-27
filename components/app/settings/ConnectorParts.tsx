@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { Segmented, type SegmentedOption } from "@/components/kit/Segmented";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { BrandLogo, isBrandLogoId } from "./BrandLogo";
-import type { ConnectorInfo, ConnectorRoute } from "@/lib/connectors";
+import type { ConnectorInfo, ConnectorRoute } from "@/lib/connectors/connectors";
 
 export type ConnectorStatus = "available" | "connected" | "expired";
 

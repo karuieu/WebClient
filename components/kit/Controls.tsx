@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "motion/react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Plus } from "./icons";
 
 export function Switch({

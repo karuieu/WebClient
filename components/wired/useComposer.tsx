@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { getModelProvider, getProviderSettings, isModelAvailable, PROVIDERS } from "@/lib/providers";
+import { getModelProvider, getProviderSettings, isModelAvailable, PROVIDERS } from "@/lib/models/providers";
 import {
   clampReasoningEffort,
   getReasoningEffort,
@@ -10,10 +10,10 @@ import {
   REASONING_EFFORT_LABELS,
   setReasoningEffort,
   type ReasoningEffort,
-} from "@/lib/reasoning";
-import { getMemorySettings } from "@/lib/memory";
-import { IMAGES_UNSUPPORTED_NOTE, MAX_IMAGES_PER_MESSAGE, MAX_TEXT_FILES_PER_MESSAGE, modelSupportsImages } from "@/lib/vision";
-import { TEXT_FILE_ACCEPT, useFileDrop, useImageAttachments, useTextFileAttachments } from "@/lib/attachments";
+} from "@/lib/models/reasoning";
+import { getMemorySettings } from "@/lib/chat/memory";
+import { IMAGES_UNSUPPORTED_NOTE, MAX_IMAGES_PER_MESSAGE, MAX_TEXT_FILES_PER_MESSAGE, modelSupportsImages } from "@/lib/messages/vision";
+import { TEXT_FILE_ACCEPT, useFileDrop, useImageAttachments, useTextFileAttachments } from "@/lib/ui/attachments";
 import { useToast } from "@/components/Toast";
 import type { Composer, ComposerAttachment } from "@/components/app/Composer";
 import type { ModelOption } from "@/components/app/ModelPicker";

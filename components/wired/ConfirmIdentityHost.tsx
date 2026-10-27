@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { ConfirmIdentityDialog } from "@/components/app/ConfirmIdentityDialog";
-import { setIdentityHandler, type IdentityRequest } from "@/lib/api";
-import { confirmIdentity } from "@/lib/auth";
+import { setIdentityHandler, type IdentityRequest } from "@/lib/core/api";
+import { confirmIdentity } from "@/lib/account/auth";
 
 type Pending = IdentityRequest & { resolve: (confirmed: boolean) => void };
 

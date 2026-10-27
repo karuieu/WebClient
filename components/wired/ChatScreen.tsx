@@ -13,21 +13,21 @@ import {
   setChatMemory,
   type Message,
   type ModelType,
-} from "@/lib/chat";
-import type { CompressionOutcome, CompressionQuota } from "@/lib/compression";
-import { visibleMessages } from "@/lib/conversation";
-import { StoppedError } from "@/lib/errors";
-import { clearChatStream, getChatStream, startRetryStream, startSaveStream, startSendStream, stopChatStream, subscribeChatStream } from "@/lib/chatStream";
-import { takeFirstMessage, type FirstMessage } from "@/lib/handoff";
-import { registerDraftRescue } from "@/lib/draftRescue";
-import { clearQuoted, markQuoted } from "@/lib/quotedHighlight";
-import { clearPendingFocus, peekPendingFocus, subscribePendingFocus } from "@/lib/searchFocus";
-import { clearSearchTerms, markSearchTerms } from "@/lib/searchHighlight";
-import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
-import { downloadArtifact } from "@/lib/artifacts";
-import { saveArtifactToLibrary } from "@/lib/projectFiles";
-import { toBlockquote } from "@/lib/messageBlocks";
-import { getUser } from "@/lib/session";
+} from "@/lib/chat/chat";
+import type { CompressionOutcome, CompressionQuota } from "@/lib/chat/compression";
+import { visibleMessages } from "@/lib/messages/conversation";
+import { StoppedError } from "@/lib/core/errors";
+import { clearChatStream, getChatStream, startRetryStream, startSaveStream, startSendStream, stopChatStream, subscribeChatStream } from "@/lib/chat/chatStream";
+import { takeFirstMessage, type FirstMessage } from "@/lib/ui/handoff";
+import { registerDraftRescue } from "@/lib/ui/draftRescue";
+import { clearQuoted, markQuoted } from "@/lib/messages/quotedHighlight";
+import { clearPendingFocus, peekPendingFocus, subscribePendingFocus } from "@/lib/search/searchFocus";
+import { clearSearchTerms, markSearchTerms } from "@/lib/search/searchHighlight";
+import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
+import { downloadArtifact } from "@/lib/artifacts/artifacts";
+import { saveArtifactToLibrary } from "@/lib/projects/projectFiles";
+import { toBlockquote } from "@/lib/messages/messageBlocks";
+import { getUser } from "@/lib/account/session";
 import {
   createSkill,
   draftStatus,
@@ -37,9 +37,9 @@ import {
   SKILLS_UPDATED_EVENT,
   updateSkill,
   type Skill,
-} from "@/lib/skills";
+} from "@/lib/chat/skills";
 import type { ArtifactData, SkillDraftData } from "@/components/app/chat/Messages";
-import { useTabTitle } from "@/lib/tabTitle";
+import { useTabTitle } from "@/lib/ui/tabTitle";
 import { useToast } from "@/components/Toast";
 import { ChatView, type HeaderProject } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";

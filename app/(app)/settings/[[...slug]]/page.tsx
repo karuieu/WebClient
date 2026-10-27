@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { DEFAULT_SETTINGS_TAB, isSettingsTab } from "@/lib/settingsOverlay";
+import { DEFAULT_SETTINGS_TAB, isSettingsTab } from "@/lib/ui/settingsOverlay";
 
 export default async function LegacySettingsRedirect({
   params,

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, isMotionComponent, type HTMLElements, type HTMLMotionProps } from "motion/react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 type AnyProps = Record<string, unknown>;
 

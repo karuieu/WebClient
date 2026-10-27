@@ -24,7 +24,7 @@ import { Logo } from "@/components/kit/Logo";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Kbd, useShortcut, type Keys } from "@/components/kit/Shortcut";
 import { Tooltip } from "@/components/kit/Tooltip";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export type SidebarChat = { id: string; title: string; starred: boolean; projectId?: string; projectName?: string };
 export type SidebarProject = { id: string; name: string };

@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { deletionErrorText } from "@/lib/api";
-import { getChats, deleteChat, renameChat, starChat, getMessages, type Chat, type Message } from "@/lib/chat";
-import { parseMessageContent } from "@/lib/vision";
+import { deletionErrorText } from "@/lib/core/api";
+import { getChats, deleteChat, renameChat, starChat, getMessages, type Chat, type Message } from "@/lib/chat/chat";
+import { parseMessageContent } from "@/lib/messages/vision";
 import {
   getProjects,
   starProject,
@@ -12,7 +12,7 @@ import {
   assignChatToProject,
   unassignChatFromProject,
   type Project,
-} from "@/lib/projects";
+} from "@/lib/projects/projects";
 import { useToast } from "@/components/Toast";
 import { ConfirmDeleteDialog, ProjectPickerDialog } from "@/components/app/Dialogs";
 import type { ProjectSettingsTab } from "@/components/app/project/ProjectSettings";

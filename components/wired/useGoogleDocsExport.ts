@@ -3,8 +3,8 @@
 import * as React from "react";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import type { Artifact } from "@/lib/artifacts";
-import { CONNECTORS_UPDATED_EVENT, loadConnectors } from "@/lib/userConnectors";
+import type { Artifact } from "@/lib/artifacts/artifacts";
+import { CONNECTORS_UPDATED_EVENT, loadConnectors } from "@/lib/connectors/userConnectors";
 
 export function useGoogleDocsExport(id: string | null, artifact: Artifact | undefined): {
   onExportGoogleDocs?: (source: string) => void;
@@ -45,7 +45,7 @@ export function useGoogleDocsExport(id: string | null, artifact: Artifact | unde
       tab = window.open("about:blank", "_blank");
       if (tab) tab.opener = null;
       showInfo("Exporting to Google Docs…");
-      const { saveArtifactToGoogleDocs } = await import("@/lib/artifactGoogleDocs");
+      const { saveArtifactToGoogleDocs } = await import("@/lib/artifacts/artifactGoogleDocs");
       const result = await saveArtifactToGoogleDocs(id, { ...artifact, content: source });
       if (tab && !tab.closed) tab.location.href = result.url;
       showSuccess(result.updated ? "Google copy updated" : "Exported to Google Docs and saved in Drive");

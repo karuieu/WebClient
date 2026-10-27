@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
-import { setToolApprovalHandler, type ToolApprovalRequest } from "@/lib/toolApproval";
+import { setToolApprovalHandler, type ToolApprovalRequest } from "@/lib/connectors/toolApproval";
 
 type Pending = ToolApprovalRequest & { resolve: (ok: boolean) => void };
 

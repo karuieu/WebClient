@@ -6,7 +6,7 @@ import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
 import { ChevronDown, FilePlus, FileText, Folder, FolderPlus, X } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import type { MemoryFileItem } from "../settings/Memory";
 
 /** `version` counts saves (v1, v2, …); `kept` keeps the current one in the history once it's replaced. */

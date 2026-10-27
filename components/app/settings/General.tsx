@@ -5,8 +5,8 @@ import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
 import { ArrowUpRight } from "@/components/kit/icons";
 import { Segmented } from "@/components/kit/Segmented";
-import { useTheme, type ThemePreference } from "@/lib/theme";
-import { cx } from "@/lib/cx";
+import { useTheme, type ThemePreference } from "@/lib/ui/theme";
+import { cx } from "@/lib/ui/cx";
 import { Group, Row } from "./Layout";
 
 export type GeneralSettingsProps = {

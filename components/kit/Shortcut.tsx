@@ -1,6 +1,6 @@
 "use client";
 
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { useMounted } from "./useMounted";
 
 export type Keys = readonly string[];

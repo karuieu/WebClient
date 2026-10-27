@@ -5,7 +5,7 @@ import { Cross } from "@/components/kit/Frame";
 import { SiteFooter } from "@/components/kit/SiteFooter";
 import { Logo } from "@/components/kit/Logo";
 import { ThemeToggle } from "@/components/kit/ThemeToggle";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 /**
  * `form` is the narrow column for sign-in screens. `system` is the wide, centred

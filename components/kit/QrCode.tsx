@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { encode } from "uqr";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 /** Keep QR codes black on white in every theme because many authenticator scanners cannot read inverted codes. */
 export function QrCode({ value, label, className }: { value: string; label: string; className?: string }) {

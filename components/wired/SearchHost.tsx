@@ -2,11 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { Chat } from "@/lib/chat";
-import type { Project } from "@/lib/projects";
-import { getSearchIndexState, searchMessages, subscribeSearchIndex, syncSearchIndex } from "@/lib/searchIndex";
-import { setPendingFocus } from "@/lib/searchFocus";
-import { fold, marked, matchesAll, searchTerms, snippet, type MarkedText } from "@/lib/searchText";
+import type { Chat } from "@/lib/chat/chat";
+import type { Project } from "@/lib/projects/projects";
+import { getSearchIndexState, searchMessages, subscribeSearchIndex, syncSearchIndex } from "@/lib/search/searchIndex";
+import { setPendingFocus } from "@/lib/search/searchFocus";
+import { fold, marked, matchesAll, searchTerms, snippet, type MarkedText } from "@/lib/search/searchText";
 import {
   SearchPalette,
   type SearchChatHit,

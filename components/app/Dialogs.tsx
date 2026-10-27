@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
 import { Check, Folder, FolderMinus, Plus } from "@/components/kit/icons";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export function ConfirmDeleteDialog({
   open,

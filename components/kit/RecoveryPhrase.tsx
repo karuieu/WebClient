@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Button } from "./Button";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Check, Copy, Download, Eye, EyeOff } from "./icons";
 
 export function RecoveryPhrase({ words }: { words: string[] }) {

@@ -4,7 +4,7 @@ import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Incognito, Lock, incognitoCostumes, type Costume } from "@/components/kit/icons";
 import { Tooltip } from "@/components/kit/Tooltip";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Composer } from "./Composer";
 import { HalloweenBats } from "./HalloweenBats";
 import { pickGreeting, pickIncognitoGreeting, type Greeting, type IncognitoGreeting } from "./greeting";

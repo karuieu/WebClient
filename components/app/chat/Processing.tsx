@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { AlertCircle, ChevronDown } from "@/components/kit/icons";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export type ProcessingStep =
   | { kind: "thought"; text: string }

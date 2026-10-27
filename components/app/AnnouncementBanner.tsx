@@ -6,7 +6,7 @@ import { Button } from "@/components/kit/Button";
 import { X } from "@/components/kit/icons";
 import { Sheet } from "@/components/kit/Sheet";
 import { useMediaQuery } from "@/components/kit/useMounted";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { ShellContext } from "./AppShell";
 
 export type Announcement = { title: string; message: string };

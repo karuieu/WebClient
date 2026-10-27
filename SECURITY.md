@@ -26,9 +26,9 @@ There is no bug bounty. If you'd like, we'll credit you publicly in the fix.
 
 In scope:
 
-- the encryption path in the browser (`lib/crypto.ts`, `lib/session.ts`, `lib/recovery.ts`),
-- end-to-end inference to the enclaves (`lib/inference.ts`, `lib/nearaiClient.ts`,
-  `lib/phalaClient.ts`), including attestation checks,
+- the encryption path in the browser (`lib/account/crypto.ts`, `lib/account/session.ts`, `lib/account/recovery.ts`),
+- end-to-end inference to the enclaves (`lib/chat/inference.ts`, `lib/enclave/nearaiClient.ts`,
+  `lib/enclave/phalaClient.ts`), including attestation checks,
 - anything in this app that sends plaintext anywhere other than an attested enclave,
 - the Karui API and server: reports are welcome by email, although that code is not public,
 - anything that lets someone read or change another user's data.

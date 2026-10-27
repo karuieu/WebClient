@@ -4,7 +4,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ChevronRight, X } from "@/components/kit/icons";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { useMounted } from "@/components/kit/useMounted";
 
 export type FrameTab<T extends string> = { id: T; label: string; icon: React.ReactNode; group?: string; danger?: boolean };

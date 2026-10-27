@@ -4,8 +4,8 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { restoreKey, isSignedIn, getUser, updateUser, clearSession, isOnboardingPending, type User } from "@/lib/session";
-import { getMe, checkSession, getAuthControls } from "@/lib/auth";
+import { restoreKey, isSignedIn, getUser, updateUser, clearSession, isOnboardingPending, type User } from "@/lib/account/session";
+import { getMe, checkSession, getAuthControls } from "@/lib/account/auth";
 
 interface SessionContextType {
   isInitialized: boolean;

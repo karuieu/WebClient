@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Lock } from "@/components/kit/icons";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { ChatHeader, type EnclaveState, type HeaderProject } from "../chat/ChatView";
 import { Composer } from "../Composer";
 import { ProjectPanel, type ProjectPanelProps } from "./ProjectPanel";

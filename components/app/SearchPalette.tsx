@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Folder, MessageSquare, Search, X } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
 import { useMounted, useNow } from "@/components/kit/useMounted";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { standaloneStamp } from "./ChatsView";
 
 export type SearchRange = readonly [number, number];

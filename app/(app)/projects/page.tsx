@@ -2,8 +2,8 @@
 
 import { useContext, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createProject, uploadProjectFiles } from "@/lib/projects";
-import { LIBRARY_LIMITS, fromDataTransfer, fromInput, prepareFiles, type PickedPath, type PreparedFile } from "@/lib/projectFiles";
+import { createProject, uploadProjectFiles } from "@/lib/projects/projects";
+import { LIBRARY_LIMITS, fromDataTransfer, fromInput, prepareFiles, type PickedPath, type PreparedFile } from "@/lib/projects/projectFiles";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
 import { ProjectsView, type ProjectCardData } from "@/components/app/ProjectsView";

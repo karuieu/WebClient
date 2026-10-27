@@ -6,7 +6,7 @@ import { Check, ChevronDown, Lock } from "@/components/kit/icons";
 import { Sheet } from "@/components/kit/Sheet";
 import { useMediaQuery } from "@/components/kit/useMounted";
 import { Segmented } from "@/components/kit/Segmented";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export type ModelOption = {
   id: string;

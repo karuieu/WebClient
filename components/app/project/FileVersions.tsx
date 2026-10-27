@@ -5,8 +5,8 @@ import { Bookmark, ChevronDown } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Spinner } from "@/components/kit/Spinner";
 import { useNow } from "@/components/kit/useMounted";
-import { toDocument, type ArtifactType } from "@/lib/artifacts";
-import { cx } from "@/lib/cx";
+import { toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
+import { cx } from "@/lib/ui/cx";
 import { exactStamp } from "../ChatsView";
 import { DocumentPaper } from "../chat/ArtifactPanel";
 

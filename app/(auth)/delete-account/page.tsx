@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { confirmAccountDeletion } from "@/lib/auth";
-import { takeLinkToken } from "@/lib/linkToken";
-import { clearSession } from "@/lib/session";
+import { confirmAccountDeletion } from "@/lib/account/auth";
+import { takeLinkToken } from "@/lib/account/linkToken";
+import { clearSession } from "@/lib/account/session";
 import { DeleteAccountView } from "@/components/auth/DeleteAccountView";
 
 export default function DeleteAccountPage(): React.JSX.Element | null {

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
 import { Plus, Trash } from "@/components/kit/icons";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Group, SectionIntro } from "./Layout";
 
 export type SkillItem = { id: string; name: string; description: string; content: string; enabled: boolean };

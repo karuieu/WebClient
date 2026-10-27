@@ -6,7 +6,7 @@ import { Button } from "@/components/kit/Button";
 import { Label } from "@/components/kit/Frame";
 import { Ellipsis, Folder, Plus, Sliders, Star, Trash } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { useNow } from "@/components/kit/useMounted";
 import { Enter, cascade } from "@/components/kit/Enter";
 import { SearchField, standaloneStamp } from "./ChatsView";

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 /** Mirror soft-wrapped lines behind the textarea in the same grid cell so line numbers and scrolling stay aligned. */
 export function NumberedTextArea({

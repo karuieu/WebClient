@@ -2,11 +2,11 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getMemorySettings, copyYouIntoProject, hasYouFolder } from "@/lib/memory";
-import { getProject, listProjectFiles, updateProject, type LibraryListing, type Project, type ProjectSettings as Settings } from "@/lib/projects";
-import { settingsHref } from "@/lib/settingsOverlay";
-import { loadConnectors, type UserConnector } from "@/lib/userConnectors";
-import { listSkills, type Skill } from "@/lib/skills";
+import { getMemorySettings, copyYouIntoProject, hasYouFolder } from "@/lib/chat/memory";
+import { getProject, listProjectFiles, updateProject, type LibraryListing, type Project, type ProjectSettings as Settings } from "@/lib/projects/projects";
+import { settingsHref } from "@/lib/ui/settingsOverlay";
+import { loadConnectors, type UserConnector } from "@/lib/connectors/userConnectors";
+import { listSkills, type Skill } from "@/lib/chat/skills";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
 import { host } from "@/components/app/settings/ConnectorParts";

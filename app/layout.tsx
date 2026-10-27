@@ -6,7 +6,7 @@ import { GeistMono } from "geist/font/mono";
 import { SessionProvider } from "@/components/SessionProvider";
 import { ToastProvider } from "@/components/Toast";
 import { MotionProvider } from "@/components/motion";
-import { themeScript } from "@/lib/themeScript";
+import { themeScript } from "@/lib/ui/themeScript";
 import { SITE_URL } from "./siteUrl";
 import "./globals.css";
 import "./kit.css";

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Check } from "./icons";
 import { Sheet } from "./Sheet";
 import { useMediaQuery, useMounted } from "./useMounted";

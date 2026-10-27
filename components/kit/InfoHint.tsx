@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export function InfoHint({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   const root = React.useRef<HTMLDetailsElement>(null);

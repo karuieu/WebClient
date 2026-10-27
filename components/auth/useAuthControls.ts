@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAuthControls, type AuthControls } from "@/lib/auth";
+import { getAuthControls, type AuthControls } from "@/lib/account/auth";
 
 export function useAuthControls(): AuthControls | null {
   const [controls, setControls] = useState<AuthControls | null>(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 const CELL_W = 10;

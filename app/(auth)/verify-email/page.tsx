@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { verifyEmail } from "@/lib/auth";
-import { takeLinkToken } from "@/lib/linkToken";
+import { verifyEmail } from "@/lib/account/auth";
+import { takeLinkToken } from "@/lib/account/linkToken";
 import { StatusView } from "@/components/auth/StatusView";
 import { useAuthControls } from "@/components/auth/useAuthControls";
 

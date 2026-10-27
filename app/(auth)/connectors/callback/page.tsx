@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { StatusView } from "@/components/auth/StatusView";
-import { SIGN_IN_CHANNEL } from "@/lib/mcpOAuth";
+import { SIGN_IN_CHANNEL } from "@/lib/connectors/mcpOAuth";
 
 type Status = "working" | "success" | "error";
 

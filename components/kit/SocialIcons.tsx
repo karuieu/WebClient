@@ -1,4 +1,4 @@
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 // Brand marks from Simple Icons (CC0), drawn on a 24×24 grid.
 const PATHS = {

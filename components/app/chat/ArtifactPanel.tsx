@@ -6,8 +6,8 @@ import { Download, Ellipsis, Expand, Printer, RotateCcw, Shrink, X } from "@/com
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Segmented } from "@/components/kit/Segmented";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
-import { toDocument, type ArtifactType } from "@/lib/artifacts";
-import { cx } from "@/lib/cx";
+import { toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
+import { cx } from "@/lib/ui/cx";
 import { ShellContext } from "../AppShell";
 import { exactStamp } from "../ChatsView";
 import { NumberedTextArea } from "../NumberedTextArea";

@@ -7,7 +7,7 @@ import { ButtonLink } from "@/components/kit/Button";
 import { Label } from "@/components/kit/Frame";
 import { Check, Ellipsis, Folder, FolderInput, Pencil, Plus, Search, Star, Trash, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { useNow } from "@/components/kit/useMounted";
 import { Enter, cascade } from "@/components/kit/Enter";
 import { Tooltip } from "@/components/kit/Tooltip";

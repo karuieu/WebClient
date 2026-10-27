@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { login, loginWithCode, maskEmail, sendLoginEmailCode } from "@/lib/auth";
-import { prefetchCaptcha } from "@/lib/captcha";
+import { login, loginWithCode, maskEmail, sendLoginEmailCode } from "@/lib/account/auth";
+import { prefetchCaptcha } from "@/lib/account/captcha";
 import { useRedirectIfLoggedIn } from "@/components/SessionProvider";
 import { LoginView, type LoginValues } from "@/components/auth/LoginView";
 import { CaptchaCheckbox } from "@/components/auth/CaptchaCheckbox";

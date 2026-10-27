@@ -1,4 +1,4 @@
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Kbd, type Keys } from "./Shortcut";
 
 // Pure CSS: hover variants only fire on devices that hover, so touch screens never see it.

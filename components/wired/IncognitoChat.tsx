@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { INCOGNITO_CHAT_ID, sendIncognitoMessage, type Message, type ModelType } from "@/lib/chat";
-import type { FirstMessage } from "@/lib/handoff";
-import { clearQuoted, markQuoted } from "@/lib/quotedHighlight";
-import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
-import { downloadArtifact } from "@/lib/artifacts";
-import { toBlockquote } from "@/lib/messageBlocks";
+import { INCOGNITO_CHAT_ID, sendIncognitoMessage, type Message, type ModelType } from "@/lib/chat/chat";
+import type { FirstMessage } from "@/lib/ui/handoff";
+import { clearQuoted, markQuoted } from "@/lib/messages/quotedHighlight";
+import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
+import { downloadArtifact } from "@/lib/artifacts/artifacts";
+import { toBlockquote } from "@/lib/messages/messageBlocks";
 import { useToast } from "@/components/Toast";
 import { ChatView } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";

@@ -7,7 +7,7 @@ import { Label } from "@/components/kit/Frame";
 import { ArrowLeft } from "@/components/kit/icons";
 import { Logo } from "@/components/kit/Logo";
 import { FormAlert } from "@/components/auth/FormAlert";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export function OnboardingShell({
   step,

@@ -1,16 +1,16 @@
 import type { ComponentProps } from "react";
-import { type Message } from "@/lib/chat";
-import { limitOf, statusOf } from "@/lib/errors";
-import { isProviderVerified } from "@/lib/inference";
-import { getModelProvider, PROVIDERS } from "@/lib/providers";
+import { type Message } from "@/lib/chat/chat";
+import { limitOf, statusOf } from "@/lib/core/errors";
+import { isProviderVerified } from "@/lib/chat/inference";
+import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
-import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/vision";
-import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactMarkdown, parseArtifacts, type Artifact } from "@/lib/artifacts";
+import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
+import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactMarkdown, parseArtifacts, type Artifact } from "@/lib/artifacts/artifacts";
 import type { ArtifactPanel } from "@/components/app/chat/ArtifactPanel";
-import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messageBlocks";
-import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/skills";
-import { parseQuestions } from "@/lib/questions";
-import type { AnswerActivity } from "@/lib/answerTools";
+import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
+import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/chat/skills";
+import { parseQuestions } from "@/lib/messages/questions";
+import type { AnswerActivity } from "@/lib/chat/answerTools";
 import type { ArtifactChange, ArtifactData, MessageData, SkillDraftData } from "@/components/app/chat/Messages";
 import type { QuestionData } from "@/components/app/chat/Questions";
 

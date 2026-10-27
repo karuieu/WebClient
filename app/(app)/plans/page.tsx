@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/api";
+import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
 import { PlansView, type PlanCard } from "@/components/app/PlansView";
 
 const PLANS: PlanCard[] = [

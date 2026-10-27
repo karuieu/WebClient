@@ -4,7 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/kit/Button";
 import { Field } from "@/components/kit/Field";
 import { Check } from "@/components/kit/icons";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 const WORD = "DELETE";
 

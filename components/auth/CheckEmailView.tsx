@@ -3,7 +3,7 @@
 import { Button } from "@/components/kit/Button";
 import { Label } from "@/components/kit/Frame";
 import { Rise } from "@/components/kit/Rise";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { FormAlert } from "./FormAlert";
 
 export function CheckEmailView({

@@ -7,7 +7,7 @@ import { ArrowDown, ChevronDown, Folder, FolderInput, Incognito, PanelRight, Pen
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Spinner } from "@/components/kit/Spinner";
 import { Enter, cascade } from "@/components/kit/Enter";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Composer } from "../Composer";
 import { ShellContext } from "../AppShell";
 import { ArtifactPanel } from "./ArtifactPanel";

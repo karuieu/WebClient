@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ApiHttpError, completePasswordReset, startPasswordReset, type PasswordResetStart } from "@/lib/auth";
-import { takeLinkToken } from "@/lib/linkToken";
+import { ApiHttpError, completePasswordReset, startPasswordReset, type PasswordResetStart } from "@/lib/account/auth";
+import { takeLinkToken } from "@/lib/account/linkToken";
 import { StatusView } from "@/components/auth/StatusView";
 import { ResetPasswordView, type ResetErrors, type ResetMode, type ResetValues } from "@/components/auth/ResetPasswordView";
 

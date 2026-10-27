@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { updateProfile, completeOnboarding, loadOnboardingRecovery, saveOnboardingRecovery, NAME_MAX_CHARS } from "@/lib/auth";
-import { updateUser } from "@/lib/session";
-import { DEFAULT_PROVIDER, PROVIDERS, setProviderSettings, type ProviderId } from "@/lib/providers";
-import { setMemorySettings, DEFAULT_MEMORY_SETTINGS } from "@/lib/memory";
-import { API_URL, apiFetch } from "@/lib/api";
+import { updateProfile, completeOnboarding, loadOnboardingRecovery, saveOnboardingRecovery, NAME_MAX_CHARS } from "@/lib/account/auth";
+import { updateUser } from "@/lib/account/session";
+import { DEFAULT_PROVIDER, PROVIDERS, setProviderSettings, type ProviderId } from "@/lib/models/providers";
+import { setMemorySettings, DEFAULT_MEMORY_SETTINGS } from "@/lib/chat/memory";
+import { API_URL, apiFetch } from "@/lib/core/api";
 import { OnboardingView, onboardingSteps, type OnboardingValues } from "@/components/onboarding/OnboardingView";
 
 const PROVIDER_OPTIONS: { id: ProviderId; model: string }[] = [

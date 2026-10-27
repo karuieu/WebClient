@@ -4,7 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
 import { Field } from "@/components/kit/Field";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { SearchField, SelectDot } from "./ChatsView";
 import { ContextPicker, selectionSize } from "./project/Library";
 

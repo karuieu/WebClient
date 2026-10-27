@@ -8,7 +8,7 @@ import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Sheet } from "@/components/kit/Sheet";
 import { Spinner } from "@/components/kit/Spinner";
 import { useMediaQuery } from "@/components/kit/useMounted";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { ModelPicker } from "./ModelPicker";
 
 export type ComposerAttachment = { id: string; kind: "image" | "file"; name: string; src?: string; meta?: string };

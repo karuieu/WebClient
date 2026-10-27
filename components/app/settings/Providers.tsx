@@ -6,7 +6,7 @@ import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
 import { ArrowUpRight, Check } from "@/components/kit/icons";
 import { InfoHint } from "@/components/kit/InfoHint";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Group, Row } from "./Layout";
 
 export type ProviderOption = {

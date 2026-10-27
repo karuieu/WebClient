@@ -2,8 +2,8 @@
 
 import { flushSync } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useTheme, type Theme } from "@/lib/theme";
-import { cx } from "@/lib/cx";
+import { useTheme, type Theme } from "@/lib/ui/theme";
+import { cx } from "@/lib/ui/cx";
 import { Moon, Sun } from "./icons";
 
 export function ThemeToggle({ className }: { className?: string }) {

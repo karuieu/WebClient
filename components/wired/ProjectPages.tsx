@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat";
-import { stashFirstMessage } from "@/lib/handoff";
-import { assignChatToProject } from "@/lib/projects";
+import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat/chat";
+import { stashFirstMessage } from "@/lib/ui/handoff";
+import { assignChatToProject } from "@/lib/projects/projects";
 import { useToast } from "@/components/Toast";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import { ProjectHome } from "@/components/app/project/ProjectWorkspace";

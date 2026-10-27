@@ -5,7 +5,7 @@ import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
 import { AlertCircle, BookOpen, Layers, Plug, Sliders } from "@/components/kit/icons";
 import { Segmented } from "@/components/kit/Segmented";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Tile } from "../settings/ConnectorParts";
 import { ConnectorsLocked } from "../settings/Connectors";
 import { Group, Row, SectionIntro } from "../settings/Layout";

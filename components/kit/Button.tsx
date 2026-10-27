@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { ArrowRight } from "./icons";
 import { Spinner } from "./Spinner";
 

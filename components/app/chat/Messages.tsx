@@ -17,8 +17,8 @@ import {
 } from "@/components/kit/icons";
 import { LogoMark } from "@/components/kit/Logo";
 import { Spinner } from "@/components/kit/Spinner";
-import type { ArtifactType } from "@/lib/artifacts";
-import { cx } from "@/lib/cx";
+import type { ArtifactType } from "@/lib/artifacts/artifacts";
+import { cx } from "@/lib/ui/cx";
 import { Markdown } from "./Markdown";
 import { Processing, type ProcessingStep } from "./Processing";
 import { Preparation, type PreparationSegment } from "./Preparation";

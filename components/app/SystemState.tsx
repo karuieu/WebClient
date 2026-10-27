@@ -1,7 +1,7 @@
 import { Decrypt } from "@/components/kit/Decrypt";
 import { Label } from "@/components/kit/Frame";
 import { Rise } from "@/components/kit/Rise";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export function SystemState({
   label,

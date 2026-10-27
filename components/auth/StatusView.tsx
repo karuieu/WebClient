@@ -4,7 +4,7 @@ import { ButtonLink } from "@/components/kit/Button";
 import { Label } from "@/components/kit/Frame";
 import { Rise } from "@/components/kit/Rise";
 import { Spinner } from "@/components/kit/Spinner";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 
 export function StatusView({
   label,

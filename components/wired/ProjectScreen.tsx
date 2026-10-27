@@ -24,18 +24,18 @@ import {
   type LibraryListing,
   type Project,
   type ProjectMemoryFile,
-} from "@/lib/projects";
-import { LIBRARY_LIMITS, fromDataTransfer, fromInput, prepareFiles, previewOf, type PickedPath, type PreparedFile } from "@/lib/projectFiles";
-import { useTabTitle } from "@/lib/tabTitle";
+} from "@/lib/projects/projects";
+import { LIBRARY_LIMITS, fromDataTransfer, fromInput, prepareFiles, previewOf, type PickedPath, type PreparedFile } from "@/lib/projects/projectFiles";
+import { useTabTitle } from "@/lib/ui/tabTitle";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
 import type { HeaderProject } from "@/components/app/chat/ChatView";
 import { ConfirmDeleteDialog } from "@/components/app/Dialogs";
-import { deletionErrorText } from "@/lib/api";
+import { deletionErrorText } from "@/lib/core/api";
 import { AddChatsDialog } from "@/components/app/ProjectDialogs";
 import { AddToLibraryDialog, type ContextSelection, type LibraryFile } from "@/components/app/project/Library";
 import type { FileVersionItem, FileVersionsProps } from "@/components/app/project/FileVersions";
-import { artifactTypeOf } from "@/lib/artifacts";
+import { artifactTypeOf } from "@/lib/artifacts/artifacts";
 import type { OpenLibraryItem, PanelChat, PanelView, ProjectPanelProps } from "@/components/app/project/ProjectPanel";
 import { ProjectWorkspace, useProjectPanel } from "@/components/app/project/ProjectWorkspace";
 import { LibraryContext } from "./useLibrary";

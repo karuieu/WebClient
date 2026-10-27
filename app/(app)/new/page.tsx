@@ -2,13 +2,13 @@
 
 import { Suspense, useContext, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat";
-import { assignChatToProject } from "@/lib/projects";
+import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat/chat";
+import { assignChatToProject } from "@/lib/projects/projects";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { truncateName, GREETING_NAME_MAX_CHARS } from "@/lib/auth";
-import { DRAFT_OFFERED_EVENT, registerDraftRescue, takeDraft } from "@/lib/draftRescue";
-import { stashFirstMessage, type FirstMessage } from "@/lib/handoff";
+import { truncateName, GREETING_NAME_MAX_CHARS } from "@/lib/account/auth";
+import { DRAFT_OFFERED_EVENT, registerDraftRescue, takeDraft } from "@/lib/ui/draftRescue";
+import { stashFirstMessage, type FirstMessage } from "@/lib/ui/handoff";
 import { NewChatView } from "@/components/app/NewChatView";
 import { isHalloweenSeason, pickCostume } from "@/components/app/greeting";
 import { useNow } from "@/components/kit/useMounted";

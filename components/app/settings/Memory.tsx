@@ -7,7 +7,7 @@ import { Stepper, Switch } from "@/components/kit/Controls";
 import { ChevronDown, Ellipsis, FileText, Folder, Lock, Pencil, Plus, Trash } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Spinner } from "@/components/kit/Spinner";
-import { cx } from "@/lib/cx";
+import { cx } from "@/lib/ui/cx";
 import { Group, Row, SectionIntro } from "./Layout";
 
 export type MemoryPrefs = { enabled: boolean; interval: number; auto: boolean; liveWrites: boolean };

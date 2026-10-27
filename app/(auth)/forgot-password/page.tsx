@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { forgotPassword } from "@/lib/auth";
-import { prefetchCaptcha } from "@/lib/captcha";
+import { forgotPassword } from "@/lib/account/auth";
+import { prefetchCaptcha } from "@/lib/account/captcha";
 import { CaptchaCheckbox } from "@/components/auth/CaptchaCheckbox";
 import { ForgotPasswordView } from "@/components/auth/ForgotPasswordView";
 
