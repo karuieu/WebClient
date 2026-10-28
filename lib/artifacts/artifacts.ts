@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { accountSettingKey } from "@/lib/account/session";
+import { remarkSubSup } from "@/lib/ui/remarkSubSup";
 
 const STORAGE_KEY = "karui_artifacts";
 const DEFAULT = true;
@@ -202,9 +203,9 @@ export function stripActiveContent(html: string): string {
 const NO_SCRIPTS_CSP =
   `<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">`;
 
-/** Raw HTML in a note stays text: a note can't carry markup of its own. */
+/** Raw HTML in a note stays text, except <sub>/<sup>: a note can't carry markup of its own. */
 function markdownToHtml(markdown: string): string {
-  return renderToStaticMarkup(createElement(Markdown, { remarkPlugins: [remarkGfm] }, markdown));
+  return renderToStaticMarkup(createElement(Markdown, { remarkPlugins: [remarkGfm, remarkSubSup] }, markdown));
 }
 
 function bodyHtml(artifact: Pick<Artifact, "type" | "content">): string {
