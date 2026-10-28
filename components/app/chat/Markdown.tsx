@@ -4,6 +4,7 @@ import * as React from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cx } from "@/lib/ui/cx";
+import { remarkRunOnList } from "@/lib/ui/remarkRunOnList";
 import { remarkSubSup } from "@/lib/ui/remarkSubSup";
 import { CodeBlock } from "./CodeBlock";
 
@@ -84,7 +85,7 @@ const components: Components = {
 
 export const Markdown = React.memo(function Markdown({ children }: { children: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkSubSup]} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkRunOnList, remarkSubSup]} components={components}>
       {children}
     </ReactMarkdown>
   );

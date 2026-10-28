@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { accountSettingKey } from "@/lib/account/session";
+import { remarkRunOnList } from "@/lib/ui/remarkRunOnList";
 import { remarkSubSup } from "@/lib/ui/remarkSubSup";
 
 const STORAGE_KEY = "karui_artifacts";
@@ -205,7 +206,7 @@ const NO_SCRIPTS_CSP =
 
 /** Raw HTML in a note stays text, except <sub>/<sup>: a note can't carry markup of its own. */
 function markdownToHtml(markdown: string): string {
-  return renderToStaticMarkup(createElement(Markdown, { remarkPlugins: [remarkGfm, remarkSubSup] }, markdown));
+  return renderToStaticMarkup(createElement(Markdown, { remarkPlugins: [remarkGfm, remarkRunOnList, remarkSubSup] }, markdown));
 }
 
 function bodyHtml(artifact: Pick<Artifact, "type" | "content">): string {
