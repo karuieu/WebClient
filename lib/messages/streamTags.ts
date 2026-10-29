@@ -158,6 +158,12 @@ function reasoningAt(text: string, index: number, initial: boolean): boolean {
   return open === -1 && close === -1 ? initial : open > close;
 }
 
+// While the streamed text ends inside <reasoning>, when that block opened; the previous value carries it across tokens.
+export function thinkingSince(text: string, since: number | null): number | null {
+  if (!reasoningAt(text, text.length, false)) return null;
+  return since ?? Date.now();
+}
+
 function connectorAttempt(text: string, inReasoning = false): RegExpExecArray | null {
   const pattern = new RegExp(`${CONNECTOR_OPENERS}(\\{|\\[|c\\d+_)`, "g");
   let match: RegExpExecArray | null;

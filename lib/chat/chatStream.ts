@@ -13,6 +13,7 @@ import { maybeAutoMemory } from "./memory";
 import { type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
 import { applyChatTitle, fallbackTitleChat, getChatTitleMode } from "./chatTitle";
 import { throwIfStopped } from "@/lib/core/errors";
+import { thinkingSince } from "@/lib/messages/streamTags";
 import { type AnswerActivity } from "./answerTools";
 
 export type StreamPhase = "streaming" | "saving" | "done" | "error";
@@ -24,6 +25,7 @@ export interface ChatStreamState {
   request: { content: string; model: ModelType; images: ChatImage[]; files: ChatTextFile[] };
   content: string;
   activity: AnswerActivity | null;
+  thinkingSince: number | null;
 
   saved: Message[] | null;
   retryResponse: string | null;
@@ -92,6 +94,7 @@ export function startSendStream(opts: {
     request: { content: opts.content, model: opts.model, images: opts.images ?? [], files: opts.files ?? [] },
     content: "",
     activity: null,
+    thinkingSince: null,
     saved: null,
     retryResponse: null,
     discarded: opts.discard ?? [],
@@ -120,6 +123,7 @@ export function startSendStream(opts: {
         (token) => {
           state.activity = null;
           state.content += token;
+          state.thinkingSince = thinkingSince(state.content, state.thinkingSince);
           notify(chatId);
         },
         opts.webSearch,
@@ -174,6 +178,7 @@ export function startRetryStream(opts: {
     request: { content: "", model: opts.model, images: [], files: [] },
     content: "",
     activity: null,
+    thinkingSince: null,
     saved: null,
     retryResponse: null,
     discarded: [],
@@ -192,6 +197,7 @@ export function startRetryStream(opts: {
         opts.history,
         (token) => {
           state.content += token;
+          state.thinkingSince = thinkingSince(state.content, state.thinkingSince);
           notify(chatId);
         },
         signal

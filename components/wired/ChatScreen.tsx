@@ -165,7 +165,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
       if (st.phase === "streaming" || st.phase === "saving" || st.error instanceof MessageSaveError) {
         const phase = st.phase === "saving" ? "saving" : st.phase === "error" ? "error" : "streaming";
         setStream({
-          content: st.content, activity: st.activity, phase,
+          content: st.content, activity: st.activity, thinkingSince: st.thinkingSince, phase,
           error: st.phase === "error" && st.error instanceof MessageSaveError ? st.error.message : undefined,
         });
         const um = st.userMessage;

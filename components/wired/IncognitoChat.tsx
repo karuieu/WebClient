@@ -7,6 +7,7 @@ import { clearQuoted, markQuoted } from "@/lib/messages/quotedHighlight";
 import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
 import { downloadArtifact } from "@/lib/artifacts/artifacts";
 import { toBlockquote } from "@/lib/messages/messageBlocks";
+import { thinkingSince } from "@/lib/messages/streamTags";
 import { useToast } from "@/components/Toast";
 import { ChatView } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
@@ -51,7 +52,11 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
       content,
       model,
       history,
-      (token) => setStream((s) => s && { ...s, activity: null, content: s.content + token }),
+      (token) => setStream((s) => {
+        if (!s) return s;
+        const content = s.content + token;
+        return { ...s, activity: null, content, thinkingSince: thinkingSince(content, s.thinkingSince ?? null) };
+      }),
       webSearch,
       (activity) => setStream((s) => s && { ...s, activity }),
       images,

@@ -144,10 +144,17 @@ export function toAssistant(
   };
 }
 
-export type Streaming = { content: string; activity: AnswerActivity | null; phase?: "streaming" | "saving" | "error"; error?: string } | null;
+export type Streaming = { content: string; activity: AnswerActivity | null; thinkingSince?: number | null; phase?: "streaming" | "saving" | "error"; error?: string } | null;
 
-function activityStatus(activity: AnswerActivity | null): string | null {
-  if (!activity) return null;
+// The thinking counter advances as reasoning tokens re-render the stream.
+function streamStatus(stream: NonNullable<Streaming>): string | null {
+  if (stream.phase === "saving") return "Saving reply";
+  if (stream.activity) return activityStatus(stream.activity);
+  if (stream.thinkingSince == null) return null;
+  return `Thinking · ${Math.floor((Date.now() - stream.thinkingSince) / 1000)}s`;
+}
+
+function activityStatus(activity: AnswerActivity): string {
   if (activity.kind === "search") return "Searching the web";
   try {
     return `Reading ${new URL(activity.url).hostname.replace(/^www\./, "")}`;
@@ -179,7 +186,7 @@ export function toViewData(
     // No Library state while streaming: the note is saved only after the answer ends.
     const { message, artifacts } = toAssistant("streaming", stream.content, {
       streaming: stream.phase !== "error",
-      status: stream.phase === "saving" ? "Saving reply" : activityStatus(stream.activity),
+      status: streamStatus(stream),
       error: stream.error,
       retryLabel: stream.error ? "Retry save" : undefined,
     }, skills);
