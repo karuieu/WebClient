@@ -540,6 +540,21 @@ async function memoryFilesFor(chat: Chat | null): ReturnType<typeof getMemoryFil
   return getMemoryFilesForChat();
 }
 
+// Fetched at once: one after another they added ~0.3 s before every answer.
+async function loadTurnContext(key: CryptoKey, chatId: string, history: HistoryMessage[]) {
+  const customInstructions = getCustomInstructionsContext();
+  const chatMeta = await getChat(chatId).catch(() => null);
+  const inProject = projectTurn(chatMeta);
+  const [since, project, memoryFiles, skills, instructions] = await Promise.all([
+    sinceSummary(key, chatId, chatMeta, history),
+    inProject,
+    memoryFilesFor(chatMeta),
+    inProject.then((p) => getSkillsForChat(p?.skillIds)),
+    customInstructions,
+  ]);
+  return { since, inProject: project, memoryFiles: project ? project.memoryFiles : memoryFiles, skills, customInstructions: instructions };
+}
+
 type TurnContext = Pick<
   E2EStreamOptions,
   | "displayName"
@@ -634,16 +649,14 @@ export async function sendMessage(
   discard: string[] = []
 ): Promise<Message[]> {
   const key = await requireAesKey();
-  const chatMeta = await getChat(chatId).catch(() => null);
-  const since = await sinceSummary(key, chatId, chatMeta, history);
-  const inProject = await projectTurn(chatMeta);
+  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history);
   const ctx: TurnContext = {
     displayName: getUser()?.display_name ?? "",
     projectContext: inProject?.context ?? "",
     conversationSummary: since.summary,
-    memoryFiles: inProject ? inProject.memoryFiles : await memoryFilesFor(chatMeta),
-    skills: await getSkillsForChat(inProject?.skillIds),
-    customInstructions: await getCustomInstructionsContext(),
+    memoryFiles,
+    skills,
+    customInstructions,
     memoryWrites: inProject ? inProject.memoryWrites : getMemorySettings().liveWrites,
     applyMemoryEdit: inProject?.applyMemoryEdit,
     project: inProject?.project,
@@ -804,13 +817,8 @@ export async function retryMessage(
   // otherwise this turn would still go out with the old one.
   await invalidateSummaryIfCovered(key, chatId, origAssistantId);
 
-  const chatMeta = await getChat(chatId).catch(() => null);
-  const since = await sinceSummary(key, chatId, chatMeta, history);
-  const inProject = await projectTurn(chatMeta);
+  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history);
   const projectContext = inProject?.context ?? "";
-  const memoryFiles = inProject ? inProject.memoryFiles : await memoryFilesFor(chatMeta);
-  const skills = await getSkillsForChat(inProject?.skillIds);
-  const customInstructions = await getCustomInstructionsContext();
   const reasoningEffort = resolveReasoningEffort(model);
   const variantGroup = origVariantGroup || crypto.randomUUID();
 

@@ -3,7 +3,7 @@
 
 import { getUser, onSessionCleared } from "@/lib/account/session";
 import { getArtifactsEnabled } from "@/lib/artifacts/artifacts";
-import { getProvider, PROVIDERS, type ProviderId } from "@/lib/models/providers";
+import { getModelProvider, getProvider, PROVIDERS, type ProviderId } from "@/lib/models/providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "@/lib/messages/memoryWrite";
 import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice, UNVERIFIED_ANSWER_CONTEXT, UNVERIFIED_NOTICE } from "@/lib/messages/messageBlocks";
@@ -39,8 +39,8 @@ import { REPETITION_NOTICE } from "@/lib/messages/repetition";
 import { contextBudget, trimTurns } from "@/lib/messages/context";
 import { libraryBlock, type LibraryIndexEntry } from "@/lib/projects/projectFiles";
 import { skillsPromptBlock, type SkillForChat } from "./skills";
-import { isNearAIVerified, streamNearAIChat } from "@/lib/enclave/nearaiClient";
-import { isPhalaVerified, streamPhalaChat } from "@/lib/enclave/phalaClient";
+import { isNearAIVerified, prewarmNearAI, streamNearAIChat } from "@/lib/enclave/nearaiClient";
+import { isPhalaVerified, prewarmPhala, streamPhalaChat } from "@/lib/enclave/phalaClient";
 import { API_URL, apiFetch } from "@/lib/core/api";
 import { fetchSystemPrompt } from "@/lib/enclave/systemPrompt";
 import {
@@ -123,6 +123,12 @@ async function fetchModelInfo(
 // stops a turn before a chat is created or an enclave is verified.
 export async function ensureModelAvailable(modelId: string, provider: ProviderId): Promise<void> {
   await fetchModelInfo(modelId, provider, true);
+}
+
+export function prewarmProvider(modelId: string): void {
+  const provider = getModelProvider(modelId);
+  if (provider === "phala") prewarmPhala();
+  if (provider === "nearai") fetchModelInfo(modelId, provider).then(({ providerModelID }) => prewarmNearAI(providerModelID), () => {});
 }
 
 export function chatModelAsHelper(modelId: string, provider: ProviderId): () => Promise<HelperModel> {

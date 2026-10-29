@@ -93,10 +93,12 @@ interface GatewayKey {
 // tab doesn't inherit it.
 let clientKeys: nacl.BoxKeyPair | null = null;
 let gatewayKey: (GatewayKey & { staleAfter: number }) | null = null;
+let pendingGatewayKey: Promise<GatewayKey> | null = null;
 
 onSessionCleared(() => {
   clientKeys = null;
   gatewayKey = null;
+  pendingGatewayKey = null;
 });
 
 export function isPhalaVerified(): boolean {
@@ -139,10 +141,25 @@ async function verifiedGatewayKeyset(report: AttestationReport, nonce: string): 
   return { keyset, digest: workloadKeysetDigest };
 }
 
-async function getGatewayKey(): Promise<GatewayKey> {
-  const now = Math.floor(Date.now() / 1000);
-  if (gatewayKey && gatewayKey.staleAfter > now) return gatewayKey;
+// The prewarm and a send that starts before it finishes share one attestation.
+function getGatewayKey(): Promise<GatewayKey> {
+  if (gatewayKey && gatewayKey.staleAfter > Math.floor(Date.now() / 1000)) return Promise.resolve(gatewayKey);
+  if (!pendingGatewayKey) {
+    const pending = fetchGatewayKey().finally(() => {
+      if (pendingGatewayKey === pending) pendingGatewayKey = null;
+    });
+    pendingGatewayKey = pending;
+  }
+  return pendingGatewayKey;
+}
 
+// Verified before the first send so it doesn't wait for attestation; a failure shows up on that send instead.
+export function prewarmPhala(): void {
+  getGatewayKey().catch(() => {});
+}
+
+async function fetchGatewayKey(): Promise<GatewayKey> {
+  const now = Math.floor(Date.now() / 1000);
   // Over plain http anyone on the way could swap the key for their own.
   assertProxiedAPIURL("attestation Phala");
   const nonce = toHex(crypto.getRandomValues(new Uint8Array(32)));

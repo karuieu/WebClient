@@ -3,6 +3,7 @@
 import { Suspense, useContext, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createChat, deleteChat, ensureChatModelAvailable, type ModelType } from "@/lib/chat/chat";
+import { prewarmProvider } from "@/lib/chat/inference";
 import { assignChatToProject } from "@/lib/projects/projects";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -46,6 +47,7 @@ function NewChat() {
 
   const composer = useComposer({ onSubmit: () => handleSend() });
   textRef.current = composer.text;
+  useEffect(() => prewarmProvider(composer.model), [composer.model]);
 
   useEffect(() => {
     if (!incognito) setIncognitoFirst(null);

@@ -18,6 +18,7 @@ import type { CompressionOutcome, CompressionQuota } from "@/lib/chat/compressio
 import { visibleMessages } from "@/lib/messages/conversation";
 import { StoppedError } from "@/lib/core/errors";
 import { clearChatStream, getChatStream, startRetryStream, startSaveStream, startSendStream, stopChatStream, subscribeChatStream } from "@/lib/chat/chatStream";
+import { prewarmProvider } from "@/lib/chat/inference";
 import { takeFirstMessage, type FirstMessage } from "@/lib/ui/handoff";
 import { registerDraftRescue } from "@/lib/ui/draftRescue";
 import { clearQuoted, markQuoted } from "@/lib/messages/quotedHighlight";
@@ -96,6 +97,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const streaming = stream !== null && stream.phase !== "error";
   const model = composer.model as ModelType;
 
+  React.useEffect(() => prewarmProvider(model), [model]);
   React.useEffect(() => registerDraftRescue(() => textRef.current), []);
   React.useEffect(() => clearQuoted, []);
   useTabTitle(title === "New chat" ? null : title, "Chat");

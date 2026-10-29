@@ -96,6 +96,11 @@ async function verifiedClient(providerModelID: string): Promise<InferenceClient>
   return c;
 }
 
+// The SDK keeps the verification for an hour and shares an in-flight one with the next send.
+export function prewarmNearAI(providerModelID: string): void {
+  verifiedClient(providerModelID).catch(() => {});
+}
+
 // The SDK decrypts with whatever key the answer names, and our public key travels in the clear. Only the model's
 // signature over the exact request and response bytes shows the answer came from the attested model.
 async function verifyCompletion(c: InferenceClient, completionId: string | undefined): Promise<void> {
