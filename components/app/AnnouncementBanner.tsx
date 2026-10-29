@@ -1,13 +1,10 @@
 "use client";
 
-import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { X } from "@/components/kit/icons";
 import { Sheet } from "@/components/kit/Sheet";
 import { useMediaQuery } from "@/components/kit/useMounted";
-import { cx } from "@/lib/ui/cx";
-import { ShellContext } from "./AppShell";
 
 export type Announcement = { title: string; message: string };
 
@@ -30,9 +27,8 @@ export function AnnouncementBanner({ announcement, open, onDismiss }: { announce
   );
 }
 
+// Floats over the screen so incognito and the chat header stay put; the side padding keeps it clear of them.
 function AnnouncementCard({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
-  const { sidebarHidden } = React.useContext(ShellContext);
-
   return (
     <motion.div
       data-motion-effect=""
@@ -40,11 +36,11 @@ function AnnouncementCard({ announcement, onDismiss }: { announcement: Announcem
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: 0.15 } }}
       transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-      className={cx("px-4 pt-3 sm:px-6", sidebarHidden && "md:px-14")}
+      className="pointer-events-none absolute inset-x-0 top-14 z-30 px-4 pt-3 sm:px-14 md:top-0"
     >
       <aside
         aria-label="Announcement"
-        className="mx-auto flex max-w-[44rem] items-start gap-2 rounded-2xl border border-line bg-surface py-3 pl-4 pr-2 text-[13.5px] leading-relaxed"
+        className="pointer-events-auto mx-auto flex max-w-[44rem] items-start gap-2 rounded-2xl border border-line bg-surface py-3 pl-4 pr-2 text-[13.5px] leading-relaxed"
       >
         <div className="min-w-0 flex-1">
           <p className="break-words font-medium">{announcement.title}</p>

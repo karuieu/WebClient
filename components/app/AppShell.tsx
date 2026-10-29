@@ -243,7 +243,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
         )}
       </AnimatePresence>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-2 md:hidden">
           <Tooltip label="Open sidebar" keys={["Mod", "B"]}>
             <button
