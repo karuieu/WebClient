@@ -5,7 +5,10 @@ import { API_URL, apiFetch, assertProxiedAPIURL } from "@/lib/core/api";
 import { CALL_DRAIN_LIMIT_MS, createLoopGuard, REPETITION_NOTICE, type StopAt } from "@/lib/messages/repetition";
 import { RateLimitError, StoppedError, UnverifiedAnswerError } from "@/lib/core/errors";
 import { STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
+import { toHex } from "./hex";
 import { parseToolResponse, withToolInstructions, type JsonTool, type ToolResponse } from "./jsonTools";
+import { assertReviewedGateway } from "./phalaGateway";
+import { forgetTinfoilSessions, tinfoilSessionIds } from "./phalaSessions";
 
 export const PHALA_E2EE_ALGO = "x25519-aes-256-gcm-hkdf-sha256";
 const HKDF_INFO = "aci.e2ee.v2.x25519";
@@ -14,10 +17,6 @@ const IV_BYTES = 12;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 function fromHex(hex: string): Uint8Array {
   const clean = hex.trim().replace(/^0x/, "");
@@ -111,7 +110,7 @@ function getClientKeys(): nacl.BoxKeyPair {
 }
 
 interface ReportExtras {
-  attestation?: { freshness?: { stale_after?: number } };
+  attestation?: { freshness?: { stale_after?: number }; evidence?: { app_compose?: string } };
   service_capabilities?: { supported_e2ee_versions?: string[] };
 }
 
@@ -119,7 +118,7 @@ interface ReportExtras {
 const REQUIRED_CHECKS = ["id-1", "id-2", "id-3", "id-4", "policy-os"];
 
 // Intel's quote collateral comes through /api/pccs, the only host the CSP allows. Intel signs it, so the relay cannot forge it.
-async function verifiedGatewayKeyset(report: AttestationReport, nonce: string): Promise<{ keyset: WorkloadKeyset; digest: string }> {
+async function verifiedGatewayKeyset(report: AttestationReport & ReportExtras, nonce: string): Promise<{ keyset: WorkloadKeyset; digest: string }> {
 
   const { reportTranscript } = await import("@phala/aci-verifier");
   const transcript = await reportTranscript(report, nonce, {
@@ -138,6 +137,8 @@ async function verifiedGatewayKeyset(report: AttestationReport, nonce: string): 
   if (!ok || !keyset || !workloadKeysetDigest) {
     throw new Error("Phala's attestation didn't verify in your browser, so nothing was sent.");
   }
+  // id-4 passed, so this is the compose measured into the quote.
+  await assertReviewedGateway(report.attestation?.evidence?.app_compose);
   return { keyset, digest: workloadKeysetDigest };
 }
 
@@ -154,8 +155,9 @@ function getGatewayKey(): Promise<GatewayKey> {
 }
 
 // Verified before the first send so it doesn't wait for attestation; a failure shows up on that send instead.
-export function prewarmPhala(): void {
+export function prewarmPhala(model: string): void {
   getGatewayKey().catch(() => {});
+  tinfoilSessionIds(model).catch(() => {});
 }
 
 async function fetchGatewayKey(): Promise<GatewayKey> {
@@ -194,16 +196,23 @@ function concatBytes(parts: Uint8Array[]): Uint8Array {
 
 // The response key comes from the answer itself and our public key travels in the clear, so anyone relaying the
 // answer could encrypt their own text to us. The receipt is what ties these exact bytes to the attested gateway.
-async function verifyReceipt(response: Response, body: Uint8Array, gateway: GatewayKey): Promise<void> {
+async function verifyReceipt(response: Response, body: Uint8Array, sealed: SealedRequest): Promise<void> {
   try {
     const id = response.headers.get("X-Receipt-Id");
     if (!id) throw new Error("no X-Receipt-Id");
     const fetched = await apiFetch(`${API_URL}/api/phala/receipts/${encodeURIComponent(id)}`);
     if (!fetched.ok) throw new Error(`receipt HTTP ${fetched.status}`);
-    const { verifyReceipt: verify, checkResponseBodyHash } = await import("@phala/aci-verifier");
-    const result = await verify((await fetched.json()) as ReceiptEnvelope, gateway.keyset, gateway.keysetDigest);
+    const { verifyReceipt: verify, checkResponseBodyHash, findEvent } = await import("@phala/aci-verifier");
+    const result = await verify((await fetched.json()) as ReceiptEnvelope, sealed.gateway.keyset, sealed.gateway.keysetDigest);
     if (!result.ok || !result.payload) throw new Error(JSON.stringify(result.checks));
     if (!(await checkResponseBodyHash(result.payload, body))) throw new Error("response bytes don't match the receipt");
+    // The pin travels outside the encrypted fields, so the gateway's signed word is what shows it held.
+    if (sealed.sessionIds.length > 0) {
+      const served = findEvent(result.payload, "upstream.verified");
+      if (served?.result !== "verified" || !sealed.sessionIds.includes(String(served.session_id))) {
+        throw new Error("the answer came from a host other than the one verified here");
+      }
+    }
   } catch (error) {
     console.warn("[karui] Phala receipt:", error);
     throw new UnverifiedAnswerError();
@@ -238,6 +247,8 @@ interface SealedRequest {
   ts: number;
   secret: Uint8Array;
   gateway: GatewayKey;
+  model: string;
+  sessionIds: string[];
 }
 
 async function sealRequest(
@@ -247,7 +258,7 @@ async function sealRequest(
   phase?: "compression"
 ): Promise<SealedRequest> {
   const keys = getClientKeys();
-  const gateway = await getGatewayKey();
+  const [gateway, sessionIds] = await Promise.all([getGatewayKey(), tinfoilSessionIds(model)]);
   const nonce = toHex(crypto.getRandomValues(new Uint8Array(32)));
   const ts = Math.floor(Date.now() / 1000);
 
@@ -270,15 +281,23 @@ async function sealRequest(
     },
     // aci_verified: only an upstream the gateway attested may get the prompt;
     // without it a model can be routed to a host that sees plaintext.
-    body: JSON.stringify({ model, messages, provider: { aci_verified: true }, ...extra }),
+    body: JSON.stringify({
+      model,
+      messages,
+      provider: { aci_verified: true, ...(sessionIds.length > 0 ? { aci_session_ids: sessionIds } : {}) },
+      ...extra,
+    }),
     nonce,
     ts,
     secret: keys.secretKey,
     gateway,
+    model,
+    sessionIds,
   };
 }
 
-async function throwForStatus(response: Response): Promise<void> {
+async function throwForStatus(response: Response, sealed: SealedRequest): Promise<void> {
+  if (response.status === 412) forgetTinfoilSessions(sealed.model);
   if (response.ok) {
     // Turns away an answer in the clear early. Any relay can set this header, so the receipt is the proof.
     if (response.headers.get("X-E2EE-Applied") !== "true") {
@@ -337,7 +356,7 @@ export async function streamPhalaChat(
     if (opts.signal?.aborted) throw new StoppedError();
     throw error;
   });
-  await throwForStatus(response);
+  await throwForStatus(response, sealed);
   if (!response.body) throw new Error("Empty response body");
 
   const reader = response.body.getReader();
@@ -451,7 +470,7 @@ export async function streamPhalaChat(
   }
   if (drainTimedOut) throw new UnverifiedAnswerError();
   const verified = !stopped;
-  if (verified) await verifyReceipt(response, concatBytes(received), sealed.gateway);
+  if (verified) await verifyReceipt(response, concatBytes(received), sealed);
 
   if (inReasoning) {
     text += "</reasoning>";
@@ -497,9 +516,9 @@ export async function phalaCompletion(opts: {
     headers: opts.withoutBasePrompt ? { ...sealed.headers, "X-Karui-Base-Prompt": "none" } : sealed.headers,
     body: sealed.body,
   });
-  await throwForStatus(response);
+  await throwForStatus(response, sealed);
   const body = new Uint8Array(await response.arrayBuffer());
-  await verifyReceipt(response, body, sealed.gateway);
+  await verifyReceipt(response, body, sealed);
 
   const data = JSON.parse(decoder.decode(body)) as {
     id?: string;

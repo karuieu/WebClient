@@ -127,8 +127,9 @@ export async function ensureModelAvailable(modelId: string, provider: ProviderId
 
 export function prewarmProvider(modelId: string): void {
   const provider = getModelProvider(modelId);
-  if (provider === "phala") prewarmPhala();
-  if (provider === "nearai") fetchModelInfo(modelId, provider).then(({ providerModelID }) => prewarmNearAI(providerModelID), () => {});
+  if (!provider) return;
+  const prewarm = provider === "phala" ? prewarmPhala : prewarmNearAI;
+  fetchModelInfo(modelId, provider).then(({ providerModelID }) => prewarm(providerModelID), () => {});
 }
 
 export function chatModelAsHelper(modelId: string, provider: ProviderId): () => Promise<HelperModel> {
