@@ -111,6 +111,69 @@ export function applyEdits(text: string, pairs: EditPair[]): string | null {
   return out;
 }
 
+/** What one of an answer's closed artifacts does to a file. `changes` counts the pairs when every block for the file was an edit. */
+export type BlockWrite =
+  | { kind: "write"; path: string; content: string; existed: boolean; changes?: number }
+  | { kind: "merged" }
+  | { kind: "failed"; path?: string; reason: string };
+
+export const TEXT_NOT_FOUND = "the text to replace wasn't found";
+const SHORTENED = "the note was shortened instead of written out";
+
+// A line such as "… full content …", "...rest unchanged..." or "<!-- ... -->" stands for text the model left out.
+const PLACEHOLDER_LINE = /^[\s[(<!-]*(?:\.{3}|…)[^.…\n]{0,40}(?:\.{3}|…)?[\s\])>-]*$/m;
+
+/** A rewrite of an existing file that leaves its text out: it would wipe the file, so it is refused. */
+function isShortened(content: string, current: string | undefined): boolean {
+  return PLACEHOLDER_LINE.test(content) && (current === undefined || content.length < current.length);
+}
+
+/**
+ * An answer's closed artifacts against the files they name, in order; `files` maps each path to its content when known.
+ * Models sometimes send each change to a file as a block of its own, so blocks for one file make a single write at its
+ * last block and the earlier ones are `merged`.
+ */
+export function planWrites(closed: Artifact[], files: ReadonlyMap<string, string | undefined>, missing: string): BlockWrite[] {
+  const writes: BlockWrite[] = [];
+  const lastWrite = new Map<string, number>();
+  const taken = new Set(files.keys());
+  for (const artifact of closed) {
+    const target = artifact.path ? artifactPath(artifact) : undefined;
+    const at = target === undefined ? undefined : lastWrite.get(target);
+    const before = at === undefined ? undefined : (writes[at] as Extract<BlockWrite, { kind: "write" }>);
+    let write: Extract<BlockWrite, { kind: "write" }>;
+    if (artifact.edit) {
+      if (target === undefined || (!before && !files.has(target))) {
+        writes.push({ kind: "failed", reason: missing });
+        continue;
+      }
+      const pairs = editPairs(artifact.content);
+      const base = before ? before.content : files.get(target);
+      const edited = base === undefined ? null : applyEdits(base, pairs);
+      if (edited === null) {
+        writes.push({ kind: "failed", path: target, reason: TEXT_NOT_FOUND });
+        continue;
+      }
+      // A rewrite earlier in the answer makes the whole write a rewrite.
+      const changes = !before ? pairs.length : before.changes === undefined ? undefined : before.changes + pairs.length;
+      write = { kind: "write", path: target, content: edited, existed: before?.existed ?? true, changes };
+    } else {
+      const existing = target !== undefined && (before !== undefined || files.has(target));
+      if (existing && isShortened(artifact.content, before ? before.content : files.get(target))) {
+        writes.push({ kind: "failed", path: target, reason: SHORTENED });
+        continue;
+      }
+      const path = existing ? target : libraryPath(artifact, taken);
+      write = { kind: "write", path, content: artifact.content, existed: before?.existed ?? files.has(path) };
+    }
+    if (at !== undefined) writes[at] = { kind: "merged" };
+    taken.add(write.path);
+    lastWrite.set(write.path, writes.length);
+    writes.push(write);
+  }
+  return writes;
+}
+
 export function parseArtifacts(content: string): { artifacts: Artifact[]; text: string } {
   const artifacts: Artifact[] = [];
 
@@ -133,19 +196,29 @@ export function parseArtifacts(content: string): { artifacts: Artifact[]; text: 
   return { artifacts, text: text.trim() };
 }
 
-/** Attributes for the closed blocks, in order; `null` leaves one as it is. */
-export function setArtifactAttrs(content: string, attrs: (Record<string, string> | null)[]): string {
+/**
+ * Attributes for the closed blocks, in order; `null` leaves a block as it is and a `null` value removes that attribute.
+ * `bodies` replaces a block's content where it has one, and `null` drops the block.
+ */
+export function setArtifactAttrs(
+  content: string,
+  attrs: (Record<string, string | null> | null)[],
+  bodies: (string | null | undefined)[] = [],
+): string {
   let index = 0;
   return content.replace(ARTIFACT_BLOCK, (block, rawAttrs: string, inner: string) => {
+    const body = bodies[index];
     const set = attrs[index++];
-    if (!set) return block;
+    if (body === null) return "";
+    if (!set && body === undefined) return block;
     let next = rawAttrs;
-    for (const [name, value] of Object.entries(set)) {
-      const attr = `${name}="${escapeHtml(value)}"`;
+    for (const [name, value] of Object.entries(set ?? {})) {
       const existing = new RegExp(`\\s${name}\\s*=\\s*"[^"]*"`, "i");
-      next = existing.test(next) ? next.replace(existing, ` ${attr}`) : `${next} ${attr}`;
+      if (value === null) next = next.replace(existing, "");
+      else if (existing.test(next)) next = next.replace(existing, ` ${name}="${escapeHtml(value)}"`);
+      else next = `${next} ${name}="${escapeHtml(value)}"`;
     }
-    return `<artifact${next}>${inner}</artifact>`;
+    return `<artifact${next}>${body === undefined ? inner : `\n${body}\n`}</artifact>`;
   });
 }
 
@@ -241,6 +314,12 @@ function withHeadInjection(html: string, injection: string): string {
   return injection + html;
 }
 
+/** Replaces each closed block with what `replace` returns for its place among them; `undefined` keeps it. */
+export function replaceArtifactBlocks(content: string, replace: (index: number) => string | undefined): string {
+  let index = 0;
+  return content.replace(ARTIFACT_BLOCK, (block) => replace(index++) ?? block);
+}
+
 /** Put CSP immediately after the doctype: it only governs content parsed after the meta tag. */
 function withLeadingCsp(html: string): string {
   return `<!doctype html>${NO_SCRIPTS_CSP}${html.replace(/^\s*<!doctype[^>]*>/i, "")}`;
@@ -252,6 +331,36 @@ export function titleSlug(title: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
     .toLowerCase();
+}
+
+const ARTIFACT_EXTENSION = { markdown: "md", html: "html" } as const;
+// Characters file systems refuse, so a downloaded Library keeps its names.
+const UNSAFE_PATH_CHARS = /[\\:*?"<>|]/g;
+
+// The model's path cleaned up, with the extension of the artifact's type; the title when it gave none.
+function requestedPath(artifact: Pick<Artifact, "title" | "type" | "path">): { base: string; ext: string } {
+  const raw = artifact.path ?? "";
+  const parts = raw
+    .split("/")
+    .map((p) => p.replace(UNSAFE_PATH_CHARS, "-").trim())
+    .filter((p) => p && p !== "." && p !== "..");
+  const last = raw.trimEnd().endsWith("/") ? undefined : parts.pop();
+  const name = last?.replace(/\.[^.]+$/, "") || titleSlug(artifact.title) || "untitled";
+  return { base: [...parts, name].join("/"), ext: ARTIFACT_EXTENSION[artifact.type] };
+}
+
+/** Where the artifact asks to be: its cleaned-up `path`, or its title. */
+export function artifactPath(artifact: Pick<Artifact, "title" | "type" | "path">): string {
+  const { base, ext } = requestedPath(artifact);
+  return `${base}.${ext}`;
+}
+
+/** Never an existing file's path: a taken one gets " (2)", " (3)", … */
+export function libraryPath(artifact: Pick<Artifact, "title" | "type" | "path">, taken: ReadonlySet<string>): string {
+  const { base, ext } = requestedPath(artifact);
+  let path = `${base}.${ext}`;
+  for (let n = 2; taken.has(path); n++) path = `${base} (${n}).${ext}`;
+  return path;
 }
 
 function fileName(title: string, extension: string): string {

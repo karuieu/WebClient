@@ -46,7 +46,7 @@ import { ChatView, type HeaderProject } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import { useComposer } from "./useComposer";
 import { LibraryContext } from "./useLibrary";
-import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, useFollowNewVersions, type Streaming } from "./messageView";
 import type { ProjectLibrary } from "./ProjectScreen";
 import { useGoogleDocsExport } from "./useGoogleDocsExport";
 
@@ -329,6 +329,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
 
   const current = openArtifact ? artifacts.get(openArtifact) : undefined;
   const googleDocsExport = useGoogleDocsExport(openArtifact, current);
+  useFollowNewVersions(current, setOpenArtifact);
 
   // A note or document in the Library opens there, at its latest version; one that isn't opens from the message.
   const openArtifactData = (a: ArtifactData) => {

@@ -43,6 +43,8 @@ export type ArtifactData = {
   edit?: boolean;
   /** Project chats only. */
   library?: { path: string; saved: boolean; saving?: boolean; change?: ArtifactChange };
+  /** Other chats: which version of the chat's file this is (none for an edit that didn't apply), and what an edit did. */
+  chat?: { version?: number; change?: ArtifactChange };
 };
 
 export type ArtifactChange = { kind: "updated" } | { kind: "edited"; count: number } | { kind: "failed"; reason: string };
@@ -190,9 +192,11 @@ function changeStatus(change: ArtifactChange, path: string): string {
   return `Edited · ${change.count === 1 ? "1 change" : `${change.count} changes`} · ${path}`;
 }
 
-function artifactStatus({ type, streaming, library }: ArtifactData): string {
+function artifactStatus({ type, streaming, edit, library, chat }: ArtifactData): string {
   const kind = type === "markdown" ? "Note" : "Document";
-  if (streaming) return library?.change ? "Changing the Library file…" : `Writing ${kind.toLowerCase()}…`;
+  if (streaming) return library?.change ? "Changing the Library file…" : `${edit ? "Changing" : "Writing"} ${kind.toLowerCase()}…`;
+  if (chat?.change) return changeStatus(chat.change, `v${chat.version}`);
+  if (chat?.version && chat.version > 1) return `${kind} · v${chat.version}`;
   if (!library) return type === "markdown" ? "Note · Markdown" : "Document · HTML";
   if (library.change) return changeStatus(library.change, library.path);
   if (library.saving) return "Saving to the Library…";
@@ -215,10 +219,12 @@ function ArtifactCard({
 }) {
   const { library } = artifact;
   const status = artifactStatus(artifact);
-  const failed = library?.change?.kind === "failed";
+  const failed = (library ?? artifact.chat)?.change?.kind === "failed";
+  // A chat's change that didn't apply has no file behind it: nothing to open or download.
+  const chatFailed = !library && failed;
   // A change lives in the Library file: without it there's nothing to open, and nothing to save.
   const canSave = library && !library.saved && !library.change && onSave;
-  const canOpen = onOpen && (!(artifact.edit || library?.change) || library?.saved);
+  const canOpen = onOpen && !chatFailed && (!(artifact.edit || library?.change) || library?.saved);
   return (
     <div className="my-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-line bg-elevated p-3 pr-4 shadow-soft">
       <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-bg p-2">
@@ -243,7 +249,7 @@ function ArtifactCard({
       </div>
       {!artifact.streaming && (
         <div className="ml-auto flex items-center gap-1">
-          {onDownload && !artifact.edit && (
+          {onDownload && !artifact.edit && !chatFailed && (
             <ActionButton label="Download" onClick={() => onDownload(artifact)}>
               <Download className="size-3.5" />
             </ActionButton>

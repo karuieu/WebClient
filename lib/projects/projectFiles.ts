@@ -1,6 +1,6 @@
 import type { PickedItem, SkipReason, SkippedItem } from "@/components/app/project/Library";
 import { estimateTokens } from "@/lib/messages/context";
-import { applyEdits, editPairs, parseArtifacts, setArtifactAttrs, tagAttr, titleSlug, type Artifact } from "@/lib/artifacts/artifacts";
+import { artifactPath, libraryPath, parseArtifacts, planWrites, setArtifactAttrs, tagAttr, type Artifact, type BlockWrite } from "@/lib/artifacts/artifacts";
 import { blockJSON } from "@/lib/messages/messageBlocks";
 import { extractPdfText } from "./pdfText";
 import {
@@ -107,30 +107,6 @@ export function previewOf(content: string): string {
   return (heading ?? lines[0] ?? "").slice(0, 200);
 }
 
-const ARTIFACT_EXTENSION = { markdown: "md", html: "html" } as const;
-// Characters file systems refuse, so a downloaded Library keeps its names.
-const UNSAFE_PATH_CHARS = /[\\:*?"<>|]/g;
-
-// The model's path cleaned up, with the extension of the artifact's type; the title when it gave none.
-function requestedPath(artifact: Pick<Artifact, "title" | "type" | "path">): { base: string; ext: string } {
-  const raw = artifact.path ?? "";
-  const parts = raw
-    .split("/")
-    .map((p) => p.replace(UNSAFE_PATH_CHARS, "-").trim())
-    .filter((p) => p && p !== "." && p !== "..");
-  const last = raw.trimEnd().endsWith("/") ? undefined : parts.pop();
-  const name = last?.replace(/\.[^.]+$/, "") || titleSlug(artifact.title) || "untitled";
-  return { base: [...parts, name].join("/"), ext: ARTIFACT_EXTENSION[artifact.type] };
-}
-
-/** Never an existing file's path: a taken one gets " (2)", " (3)", … */
-export function libraryPath(artifact: Pick<Artifact, "title" | "type" | "path">, taken: ReadonlySet<string>): string {
-  const { base, ext } = requestedPath(artifact);
-  let path = `${base}.${ext}`;
-  for (let n = 2; taken.has(path); n++) path = `${base} (${n}).${ext}`;
-  return path;
-}
-
 function failureReason(error: unknown): string {
   if (error instanceof ProjectApiError && error.status === 409) return "the file changed in the meantime";
   if (error instanceof ProjectApiError && error.status === 507) return "the Library is full";
@@ -139,10 +115,8 @@ function failureReason(error: unknown): string {
 
 type SaveResult = Record<string, string>;
 
-async function createFile(projectId: string, artifact: Artifact, taken: Set<string>): Promise<SaveResult> {
-  const path = libraryPath(artifact, taken);
-  taken.add(path);
-  return uploadProjectFiles(projectId, [{ path, content: artifact.content, preview: previewOf(artifact.content) }]).then(
+async function createFile(projectId: string, path: string, content: string): Promise<SaveResult> {
+  return uploadProjectFiles(projectId, [{ path, content, preview: previewOf(content) }]).then(
     () => ({ path, saved: "created" }),
     // No reason: the card offers Save to Library instead.
     () => ({ path, saved: "failed" }),
@@ -156,22 +130,23 @@ async function replaceFile(projectId: string, file: LibraryFileMeta, content: st
   );
 }
 
-async function editFile(projectId: string, file: LibraryFileMeta, artifact: Artifact): Promise<SaveResult> {
-  const pairs = editPairs(artifact.content);
-  const text = (await readProjectFiles(projectId, [file])).get(file.id);
-  const edited = text === undefined ? null : applyEdits(text, pairs);
-  if (edited === null) return { path: file.path, saved: "failed", reason: "the text to replace wasn't found" };
-  const result = await replaceFile(projectId, file, edited, "edited");
-  return result.saved === "edited" ? { ...result, changes: String(pairs.length) } : result;
+// A merged block was folded into a later one for the same file, which makes the one save.
+async function saveWrite(projectId: string, write: BlockWrite, files: Map<string, LibraryFileMeta>): Promise<SaveResult | null> {
+  if (write.kind === "merged") return null;
+  if (write.kind === "failed") return { ...(write.path && { path: write.path }), saved: "failed", reason: write.reason };
+  const file = files.get(write.path);
+  if (!file) return createFile(projectId, write.path, write.content);
+  if (write.changes === undefined) return replaceFile(projectId, file, write.content, "updated");
+  const result = await replaceFile(projectId, file, write.content, "edited");
+  return result.saved === "edited" ? { ...result, changes: String(write.changes) } : result;
 }
 
-async function saveArtifact(projectId: string, artifact: Artifact, files: Map<string, LibraryFileMeta>, taken: Set<string>): Promise<SaveResult> {
-  const { base, ext } = requestedPath(artifact);
-  const existing = artifact.path ? files.get(`${base}.${ext}`) : undefined;
-  if (artifact.edit) {
-    return existing ? editFile(projectId, existing, artifact) : { saved: "failed", reason: "the file isn't in the Library" };
-  }
-  return existing ? replaceFile(projectId, existing, artifact.content, "updated") : createFile(projectId, artifact, taken);
+// The current text of the files the answer changes, read once: edits apply to it and a rewrite is checked against it.
+// A file that can't be read has no text, so its edits fail.
+async function currentTexts(projectId: string, closed: Artifact[], files: Map<string, LibraryFileMeta>): Promise<Map<string, string | undefined>> {
+  const changed = closed.filter((a) => a.path).map((a) => files.get(artifactPath(a))).filter((f) => f !== undefined);
+  const texts = changed.length > 0 ? await readProjectFiles(projectId, [...new Set(changed)]).catch(() => new Map<string, string>()) : new Map<string, string>();
+  return new Map([...files.values()].map((f) => [f.path, texts.get(f.id)]));
 }
 
 const KEEP_TAG = /<keep_version\b([^>]*?)\/?>(?:\s*<\/keep_version>)?/g;
@@ -203,10 +178,10 @@ export async function saveArtifactsToLibrary(projectId: string, content: string)
     return content;
   }
   const kept = await keepVersions(projectId, content, files);
-  const taken = new Set(files.keys());
-  const results: SaveResult[] = [];
-  for (const artifact of closed) results.push(await saveArtifact(projectId, artifact, files, taken));
-  return setArtifactAttrs(kept, results);
+  const writes = planWrites(closed, await currentTexts(projectId, closed, files), "the file isn't in the Library");
+  const results: (SaveResult | null)[] = [];
+  for (const write of writes) results.push(await saveWrite(projectId, write, files));
+  return setArtifactAttrs(kept, results, writes.map((w) => (w.kind === "merged" ? null : undefined)));
 }
 
 export async function saveArtifactToLibrary(projectId: string, artifact: Artifact): Promise<string> {

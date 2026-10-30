@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import { useEffect, useRef, type ComponentProps } from "react";
 import { type Message } from "@/lib/chat/chat";
 import { limitOf, statusOf } from "@/lib/core/errors";
 import { isProviderVerified } from "@/lib/chat/inference";
@@ -6,7 +6,8 @@ import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
 import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactMarkdown, parseArtifacts, type Artifact } from "@/lib/artifacts/artifacts";
-import type { ArtifactPanel } from "@/components/app/chat/ArtifactPanel";
+import { chatFiles } from "@/lib/artifacts/chatFiles";
+import type { ArtifactPanel, ArtifactVersion } from "@/components/app/chat/ArtifactPanel";
 import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
 import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/chat/skills";
 import { parseQuestions } from "@/lib/messages/questions";
@@ -56,19 +57,85 @@ function libraryOf(key: string, artifact: Artifact, library: ChatLibrary): Artif
   return { path: path ?? "", saved: path !== undefined && library.paths.has(path), saving: library.saving === key, change };
 }
 
-function artifactsOf(id: string, artifacts: Artifact[], library?: ChatLibrary): ArtifactData[] {
+/**
+ * Outside a project, the chat's file a card shows: its path, which version the card is, every version Karui wrote and the
+ * card holding the latest one.
+ */
+type ChatFileView = { path: string; version: number; history: ArtifactVersion[]; latestCard: string };
+
+/** An artifact as a card shows it; `file` only in chats outside a project. */
+export type ShownArtifact = Artifact & { file?: ChatFileView };
+
+// Keyed like the cards: message id and the block's place in it.
+function chatFileViews(messages: ShownMessage[]): Map<string, ChatFileView> {
+  const views = new Map<string, ChatFileView>();
+  for (const file of chatFiles(messages).values()) {
+    const history = file.versions.map((v, i) => ({ number: i + 1, content: v.content, savedAt: messages[v.turn].created_at }));
+    const cardOf = (v: (typeof file.versions)[number]) => `${messages[v.turn].id}:${v.block}`;
+    const latestCard = cardOf(file.versions[file.versions.length - 1]);
+    file.versions.forEach((v, i) => views.set(cardOf(v), { path: file.path, version: i + 1, history, latestCard }));
+  }
+  return views;
+}
+
+function chatOf(artifact: ShownArtifact): ArtifactData["chat"] {
+  if (artifact.reason) return { change: { kind: "failed", reason: artifact.reason } };
+  if (!artifact.file) return undefined;
+  return { version: artifact.file.version, change: artifact.changes ? { kind: "edited", count: artifact.changes } : undefined };
+}
+
+function artifactsOf(id: string, artifacts: ShownArtifact[], library?: ChatLibrary): ArtifactData[] {
   return artifacts.map((a, i) => {
     const key = `${id}:${i}`;
-    return { id: key, title: a.title, type: a.type, edit: a.edit, streaming: a.streaming, library: library && libraryOf(key, a, library) };
+    return {
+      id: key,
+      title: a.title,
+      type: a.type,
+      edit: a.edit,
+      streaming: a.streaming,
+      library: library && libraryOf(key, a, library),
+      chat: library ? undefined : chatOf(a),
+    };
   });
 }
 
-export function artifactPanelOf(id: string | null, current: Artifact | undefined, onClose: () => void): ComponentProps<typeof ArtifactPanel> {
+function panelDataOf(id: string, current: ShownArtifact, versionsBack: number): ComponentProps<typeof ArtifactPanel>["artifact"] {
+  const { title, type, streaming, file } = current;
+  if (!file) return { id, title, type, source: current.content, streaming };
+  const history = file.history.slice(-(versionsBack + 1));
+  const latest = history[history.length - 1];
+  // A new version from Karui starts the panel's own edits afresh.
+  return { id: `chat:${file.path}:${latest.number}`, title, type, source: latest.content, history, openAt: file.version };
+}
+
+/** While a chat's file is open, a new version Karui writes of it opens in its place; an older card opened by hand stays. */
+export function useFollowNewVersions(current: ShownArtifact | undefined, open: (id: string) => void): void {
+  const seen = useRef<{ path: string; latestCard: string } | null>(null);
+  const path = current?.file?.path;
+  const latestCard = current?.file?.latestCard;
+  useEffect(() => {
+    if (!path || !latestCard) {
+      seen.current = null;
+      return;
+    }
+    const before = seen.current;
+    seen.current = { path, latestCard };
+    if (before?.path === path && before.latestCard !== latestCard) open(latestCard);
+  }, [path, latestCard, open]);
+}
+
+/** `versionsBack` limits the versions of a chat's file the panel lists besides the latest. */
+export function artifactPanelOf(
+  id: string | null,
+  current: ShownArtifact | undefined,
+  onClose: () => void,
+  versionsBack = Infinity,
+): ComponentProps<typeof ArtifactPanel> {
   const download = (save: (artifact: Artifact) => void) => (source: string) => {
     if (current) save({ ...current, content: source });
   };
   return {
-    artifact: id && current ? { id, title: current.title, type: current.type, source: current.content, streaming: current.streaming } : null,
+    artifact: id && current ? panelDataOf(id, current, versionsBack) : null,
     onClose,
     onDownloadHtml: download(downloadArtifactHtml),
     onDownloadDoc: download(downloadArtifactDoc),
@@ -113,8 +180,10 @@ export function toAssistant(
   extra: Partial<AssistantData>,
   skills: SkillContext = NO_SKILLS,
   library?: ChatLibrary,
-): { message: AssistantData; artifacts: Artifact[] } {
-  const { artifacts, text } = parseArtifacts(content);
+  files?: ReadonlyMap<string, ChatFileView>,
+): { message: AssistantData; artifacts: ShownArtifact[] } {
+  const { artifacts: parsed, text } = parseArtifacts(content);
+  const artifacts = parsed.map((a, i) => ({ ...a, file: files?.get(`${id}:${i}`) }));
   const stopped = text.includes(STOPPED_NOTICE);
   const { steps, answer, preparation, timeline } = parseMessageBlocks(text.replaceAll(STOPPED_NOTICE, ""));
   const { drafts, text: withoutDrafts } = parseSkillDrafts(answer);
@@ -170,15 +239,16 @@ export function toViewData(
   stream: Streaming,
   skills: SkillContext = NO_SKILLS,
   library?: ChatLibrary,
-): { data: MessageData[]; artifacts: Map<string, Artifact> } {
-  const byId = new Map<string, Artifact>();
+): { data: MessageData[]; artifacts: Map<string, ShownArtifact> } {
+  const byId = new Map<string, ShownArtifact>();
+  const files = library ? undefined : chatFileViews(messages);
   const data: MessageData[] = messages.map((m) => {
     if (m.role === "user") return toUser(m);
     const { message, artifacts } = toAssistant(m.id, m.content, {
       model: modelLabel(m.model, m.provider),
       variant: m.variant,
       decryptionFailed: m.decryptionFailed,
-    }, skills, library);
+    }, skills, library, files);
     artifacts.forEach((a, i) => byId.set(`${m.id}:${i}`, a));
     return message;
   });

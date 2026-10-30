@@ -139,14 +139,25 @@ export function chatModelAsHelper(modelId: string, provider: ProviderId): () => 
   });
 }
 
+const ARTIFACT_CHANGES =
+  'write it whole again with path="<its path>", or send only the changes, all of them in one artifact with one pair per change: <artifact type="markdown" title="…" path="<its path>" mode="edit"><old>exact text from the file</old><new>its replacement</new><old>another exact text</old><new>its replacement</new></artifact>. ' +
+  "Never split the changes to one file into several artifacts. A rewrite carries the complete file: never shorten it with \"…\" or a stand-in for text you keep. Each <old> must appear in the file exactly once, or nothing changes. For a small fix to a long file, send the changes; for a file that was cut short in your context, always send the changes.";
+
 const PROJECT_ARTIFACTS = `<project_artifacts>
 In this project, artifacts are files in its Library: a note (type="markdown") is a .md file, a document (type="html") an .html file. The .md and .html files in <library_index> are notes and documents too, including ones the user added.
 - A new file: write the artifact. Add path="folder/name.md" to choose where; without it, the title names the file.
-- A change to a file that exists: load it with <read> first. Then write it whole again with path="<its path>", or send only the changes, one pair per change: <artifact type="markdown" title="…" path="<its path>" mode="edit"><old>exact text from the file</old><new>its replacement</new></artifact>. Each <old> must appear in the file exactly once, or nothing changes. For a small fix to a long file, send the changes.
-- Every save keeps the version it replaces, and the last three stay, so a change can be undone in the Library.
+- A change to a file that exists: load it with <read> first. Then ${ARTIFACT_CHANGES}
+- Every save keeps the version it replaces, and the last five stay, so a change can be undone in the Library.
 - When the user asks to keep or back up a file's current version, write <keep_version path="<its path>"/>. A kept version stays until the user deletes it.
 After a save, your earlier artifact tags show what happened: saved="created", "updated", "edited", or "failed" with a reason.
 </project_artifacts>`;
+
+const CHAT_ARTIFACTS = `<chat_artifacts>
+In this chat, every note and document you write is a file, named by the path="…" in its tag. Earlier versions in the conversation are replaced by a short note; the latest one is the file.
+- A new file: write the artifact without a path, or add path="name.md" to choose one.
+- A change to a file: ${ARTIFACT_CHANGES} It becomes the file's next version. When its latest version isn't in the conversation, load it from <chat_files_index> with <read> first.
+After an edit, its tag shows what happened: changes="N", or reason="…" when nothing changed.
+</chat_artifacts>`;
 
 // Providers cache the longest common token prefix, so stable blocks go first and per-message memory goes last.
 async function buildSystemPrompt(opts: {
@@ -155,8 +166,10 @@ async function buildSystemPrompt(opts: {
   conversationSummary: string;
   memoryBlock: string;
   memoryScope: "user" | "project";
+  hasChatFiles: boolean;
 
   projectFilesBlock: string;
+  chatFilesBlock: string;
   skillsBlock: string;
   customInstructions: string;
   generateTitle: boolean;
@@ -208,6 +221,8 @@ async function buildSystemPrompt(opts: {
       "\n\n<artifacts_status>Artifacts are currently DISABLED by the user. Do NOT emit any <artifact> block — write the full answer inline in the chat instead.</artifacts_status>";
   } else if (opts.memoryScope === "project") {
     prompt += `\n\n${PROJECT_ARTIFACTS}`;
+  } else if (opts.hasChatFiles) {
+    prompt += `\n\n${CHAT_ARTIFACTS}`;
   }
   if (opts.generateTitle) {
     prompt += opts.generateBrief
@@ -226,6 +241,11 @@ async function buildSystemPrompt(opts: {
       "\n\n<project_files>\nFiles from this project's Library that the user added, picked for this message. Use them as source material and say which file you rely on when it matters.\n" +
       files +
       "\n</project_files>";
+  }
+
+  const chatFiles = opts.chatFilesBlock.trim();
+  if (chatFiles) {
+    prompt += "\n\n<chat_files>\nThe latest versions of files from this chat, loaded for this message.\n" + chatFiles + "\n</chat_files>";
   }
 
   const skills = opts.skillsBlock.trim();
@@ -319,6 +339,8 @@ export interface E2EStreamOptions {
     read: (ids: string[]) => Promise<Map<string, string>>;
     connectorIds: string[];
   };
+  // A normal chat's notes and documents, latest versions only; ids are paths.
+  chatFiles?: { files: LibraryIndexEntry[]; contents: Map<string, string> };
 
   generateBrief?: boolean;
   signal?: AbortSignal;
@@ -397,7 +419,8 @@ export async function streamE2EChat(
   const library = opts.project?.files ?? [];
   const skills = opts.skills ?? [];
   const sendWholeLibrary = library.reduce((n, f) => n + f.size, 0) / 4 <= budget * LIBRARY_WHOLE_SHARE;
-  const index: ContextIndex = { memory: opts.memoryFiles, library: sendWholeLibrary ? [] : library, skills };
+  const chatFiles = opts.chatFiles ?? { files: [], contents: new Map<string, string>() };
+  const index: ContextIndex = { memory: opts.memoryFiles, library: sendWholeLibrary ? [] : library, skills, chat: chatFiles.files };
   const aliases = contextAliases(index);
   const toolsBlock = answerToolsBlock(index, connectorTools, Boolean(opts.memoryWrites));
 
@@ -441,7 +464,13 @@ export async function streamE2EChat(
       conversationSummary: opts.conversationSummary,
       memoryBlock: memoryBlock(opts.memoryFiles, round.selection.memoryIds),
       memoryScope: opts.project ? "project" : "user",
+      hasChatFiles: chatFiles.files.length > 0,
       projectFilesBlock: await projectFilesBlock(round, emit),
+      chatFilesBlock: libraryBlock(
+        chatFiles.files.filter((f) => round.selection.chatIds.includes(f.id)),
+        chatFiles.contents,
+        budget * LIBRARY_PROMPT_SHARE,
+      ),
       skillsBlock: skillsBlock(round, emit),
       customInstructions: opts.customInstructions,
       generateTitle: opts.generateTitle && !round.titleWritten,

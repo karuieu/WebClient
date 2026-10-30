@@ -7,6 +7,7 @@ import { ensureAesKey, getUser } from "@/lib/account/session";
 import { decryptField, encryptField, fieldAad, messageAad } from "@/lib/account/crypto";
 import { getProject, listProjectFiles, listProjectMemory, readProjectFiles } from "@/lib/projects/projects";
 import { saveArtifactsToLibrary } from "@/lib/projects/projectFiles";
+import { chatFileIndex, collapseOldVersions, resolveChatArtifacts } from "@/lib/artifacts/chatFiles";
 import {
   applyLiveMemoryEdit,
   applyProjectMemoryEdit,
@@ -139,10 +140,10 @@ function canBeSummarised(turn: ChatTurn): boolean {
   return turn.content.trim() !== UNDECRYPTABLE_PLACEHOLDER && !(turn.role === "assistant" && isUnverifiedAnswer(turn.content));
 }
 
-// A stopped answer stays a quote, never a verified assistant turn.
+// A stopped answer stays a quote, never a verified assistant turn. Old file versions collapse before the hidden blocks go:
+// stripping drops the notice that marks an unverified answer, whose artifacts are no version.
 function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
-  return turns
-    .filter((turn) => turn.content.trim() !== UNDECRYPTABLE_PLACEHOLDER)
+  return collapseOldVersions(turns.filter((turn) => turn.content.trim() !== UNDECRYPTABLE_PLACEHOLDER))
     .map((turn) => {
       const { content, images } = turnContentForAI(stripHiddenBlocks(turn.content, turn.role), readsImages);
       return {
@@ -155,7 +156,7 @@ function turnsForAI(turns: ChatTurn[], readsImages: boolean) {
 
 // Unverified answers stay out of summaries and memory. Images count as their description; counting base64 would trip the compression gate.
 function modelTurns(messages: HistoryMessage[]): { turns: ChatTurn[]; ids: string[] } {
-  const kept = messages.filter((m) => !m.decryptionFailed && canBeSummarised(m));
+  const kept = collapseOldVersions(messages.filter((m) => !m.decryptionFailed && canBeSummarised(m)));
   return {
     turns: kept.map((m) => ({ role: m.role, content: turnContentForAI(stripHiddenBlocks(m.content, m.role), false).content })),
     ids: kept.map((m) => m.id),
@@ -567,6 +568,7 @@ type TurnContext = Pick<
   | "connectors"
   | "signal"
   | "project"
+  | "chatFiles"
   | "applyMemoryEdit"
 >;
 
@@ -660,6 +662,7 @@ export async function sendMessage(
     memoryWrites: inProject ? inProject.memoryWrites : getMemorySettings().liveWrites,
     applyMemoryEdit: inProject?.applyMemoryEdit,
     project: inProject?.project,
+    chatFiles: inProject ? undefined : chatFileIndex(history),
     connectors: true,
     signal,
   };
@@ -674,10 +677,10 @@ export async function sendMessage(
       : undefined;
 
   const turn = await streamTurn(content, model, since.history, onToken, ctx, webSearch, onActivity, images, files, onTitle, onBrief);
-  // Retries don't save: a retry repeats the answer, not its actions. Neither does an unverified answer.
-  const assistantContent = inProject && !isUnverifiedAnswer(turn.assistantContent)
-    ? await inProject.saveArtifacts(turn.assistantContent)
-    : turn.assistantContent;
+  // A project saves the answer's notes to its Library, unless it is unverified; a normal chat keeps them in the message as file versions.
+  const assistantContent = !inProject
+    ? resolveChatArtifacts(turn.assistantContent, history)
+    : isUnverifiedAnswer(turn.assistantContent) ? turn.assistantContent : await inProject.saveArtifacts(turn.assistantContent);
   return appendMessages(
     chatId,
     key,
@@ -714,13 +717,15 @@ export async function sendIncognitoMessage(
     skills: [],
     customInstructions: "",
     memoryWrites: false,
+    chatFiles: chatFileIndex(history),
     connectors: false,
   };
   const turn = await streamTurn(content, model, history, onToken, ctx, webSearch, onActivity, images, files, undefined);
+  const assistantContent = resolveChatArtifacts(turn.assistantContent, history);
   const base = { chat_id: INCOGNITO_CHAT_ID, model, pinned: false, created_at: new Date().toISOString() };
   return [
     { ...base, id: crypto.randomUUID(), role: "user", content: turn.userContent, tokens: turn.inputTokens },
-    { ...base, id: crypto.randomUUID(), role: "assistant", content: turn.assistantContent, provider: turn.provider, tokens: turn.outputTokens },
+    { ...base, id: crypto.randomUUID(), role: "assistant", content: assistantContent, provider: turn.provider, tokens: turn.outputTokens },
   ];
 }
 
@@ -839,6 +844,7 @@ export async function retryMessage(
       // already ran once, after the user allowed them.
       connectors: false,
       project: inProject?.project,
+      chatFiles: inProject ? undefined : chatFileIndex(history),
       reasoningEffort,
       signal,
     },
@@ -846,6 +852,8 @@ export async function retryMessage(
   );
 
   requireAnswer(response);
+  // Retries don't save to the Library: a retry repeats the answer, not its actions.
+  const saved = inProject ? response : resolveChatArtifacts(response, history);
 
   if (!origVariantGroup) {
     await apiCall<void>(`/api/chats/${chatId}/messages/${origAssistantId}/variant`, {
@@ -856,10 +864,10 @@ export async function retryMessage(
 
   // Return exactly what was saved: ChatWindow finds the new variant by matching m.content to retryResponse.
   await appendMessages(chatId, key, [
-    { role: "assistant", content: response, model, provider, variant_group: variantGroup, tokens: outputTokens },
+    { role: "assistant", content: saved, model, provider, variant_group: variantGroup, tokens: outputTokens },
   ]);
 
-  return response;
+  return saved;
 }
 
 export interface BillingStatus {

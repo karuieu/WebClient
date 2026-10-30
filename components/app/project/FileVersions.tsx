@@ -16,11 +16,9 @@ export type FileVersionItem = {
   savedAt: string;
   size: number;
   kept: boolean;
-  /** In place of the time, e.g. "from Karui". */
-  hint?: string;
 };
 
-/** Every save is the next number; the last three earlier versions rotate, kept ones stay. */
+/** Every save is the next number; the last five earlier versions rotate, kept ones stay. */
 export type FileVersionsProps = {
   /** Earlier versions, newest first; null while loading. */
   list: FileVersionItem[] | null;
@@ -57,10 +55,10 @@ export function versionMenuItems(current: CurrentVersion, canKeep: boolean, p: F
   } else if (p.list === null) {
     items.push({ type: "header", content: note(<><Spinner className="size-3" />Loading earlier versions…</>) });
   } else if (p.list.length === 0) {
-    items.push({ type: "header", content: note("Each save makes a new version. The last three stay here.") });
+    items.push({ type: "header", content: note("Each save makes a new version. The last five stay here.") });
   } else {
     for (const v of p.list) {
-      const hint = v.hint ?? [now && exactStamp(v.savedAt, now), v.kept && "kept"].filter(Boolean).join(" · ");
+      const hint = [now && exactStamp(v.savedAt, now), v.kept && "kept"].filter(Boolean).join(" · ");
       items.push({ label: `v${v.number}`, hint, checked: shown === v.number, onSelect: () => p.onView(v) });
     }
   }

@@ -11,20 +11,34 @@ import { cx } from "@/lib/ui/cx";
 import { ShellContext } from "../AppShell";
 import { exactStamp } from "../ChatsView";
 import { NumberedTextArea } from "../NumberedTextArea";
-import { VersionPaper, VersionPicker, versionMenuItems, type FileVersionItem, type FileVersionsProps } from "../project/FileVersions";
+import { VersionPicker, versionMenuItems, type FileVersionItem, type FileVersionsProps } from "../project/FileVersions";
 
 const WIDTH_KEY = "karui-artifact-width";
 const MIN = 380;
 const DEFAULT = 720;
 // Narrower than this, the header controls move into ⋯.
 const COMPACT_HEADER = 600;
-// Besides the current one; v1, as Karui wrote it, stays too.
-const VERSIONS_BACK = 3;
+// Your own edits kept besides the current one; versions Karui wrote always stay.
+const VERSIONS_BACK = 5;
 // Previews never run scripts; same-origin is only there so the frame can be printed.
 const SANDBOX = "allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox";
 
-/** `id` keeps each artifact's edits apart. */
-export type ArtifactPanelData = { id: string; title: string; type: ArtifactType; source: string; streaming?: boolean };
+/** A version of a chat's file that Karui wrote, numbered from 1; the last one is `source`. */
+export type ArtifactVersion = { number: number; content: string; savedAt: string };
+
+/**
+ * `id` keeps each artifact's edits apart. `history` lists the versions Karui wrote in this chat, oldest first, and `openAt` the
+ * one to show first.
+ */
+export type ArtifactPanelData = {
+  id: string;
+  title: string;
+  type: ArtifactType;
+  source: string;
+  streaming?: boolean;
+  history?: ArtifactVersion[];
+  openAt?: number;
+};
 
 function useDesktop() {
   const [desktop, setDesktop] = React.useState(true);
@@ -110,25 +124,26 @@ type Downloads = {
   exportingGoogleDocs?: boolean;
 };
 
-type Version = { number: number; content: string; savedAt: string };
+type Version = ArtifactVersion & { fromKarui?: boolean };
 
 /** Edits are never saved: they live in the panel while the chat is open, and versions are only for going back. */
 type Edits = { versions: Version[]; draft: string };
 
-function startEdits(source: string): Edits {
-  return { versions: [{ number: 1, content: source, savedAt: new Date().toISOString() }], draft: source };
+function startEdits(artifact: ArtifactPanelData): Edits {
+  const history = artifact.history ?? [{ number: 1, content: artifact.source, savedAt: new Date().toISOString() }];
+  return { versions: history.map((v) => ({ ...v, fromKarui: true })), draft: artifact.source };
 }
 
 function withVersion(edits: Edits, content: string): Edits {
-  const [first, ...rest] = edits.versions;
   const current = edits.versions[edits.versions.length - 1];
   if (content === current.content) return { ...edits, draft: content };
   const next = { number: current.number + 1, content, savedAt: new Date().toISOString() };
-  return { versions: [first, ...rest.slice(-VERSIONS_BACK), next], draft: content };
+  const yours = edits.versions.filter((v) => !v.fromKarui);
+  return { versions: [...edits.versions.filter((v) => v.fromKarui), ...yours.slice(-VERSIONS_BACK), next], draft: content };
 }
 
 function asItem(v: Version): FileVersionItem {
-  return { id: String(v.number), number: v.number, savedAt: v.savedAt, size: new Blob([v.content]).size, kept: false, hint: v.number === 1 ? "from Karui" : undefined };
+  return { id: String(v.number), number: v.number, savedAt: v.savedAt, size: new Blob([v.content]).size, kept: false };
 }
 
 function PanelBody({
@@ -154,7 +169,7 @@ function PanelBody({
   mobile?: boolean;
 }) {
   const [tab, setTab] = React.useState<"preview" | "edit">("preview");
-  const [viewing, setViewing] = React.useState<number | null>(null);
+  const [viewing, setViewing] = React.useState<number | null>(artifact.openAt ?? null);
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const compact = useNarrow(rootRef, COMPACT_HEADER);
@@ -164,13 +179,14 @@ function PanelBody({
   const ready = !artifact.streaming;
   const note = artifact.type === "markdown";
   const writing = note ? "Writing note…" : "Writing document…";
-  const edits = saved ?? startEdits(artifact.source);
+  const edits = saved ?? startEdits(artifact);
   const current = edits.versions[edits.versions.length - 1];
-  const shownVersion = viewing === null ? null : (edits.versions.find((v) => v.number === viewing) ?? null);
+  const shownVersion = viewing === null || viewing === current.number ? null : (edits.versions.find((v) => v.number === viewing) ?? null);
   const content = shownVersion ? shownVersion.content : edits.draft;
+  const showsPaper = ready && (tab === "preview" || !!shownVersion);
   const document = React.useMemo(
-    () => (ready && tab === "preview" && !shownVersion ? toDocument({ title: artifact.title, type: artifact.type, content: edits.draft }) : ""),
-    [ready, tab, shownVersion, artifact.title, artifact.type, edits.draft],
+    () => (showsPaper ? toDocument({ title: artifact.title, type: artifact.type, content }) : ""),
+    [showsPaper, artifact.title, artifact.type, content],
   );
 
   const commit = () => edits.draft !== current.content && onEdits(withVersion(edits, edits.draft));
@@ -210,7 +226,6 @@ function PanelBody({
       : [{ label: "Export to Google Docs", onSelect: () => onExportGoogleDocs(content) }] : []),
   ];
   const print = () => frameRef.current?.contentWindow?.print();
-  const canPrint = ready && (tab === "preview" || !!shownVersion);
   const menuItems: MenuItem[] = [
     ...(!shownVersion
       ? [
@@ -222,7 +237,7 @@ function PanelBody({
       : []),
     ...versionMenuItems(currentVersion, false, versions, now),
     { type: "separator" },
-    ...(canPrint ? [{ label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: print }, { type: "separator" as const }] : []),
+    ...(showsPaper ? [{ label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: print }, { type: "separator" as const }] : []),
     { type: "header", content: <p className="text-label text-muted">Download</p> },
     ...downloads,
   ];
@@ -230,8 +245,21 @@ function PanelBody({
   const subtitle = artifact.streaming
     ? writing
     : shownVersion
-      ? [`v${shownVersion.number}`, shownVersion.number === 1 ? "from Karui" : now && exactStamp(shownVersion.savedAt, now), "read only"].filter(Boolean).join(" · ")
+      ? [`v${shownVersion.number}`, now && exactStamp(shownVersion.savedAt, now), "read only"].filter(Boolean).join(" · ")
       : [current.number > 1 || compact ? `v${current.number}` : null, note ? "Markdown" : "HTML · scripts off"].filter(Boolean).join(" · ");
+
+  // An earlier version can't be edited, so Restore takes the place of Preview / Edit.
+  const restore = shownVersion && (
+    <button
+      type="button"
+      onClick={() => versions.onRestore(asItem(shownVersion))}
+      title={`Makes v${shownVersion.number} the newest version, v${current.number + 1}`}
+      className="mx-1 flex h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full bg-inverse px-3 text-[12.5px] font-medium text-on-inverse transition-[opacity,transform] duration-150 hover:opacity-85 active:scale-[0.97]"
+    >
+      <RotateCcw className="size-3" />
+      Restore
+    </button>
+  );
 
   return (
     <div
@@ -253,7 +281,7 @@ function PanelBody({
         {ready && !compact && (
           <>
             <VersionPicker current={currentVersion} canKeep={false} p={versions} />
-            {!shownVersion && (
+            {restore ?? (
               <Segmented
                 id={mobile ? "artifact-view-mobile" : "artifact-view"}
                 label="View"
@@ -277,7 +305,7 @@ function PanelBody({
         {ready && !compact && (
           <>
             {/* Disabled rather than hidden while editing, so the header doesn't shift. */}
-            <IconButton label={canPrint ? "Print or save as PDF" : "Switch to Preview to print"} onClick={print} disabled={!canPrint}>
+            <IconButton label={showsPaper ? "Print or save as PDF" : "Switch to Preview to print"} onClick={print} disabled={!showsPaper}>
               <Printer className="size-[17px]" />
             </IconButton>
             <Menu label="Download" placement="bottom-end" items={downloads}>
@@ -313,17 +341,7 @@ function PanelBody({
             )}
           </Menu>
         )}
-        {shownVersion && (
-          <button
-            type="button"
-            onClick={() => versions.onRestore(asItem(shownVersion))}
-            title={`Makes v${shownVersion.number} the newest version, v${current.number + 1}`}
-            className="ml-1 flex h-7 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full bg-inverse px-3 text-[12.5px] font-medium text-on-inverse transition-[opacity,transform] duration-150 hover:opacity-85 active:scale-[0.97]"
-          >
-            <RotateCcw className="size-3" />
-            Restore
-          </button>
-        )}
+        {compact && restore}
         <IconButton label="Close" onClick={onClose}>
           <X className="size-[18px]" />
         </IconButton>
@@ -334,11 +352,10 @@ function PanelBody({
           <div className="absolute inset-0 p-3 sm:p-5">
             <WritingSkeleton label={writing} />
           </div>
-        ) : shownVersion && versions.viewing ? (
-          <VersionPaper name={artifact.title} type={artifact.type} viewing={versions.viewing} onRetry={() => {}} frameRef={frameRef} />
-        ) : tab === "preview" ? (
+        ) : showsPaper ? (
+          // An earlier version sits on the same paper as the current one, so switching doesn't move the page.
           <div className="absolute inset-0 p-3 sm:p-5">
-            <DocumentPaper title={artifact.title} document={document} frameRef={frameRef} />
+            <DocumentPaper title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} frameRef={frameRef} />
           </div>
         ) : (
           <NumberedTextArea
@@ -469,7 +486,7 @@ export function ArtifactPanel({
               </div>
             )}
             <div className={cx("h-full", dragging && "pointer-events-none select-none")} style={{ width: expanded ? "100%" : width }}>
-              <PanelBody key={common.artifact.id} {...common} expanded={expanded} onToggleExpand={() => setExpanded((x) => !x)} />
+              <PanelBody key={`${common.artifact.id}:${common.artifact.openAt}`} {...common} expanded={expanded} onToggleExpand={() => setExpanded((x) => !x)} />
             </div>
           </motion.aside>
         )}
@@ -488,7 +505,7 @@ export function ArtifactPanel({
             transition={{ type: "spring", bounce: 0, duration: 0.45 }}
             className="fixed inset-0 z-50 overflow-hidden pt-[env(safe-area-inset-top)]"
           >
-            <PanelBody key={common.artifact.id} {...common} mobile />
+            <PanelBody key={`${common.artifact.id}:${common.artifact.openAt}`} {...common} mobile />
           </motion.div>
         )}
       </AnimatePresence>

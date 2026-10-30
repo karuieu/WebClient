@@ -13,7 +13,10 @@ import { ChatView } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import type { Costume } from "@/components/kit/icons";
 import { useComposer } from "./useComposer";
-import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, toViewData, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, toViewData, useFollowNewVersions, type Streaming } from "./messageView";
+
+// Every version lives only in this tab's memory, so the panel lists the latest one and three before it.
+const INCOGNITO_VERSIONS_BACK = 3;
 
 /** Keep incognito messages only in component memory; navigation, reload, and tab closure discard the conversation. */
 export function IncognitoChat({ first, halloween }: { first: FirstMessage; halloween?: Costume }): React.JSX.Element {
@@ -91,6 +94,7 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
 
   const { data, artifacts } = React.useMemo(() => toViewData(messages, stream), [messages, stream]);
   const current = openArtifact ? artifacts.get(openArtifact) : undefined;
+  useFollowNewVersions(current, setOpenArtifact);
   const [dismissedQuestions, setDismissedQuestions] = React.useState<string | null>(null);
   const asking = pendingQuestions(data, dismissedQuestions);
 
@@ -132,7 +136,7 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
           const art = artifacts.get(a.id);
           if (art) downloadArtifact(art);
         }}
-        artifactPanel={artifactPanelOf(openArtifact, current, () => setOpenArtifact(null))}
+        artifactPanel={artifactPanelOf(openArtifact, current, () => setOpenArtifact(null), INCOGNITO_VERSIONS_BACK)}
       />
     </div>
   );
