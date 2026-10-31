@@ -9,7 +9,7 @@ export interface ChatImage {
   description?: string;
 }
 
-export const MAX_IMAGES_PER_MESSAGE = 4;
+export const MAX_IMAGES_PER_MESSAGE = 5;
 const MAX_IMAGE_DATAURL_CHARS = 6_000_000;
 
 const MAX_IMAGE_DIMENSION = 2048;
