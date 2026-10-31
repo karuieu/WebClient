@@ -422,7 +422,7 @@ export async function readProjectFiles(projectId: string, files: Pick<LibraryFil
   return out;
 }
 
-/** `keepVersion` moves the content being replaced into the file's versions (notes and documents). */
+/** `keepVersion` moves the content being replaced into the file's versions (notes, documents and code). */
 export async function updateProjectFile(
   projectId: string,
   file: Pick<LibraryFileMeta, "id" | "updated_at">,

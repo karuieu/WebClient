@@ -5,7 +5,7 @@ import { isProviderVerified } from "@/lib/chat/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
-import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactMarkdown, parseArtifacts, type Artifact } from "@/lib/artifacts/artifacts";
+import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, parseArtifacts, type Artifact } from "@/lib/artifacts/artifacts";
 import { chatFiles } from "@/lib/artifacts/chatFiles";
 import type { ArtifactPanel, ArtifactVersion } from "@/components/app/chat/ArtifactPanel";
 import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
@@ -91,6 +91,7 @@ function artifactsOf(id: string, artifacts: ShownArtifact[], library?: ChatLibra
       id: key,
       title: a.title,
       type: a.type,
+      path: a.file?.path ?? a.path,
       edit: a.edit,
       streaming: a.streaming,
       library: library && libraryOf(key, a, library),
@@ -101,11 +102,11 @@ function artifactsOf(id: string, artifacts: ShownArtifact[], library?: ChatLibra
 
 function panelDataOf(id: string, current: ShownArtifact, versionsBack: number): ComponentProps<typeof ArtifactPanel>["artifact"] {
   const { title, type, streaming, file } = current;
-  if (!file) return { id, title, type, source: current.content, streaming };
+  if (!file) return { id, title, type, source: current.content, path: current.path, streaming };
   const history = file.history.slice(-(versionsBack + 1));
   const latest = history[history.length - 1];
   // A new version from Karui starts the panel's own edits afresh.
-  return { id: `chat:${file.path}:${latest.number}`, title, type, source: latest.content, history, openAt: file.version };
+  return { id: `chat:${file.path}:${latest.number}`, title, type, source: latest.content, path: file.path, history, openAt: file.version };
 }
 
 /** While a chat's file is open, a new version Karui writes of it opens in its place; an older card opened by hand stays. */
@@ -139,7 +140,7 @@ export function artifactPanelOf(
     onClose,
     onDownloadHtml: download(downloadArtifactHtml),
     onDownloadDoc: download(downloadArtifactDoc),
-    onDownloadMarkdown: download(downloadArtifactMarkdown),
+    onDownloadSource: download(downloadArtifactSource),
   };
 }
 

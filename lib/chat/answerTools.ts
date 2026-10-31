@@ -163,7 +163,7 @@ const SKILL_RULES =
   `matches what the latest message asks for, at most ${MAX_SKILLS_PER_TURN}. Load none when no skill clearly fits: a skill loaded by mistake changes how the whole answer is written.`;
 
 const CHAT_FILE_RULES =
-  "<chat_files_index> lists the notes and documents written earlier in this chat (id, path, size, title). The latest version of each is usually in the conversation above; " +
+  "<chat_files_index> lists the notes, documents and code files written earlier in this chat (id, path, size, title). The latest version of each is usually in the conversation above; " +
   "load one only when you need it and its latest version isn't there.";
 
 const CALL_FORMAT = '<connector_call>{"name":"<tool name>","arguments":{...}}</connector_call>';

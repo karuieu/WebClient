@@ -5,10 +5,11 @@ import { Bookmark, ChevronDown } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Spinner } from "@/components/kit/Spinner";
 import { useNow } from "@/components/kit/useMounted";
-import { toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
+import { codeLanguageOf, toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { exactStamp } from "../ChatsView";
 import { DocumentPaper } from "../chat/ArtifactPanel";
+import { NumberedTextArea } from "../NumberedTextArea";
 
 export type FileVersionItem = {
   id: string;
@@ -110,7 +111,7 @@ export function VersionPaper({
   frameRef?: React.Ref<HTMLIFrameElement>;
 }) {
   const { version, content } = viewing;
-  const document = React.useMemo(() => (content === null ? "" : toDocument({ title: name, type, content })), [content, name, type]);
+  const document = React.useMemo(() => (content === null || type === "code" ? "" : toDocument({ title: name, type, content })), [content, name, type]);
 
   if (viewing.error) {
     return (
@@ -131,6 +132,9 @@ export function VersionPaper({
       </div>
     );
   }
+  if (type === "code") return (
+    <NumberedTextArea label={`${name}, v${version.number}`} value={content} readOnly language={codeLanguageOf(name).prism} />
+  );
   return (
     <div className="min-h-0 flex-1 p-3">
       <DocumentPaper title={`${name}, v${version.number}`} document={document} frameRef={frameRef} />

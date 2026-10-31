@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Ellipsis,
   Expand,
+  FileBraces,
   FileCode,
   FileText,
   Folder,
@@ -30,7 +31,7 @@ import { Segmented } from "@/components/kit/Segmented";
 import { Spinner } from "@/components/kit/Spinner";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
 import { Tooltip } from "@/components/kit/Tooltip";
-import { artifactTypeOf, toDocument } from "@/lib/artifacts/artifacts";
+import { artifactTypeOf, codeLanguageOf, toDocument } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { exactStamp, groupOf, stamp } from "../ChatsView";
 import { DocumentPaper } from "../chat/ArtifactPanel";
@@ -310,7 +311,7 @@ function allFiles(n: TreeNode): LibraryFile[] {
 
 const indent = (depth: number) => ({ paddingLeft: `${12 + depth * 14}px` });
 
-const FILE_ICON = { markdown: NotebookText, html: FileCode } as const;
+const FILE_ICON = { markdown: NotebookText, html: FileCode, code: FileBraces } as const;
 
 function FileRow({ file, depth, p }: { file: LibraryFile; depth: number; p: Internal }) {
   const name = file.path.split("/").pop() ?? file.path;
@@ -624,10 +625,12 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
   const field = "w-full bg-transparent outline-none transition-colors duration-150 placeholder:text-subtle focus:bg-elevated";
 
   const type = memory ? null : artifactTypeOf((item.file as LibraryFile).path);
-  const [view, setView] = React.useState<"preview" | "edit">(type ? "preview" : "edit");
+  // Code has no paper: it opens straight in the editor.
+  const paged = type !== null && type !== "code";
+  const [view, setView] = React.useState<"preview" | "edit">(paged ? "preview" : "edit");
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const loaded = item.kind === "file" && item.content !== null && !item.error;
-  const previewing = type !== null && view === "preview" && loaded;
+  const previewing = paged && view === "preview" && loaded;
   const document = React.useMemo(
     () => (previewing ? toDocument({ title: name ?? "", type, content: draft.content }) : ""),
     [previewing, type, name, draft.content],
@@ -643,7 +646,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
   const now = useNow();
   const toolbar = type !== null && loaded;
   const menuItems: MenuItem[] = [
-    ...(toolbar && compact && !viewing
+    ...(toolbar && paged && compact && !viewing
       ? [
           { type: "header" as const, content: <p className="text-label text-muted">View</p> },
           { label: "Preview", checked: view === "preview", onSelect: () => setView("preview") },
@@ -652,7 +655,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
         ]
       : []),
     ...(compact && versions ? [...versionMenuItems(current, !dirty, versions, now), { type: "separator" as const }] : []),
-    ...(previewing || viewing
+    ...(previewing || (viewing && paged)
       ? [
           { label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: () => frameRef.current?.contentWindow?.print() },
           { type: "separator" as const },
@@ -717,7 +720,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
         {toolbar && !compact && (
           <>
             {versions && <VersionPicker current={current} canKeep={!dirty} p={versions} />}
-            {!viewing && (
+            {!viewing && paged && (
               <Segmented
                 id={`library-view-${p.variant}`}
                 label="View"
@@ -863,6 +866,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
           label={`Content of ${name}`}
           value={draft.content}
           spellCheck={type === "markdown"}
+          language={type === "code" ? codeLanguageOf(name).prism : undefined}
           onChange={(content) => setDraft((d) => ({ ...d, content }))}
         />
       )}

@@ -331,7 +331,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const googleDocsExport = useGoogleDocsExport(openArtifact, current);
   useFollowNewVersions(current, setOpenArtifact);
 
-  // A note or document in the Library opens there, at its latest version; one that isn't opens from the message.
+  // An artifact in the Library opens there, at its latest version; one that isn't opens from the message.
   const openArtifactData = (a: ArtifactData) => {
     if (!a.library?.saved) return setOpenArtifact(a.id);
     setOpenArtifact(null);

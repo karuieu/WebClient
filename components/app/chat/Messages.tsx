@@ -17,7 +17,7 @@ import {
 } from "@/components/kit/icons";
 import { LogoMark } from "@/components/kit/Logo";
 import { Spinner } from "@/components/kit/Spinner";
-import type { ArtifactType } from "@/lib/artifacts/artifacts";
+import { codeLanguageOf, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { Markdown } from "./Markdown";
 import { Processing, type ProcessingStep } from "./Processing";
@@ -38,6 +38,8 @@ export type ArtifactData = {
   id: string;
   title: string;
   type: ArtifactType;
+  /** For code, the file's extension names its language. */
+  path?: string;
   streaming?: boolean;
   /** An edit carries only the changes, not a document: there's nothing to download or open from the message. */
   edit?: boolean;
@@ -192,12 +194,20 @@ function changeStatus(change: ArtifactChange, path: string): string {
   return `Edited · ${change.count === 1 ? "1 change" : `${change.count} changes`} · ${path}`;
 }
 
-function artifactStatus({ type, streaming, edit, library, chat }: ArtifactData): string {
-  const kind = type === "markdown" ? "Note" : "Document";
+const KIND = { markdown: "Note", html: "Document", code: "Code" } as const;
+
+function formatOf({ type, path }: ArtifactData): string {
+  if (type === "code") return codeLanguageOf(path).label;
+  return type === "markdown" ? "Markdown" : "HTML";
+}
+
+function artifactStatus(artifact: ArtifactData): string {
+  const { type, streaming, edit, library, chat } = artifact;
+  const kind = KIND[type];
   if (streaming) return library?.change ? "Changing the Library file…" : `${edit ? "Changing" : "Writing"} ${kind.toLowerCase()}…`;
   if (chat?.change) return changeStatus(chat.change, `v${chat.version}`);
   if (chat?.version && chat.version > 1) return `${kind} · v${chat.version}`;
-  if (!library) return type === "markdown" ? "Note · Markdown" : "Document · HTML";
+  if (!library) return `${kind} · ${formatOf(artifact)}`;
   if (library.change) return changeStatus(library.change, library.path);
   if (library.saving) return "Saving to the Library…";
   return library.saved ? `In the Library · ${library.path}` : `${kind} · not in the Library`;
@@ -227,13 +237,24 @@ function ArtifactCard({
   const canOpen = onOpen && !chatFailed && (!(artifact.edit || library?.change) || library?.saved);
   return (
     <div className="my-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-line bg-elevated p-3 pr-4 shadow-soft">
-      <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-bg p-2">
-        <span className="h-1.5 w-3/4 rounded-full bg-line-strong" />
-        <span className="h-1 w-full rounded-full bg-line" />
-        <span className="h-1 w-5/6 rounded-full bg-line" />
-        <span className="h-1 w-full rounded-full bg-line" />
-        <span className="h-1 w-2/3 rounded-full bg-line" />
-      </div>
+      {artifact.type === "code" ? (
+        <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-bg p-2">
+          <span className="h-1 w-1/2 rounded-full bg-line-strong" />
+          <span className="ml-2 h-1 w-2/3 rounded-full bg-line" />
+          <span className="ml-2 h-1 w-1/2 rounded-full bg-line" />
+          <span className="ml-4 h-1 w-1/3 rounded-full bg-line" />
+          <span className="h-1 w-2/5 rounded-full bg-line-strong" />
+          <span className="ml-2 h-1 w-3/5 rounded-full bg-line" />
+        </div>
+      ) : (
+        <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-bg p-2">
+          <span className="h-1.5 w-3/4 rounded-full bg-line-strong" />
+          <span className="h-1 w-full rounded-full bg-line" />
+          <span className="h-1 w-5/6 rounded-full bg-line" />
+          <span className="h-1 w-full rounded-full bg-line" />
+          <span className="h-1 w-2/3 rounded-full bg-line" />
+        </div>
+      )}
       <div className="min-w-[9rem] flex-1">
         <p className="truncate text-[14.5px] font-medium tracking-[-0.01em]">{artifact.title}</p>
         <p

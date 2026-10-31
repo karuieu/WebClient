@@ -140,12 +140,12 @@ export function chatModelAsHelper(modelId: string, provider: ProviderId): () => 
 }
 
 const ARTIFACT_CHANGES =
-  'write it whole again with path="<its path>", or send only the changes, all of them in one artifact with one pair per change: <artifact type="markdown" title="…" path="<its path>" mode="edit"><old>exact text from the file</old><new>its replacement</new><old>another exact text</old><new>its replacement</new></artifact>. ' +
+  'write it whole again with path="<its path>", or send only the changes, all of them in one artifact with one pair per change: <artifact type="<its type>" title="…" path="<its path>" mode="edit"><old>exact text from the file</old><new>its replacement</new><old>another exact text</old><new>its replacement</new></artifact>. ' +
   "Never split the changes to one file into several artifacts. A rewrite carries the complete file: never shorten it with \"…\" or a stand-in for text you keep. Each <old> must appear in the file exactly once, or nothing changes. For a small fix to a long file, send the changes; for a file that was cut short in your context, always send the changes.";
 
 const PROJECT_ARTIFACTS = `<project_artifacts>
-In this project, artifacts are files in its Library: a note (type="markdown") is a .md file, a document (type="html") an .html file. The .md and .html files in <library_index> are notes and documents too, including ones the user added.
-- A new file: write the artifact. Add path="folder/name.md" to choose where; without it, the title names the file.
+In this project, artifacts are files in its Library: a note (type="markdown") is a .md file, a document (type="html") an .html file, and code (type="code") a source file such as .py or .ts. The .md, .html and source files in <library_index> are notes, documents and code too, including ones the user added.
+- A new file: write the artifact. Add path="folder/name.md" to choose where; without it, the title names the file. Code always has a path with its extension, such as path="scripts/backup.py".
 - A change to a file that exists: load it with <read> first. Then ${ARTIFACT_CHANGES}
 - Every save keeps the version it replaces, and the last five stay, so a change can be undone in the Library.
 - When the user asks to keep or back up a file's current version, write <keep_version path="<its path>"/>. A kept version stays until the user deletes it.
@@ -153,8 +153,8 @@ After a save, your earlier artifact tags show what happened: saved="created", "u
 </project_artifacts>`;
 
 const CHAT_ARTIFACTS = `<chat_artifacts>
-In this chat, every note and document you write is a file, named by the path="…" in its tag. Earlier versions in the conversation are replaced by a short note; the latest one is the file.
-- A new file: write the artifact without a path, or add path="name.md" to choose one.
+In this chat, every note, document and code file you write is a file, named by the path="…" in its tag. Earlier versions in the conversation are replaced by a short note; the latest one is the file.
+- A new file: write the artifact without a path, or add path="name.md" to choose one. Code always has a path with its extension, such as path="backup.py".
 - A change to a file: ${ARTIFACT_CHANGES} It becomes the file's next version. When its latest version isn't in the conversation, load it from <chat_files_index> with <read> first.
 After an edit, its tag shows what happened: changes="N", or reason="…" when nothing changed.
 </chat_artifacts>`;
@@ -339,7 +339,7 @@ export interface E2EStreamOptions {
     read: (ids: string[]) => Promise<Map<string, string>>;
     connectorIds: string[];
   };
-  // A normal chat's notes and documents, latest versions only; ids are paths.
+  // A normal chat's files, latest versions only; ids are paths.
   chatFiles?: { files: LibraryIndexEntry[]; contents: Map<string, string> };
 
   generateBrief?: boolean;

@@ -28,8 +28,8 @@ export function setArtifactsEnabled(enabled: boolean): void {
   } catch {}
 }
 
-/** A note is Markdown; a document is HTML. */
-export type ArtifactType = "markdown" | "html";
+/** A note is Markdown, a document is HTML, and code is a program's source file. */
+export type ArtifactType = "markdown" | "html" | "code";
 
 const SAVED = ["created", "updated", "edited", "failed"] as const;
 export type SavedAs = (typeof SAVED)[number];
@@ -49,11 +49,53 @@ export interface Artifact {
   streaming?: boolean;
 }
 
+/** Code files by extension: the Prism language that colours them and the name people know it by. */
+const CODE_LANGUAGES: Record<string, { prism: string; label: string }> = {
+  py: { prism: "python", label: "Python" },
+  ts: { prism: "typescript", label: "TypeScript" },
+  tsx: { prism: "tsx", label: "TSX" },
+  js: { prism: "javascript", label: "JavaScript" },
+  jsx: { prism: "jsx", label: "JSX" },
+  mjs: { prism: "javascript", label: "JavaScript" },
+  json: { prism: "json", label: "JSON" },
+  yaml: { prism: "yaml", label: "YAML" },
+  yml: { prism: "yaml", label: "YAML" },
+  toml: { prism: "toml", label: "TOML" },
+  sh: { prism: "bash", label: "Shell" },
+  go: { prism: "go", label: "Go" },
+  rs: { prism: "rust", label: "Rust" },
+  java: { prism: "java", label: "Java" },
+  kt: { prism: "kotlin", label: "Kotlin" },
+  swift: { prism: "swift", label: "Swift" },
+  c: { prism: "c", label: "C" },
+  h: { prism: "c", label: "C" },
+  cpp: { prism: "cpp", label: "C++" },
+  cs: { prism: "csharp", label: "C#" },
+  rb: { prism: "ruby", label: "Ruby" },
+  php: { prism: "php", label: "PHP" },
+  sql: { prism: "sql", label: "SQL" },
+  css: { prism: "css", label: "CSS" },
+  txt: { prism: "text", label: "Plain text" },
+};
+
+function extensionOf(path: string): string {
+  const dot = path.lastIndexOf(".");
+  return dot === -1 ? "" : path.slice(dot + 1).toLowerCase();
+}
+
 export function artifactTypeOf(path: string): ArtifactType | null {
-  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  const ext = extensionOf(path);
   if (ext === "md" || ext === "markdown") return "markdown";
   if (ext === "html" || ext === "htm") return "html";
-  return null;
+  return ext in CODE_LANGUAGES ? "code" : null;
+}
+
+export type CodeLanguage = { ext: string; prism: string; label: string };
+
+/** Unknown extensions are plain text saved as .txt. */
+export function codeLanguageOf(path: string | undefined): CodeLanguage {
+  const ext = extensionOf(path ?? "");
+  return ext in CODE_LANGUAGES ? { ext, ...CODE_LANGUAGES[ext] } : { ext: "txt", ...CODE_LANGUAGES.txt };
 }
 
 const DEFAULT_TITLE = "Document";
@@ -71,13 +113,22 @@ export function tagAttr(raw: string, name: string): string {
     .trim();
 }
 
+// Blocks without a type predate notes and are HTML.
+function typeOf(attr: string): ArtifactType {
+  const type = attr.toLowerCase();
+  return type === "markdown" || type === "code" ? type : "html";
+}
+
+// Models wrap code in a Markdown fence out of habit; the fence isn't part of the file.
+const CODE_FENCE = /^```[\w+#.-]*[^\S\n]*\n([\s\S]*?)\n?```$/;
+
 function fromTag(rawAttrs: string, content: string): Artifact {
   const saved = SAVED.find((s) => s === tagAttr(rawAttrs, "saved"));
+  const type = typeOf(tagAttr(rawAttrs, "type"));
   return {
     title: tagAttr(rawAttrs, "title") || DEFAULT_TITLE,
-    // Blocks without a type predate notes and are HTML.
-    type: tagAttr(rawAttrs, "type").toLowerCase() === "markdown" ? "markdown" : "html",
-    content,
+    type,
+    content: type === "code" ? content.replace(CODE_FENCE, "$1") : content,
     edit: tagAttr(rawAttrs, "mode").toLowerCase() === "edit" || undefined,
     path: tagAttr(rawAttrs, "path") || undefined,
     saved,
@@ -119,13 +170,18 @@ export type BlockWrite =
 
 export const TEXT_NOT_FOUND = "the text to replace wasn't found";
 const SHORTENED = "the note was shortened instead of written out";
+const CODE_SHORTENED = "the code was shortened instead of written out";
 
 // A line such as "… full content …", "...rest unchanged..." or "<!-- ... -->" stands for text the model left out.
 const PLACEHOLDER_LINE = /^[\s[(<!-]*(?:\.{3}|…)[^.…\n]{0,40}(?:\.{3}|…)?[\s\])>-]*$/m;
+// In code a bare "..." is real (Python's Ellipsis, stubs), so only a comment with words after the dots counts:
+// "# ... rest unchanged", "// … existing code …", "/* ... */ keep".
+const CODE_PLACEHOLDER_LINE = /^\s*(?:#|\/\/|\/\*|--|<!--)\s*(?:\.{3}|…)\s*\p{L}[^\n]{0,60}$/mu;
 
 /** A rewrite of an existing file that leaves its text out: it would wipe the file, so it is refused. */
-function isShortened(content: string, current: string | undefined): boolean {
-  return PLACEHOLDER_LINE.test(content) && (current === undefined || content.length < current.length);
+function isShortened(artifact: Artifact, current: string | undefined): boolean {
+  const placeholder = artifact.type === "code" ? CODE_PLACEHOLDER_LINE : PLACEHOLDER_LINE;
+  return placeholder.test(artifact.content) && (current === undefined || artifact.content.length < current.length);
 }
 
 /**
@@ -159,8 +215,8 @@ export function planWrites(closed: Artifact[], files: ReadonlyMap<string, string
       write = { kind: "write", path: target, content: edited, existed: before?.existed ?? true, changes };
     } else {
       const existing = target !== undefined && (before !== undefined || files.has(target));
-      if (existing && isShortened(artifact.content, before ? before.content : files.get(target))) {
-        writes.push({ kind: "failed", path: target, reason: SHORTENED });
+      if (existing && isShortened(artifact, before ? before.content : files.get(target))) {
+        writes.push({ kind: "failed", path: target, reason: artifact.type === "code" ? CODE_SHORTENED : SHORTENED });
         continue;
       }
       const path = existing ? target : libraryPath(artifact, taken);
@@ -286,6 +342,7 @@ function bodyHtml(artifact: Pick<Artifact, "type" | "content">): string {
   return stripActiveContent(artifact.type === "markdown" ? markdownToHtml(artifact.content) : artifact.content);
 }
 
+/** Notes and documents only: code is never shown on paper. */
 export function toDocument(artifact: Pick<Artifact, "title" | "type" | "content">): string {
   const html = bodyHtml(artifact);
 
@@ -334,6 +391,11 @@ export function titleSlug(title: string): string {
 }
 
 const ARTIFACT_EXTENSION = { markdown: "md", html: "html" } as const;
+
+// Code keeps the extension it was given, since that names its language.
+function extensionFor(artifact: Pick<Artifact, "type">, name: string | undefined): string {
+  return artifact.type === "code" ? codeLanguageOf(name).ext : ARTIFACT_EXTENSION[artifact.type];
+}
 // Characters file systems refuse, so a downloaded Library keeps its names.
 const UNSAFE_PATH_CHARS = /[\\:*?"<>|]/g;
 
@@ -346,7 +408,7 @@ function requestedPath(artifact: Pick<Artifact, "title" | "type" | "path">): { b
     .filter((p) => p && p !== "." && p !== "..");
   const last = raw.trimEnd().endsWith("/") ? undefined : parts.pop();
   const name = last?.replace(/\.[^.]+$/, "") || titleSlug(artifact.title) || "untitled";
-  return { base: [...parts, name].join("/"), ext: ARTIFACT_EXTENSION[artifact.type] };
+  return { base: [...parts, name].join("/"), ext: extensionFor(artifact, last) };
 }
 
 /** Where the artifact asks to be: its cleaned-up `path`, or its title. */
@@ -380,13 +442,20 @@ function downloadBlob(blob: Blob, name: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export function downloadArtifactMarkdown(artifact: Artifact): void {
-  downloadBlob(new Blob([artifact.content], { type: "text/markdown;charset=utf-8" }), fileName(artifact.title, "md"));
+/** The file as written: Markdown for a note, the source file under its own name for code. */
+export function downloadArtifactSource(artifact: Artifact): void {
+  if (artifact.type !== "code") {
+    downloadBlob(new Blob([artifact.content], { type: "text/markdown;charset=utf-8" }), fileName(artifact.title, "md"));
+    return;
+  }
+  const name = artifact.path?.split("/").pop();
+  const known = name && artifactTypeOf(name) === "code";
+  downloadBlob(new Blob([artifact.content], { type: "text/plain;charset=utf-8" }), known ? name : fileName(artifact.title, "txt"));
 }
 
 export function downloadArtifact(artifact: Artifact): void {
-  if (artifact.type === "markdown") downloadArtifactMarkdown(artifact);
-  else downloadArtifactHtml(artifact);
+  if (artifact.type === "html") downloadArtifactHtml(artifact);
+  else downloadArtifactSource(artifact);
 }
 
 export function downloadArtifactHtml(artifact: Artifact): void {

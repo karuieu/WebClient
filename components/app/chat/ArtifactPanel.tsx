@@ -6,7 +6,7 @@ import { Download, Ellipsis, Expand, Printer, RotateCcw, Shrink, X } from "@/com
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Segmented } from "@/components/kit/Segmented";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
-import { toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
+import { codeLanguageOf, toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { ShellContext } from "../AppShell";
 import { exactStamp } from "../ChatsView";
@@ -35,6 +35,8 @@ export type ArtifactPanelData = {
   title: string;
   type: ArtifactType;
   source: string;
+  /** For code, the file's extension names its language. */
+  path?: string;
   streaming?: boolean;
   history?: ArtifactVersion[];
   openAt?: number;
@@ -119,7 +121,8 @@ function WritingSkeleton({ label }: { label: string }) {
 type Downloads = {
   onDownloadHtml: (source: string) => void;
   onDownloadDoc: (source: string) => void;
-  onDownloadMarkdown?: (source: string) => void;
+  /** The file as written: Markdown for a note, the source file for code. */
+  onDownloadSource?: (source: string) => void;
   onExportGoogleDocs?: (source: string) => void;
   exportingGoogleDocs?: boolean;
 };
@@ -142,6 +145,16 @@ function withVersion(edits: Edits, content: string): Edits {
   return { versions: [...edits.versions.filter((v) => v.fromKarui), ...yours.slice(-VERSIONS_BACK), next], draft: content };
 }
 
+/** How the panel names what it holds, and the format shown in its subtitle and editor. */
+function kindOf(artifact: ArtifactPanelData): { writing: string; format: string; language?: string } {
+  if (artifact.type === "markdown") return { writing: "Writing note…", format: "Markdown" };
+  if (artifact.type === "code") {
+    const { label, prism } = codeLanguageOf(artifact.path);
+    return { writing: "Writing code…", format: label, language: prism };
+  }
+  return { writing: "Writing document…", format: "HTML" };
+}
+
 function asItem(v: Version): FileVersionItem {
   return { id: String(v.number), number: v.number, savedAt: v.savedAt, size: new Blob([v.content]).size, kept: false };
 }
@@ -155,7 +168,7 @@ function PanelBody({
   onToggleExpand,
   onDownloadHtml,
   onDownloadDoc,
-  onDownloadMarkdown,
+  onDownloadSource,
   onExportGoogleDocs,
   exportingGoogleDocs,
   mobile,
@@ -178,12 +191,14 @@ function PanelBody({
 
   const ready = !artifact.streaming;
   const note = artifact.type === "markdown";
-  const writing = note ? "Writing note…" : "Writing document…";
+  const code = artifact.type === "code";
+  const { writing, format, language } = kindOf(artifact);
   const edits = saved ?? startEdits(artifact);
   const current = edits.versions[edits.versions.length - 1];
   const shownVersion = viewing === null || viewing === current.number ? null : (edits.versions.find((v) => v.number === viewing) ?? null);
   const content = shownVersion ? shownVersion.content : edits.draft;
-  const showsPaper = ready && (tab === "preview" || !!shownVersion);
+  // Code has no paper: it opens straight in the editor, an earlier version read only.
+  const showsPaper = ready && !code && (tab === "preview" || !!shownVersion);
   const document = React.useMemo(
     () => (showsPaper ? toDocument({ title: artifact.title, type: artifact.type, content }) : ""),
     [showsPaper, artifact.title, artifact.type, content],
@@ -217,8 +232,11 @@ function PanelBody({
   };
   const currentVersion = { number: current.number, kept: false };
 
-  const downloads: MenuItem[] = [
-    ...(note && onDownloadMarkdown ? [{ label: "Markdown", hint: ".md", onSelect: () => onDownloadMarkdown(content) }] : []),
+  // Code is only ever its own file: a web page or Word copy of a program helps no one.
+  const downloads: MenuItem[] = code ? [
+    ...(onDownloadSource ? [{ label: `${format} file`, hint: `.${codeLanguageOf(artifact.path).ext}`, onSelect: () => onDownloadSource(content) }] : []),
+  ] : [
+    ...(note && onDownloadSource ? [{ label: "Markdown", hint: ".md", onSelect: () => onDownloadSource(content) }] : []),
     { label: "Web page", hint: ".html", onSelect: () => onDownloadHtml(content) },
     { label: "Word document", hint: ".doc", onSelect: () => onDownloadDoc(content) },
     ...(onExportGoogleDocs ? exportingGoogleDocs
@@ -227,7 +245,7 @@ function PanelBody({
   ];
   const print = () => frameRef.current?.contentWindow?.print();
   const menuItems: MenuItem[] = [
-    ...(!shownVersion
+    ...(!shownVersion && !code
       ? [
           { type: "header" as const, content: <p className="text-label text-muted">View</p> },
           { label: "Preview", checked: tab === "preview", onSelect: () => showTab("preview") },
@@ -246,7 +264,7 @@ function PanelBody({
     ? writing
     : shownVersion
       ? [`v${shownVersion.number}`, now && exactStamp(shownVersion.savedAt, now), "read only"].filter(Boolean).join(" · ")
-      : [current.number > 1 || compact ? `v${current.number}` : null, note ? "Markdown" : "HTML · scripts off"].filter(Boolean).join(" · ");
+      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? "HTML · scripts off" : format].filter(Boolean).join(" · ");
 
   // An earlier version can't be edited, so Restore takes the place of Preview / Edit.
   const restore = shownVersion && (
@@ -281,7 +299,7 @@ function PanelBody({
         {ready && !compact && (
           <>
             <VersionPicker current={currentVersion} canKeep={false} p={versions} />
-            {restore ?? (
+            {restore ?? (!code && (
               <Segmented
                 id={mobile ? "artifact-view-mobile" : "artifact-view"}
                 label="View"
@@ -294,7 +312,7 @@ function PanelBody({
                 value={tab}
                 onChange={showTab}
               />
-            )}
+            ))}
           </>
         )}
         {onToggleExpand && (
@@ -304,10 +322,12 @@ function PanelBody({
         )}
         {ready && !compact && (
           <>
-            {/* Disabled rather than hidden while editing, so the header doesn't shift. */}
-            <IconButton label={showsPaper ? "Print or save as PDF" : "Switch to Preview to print"} onClick={print} disabled={!showsPaper}>
-              <Printer className="size-[17px]" />
-            </IconButton>
+            {/* Disabled rather than hidden while editing, so the header doesn't shift. Code is never printed. */}
+            {!code && (
+              <IconButton label={showsPaper ? "Print or save as PDF" : "Switch to Preview to print"} onClick={print} disabled={!showsPaper}>
+                <Printer className="size-[17px]" />
+              </IconButton>
+            )}
             <Menu label="Download" placement="bottom-end" items={downloads}>
               {({ open, triggerProps }) => (
                 <button
@@ -359,9 +379,12 @@ function PanelBody({
           </div>
         ) : (
           <NumberedTextArea
-            label={`${note ? "Markdown" : "HTML"} of ${artifact.title}`}
-            value={edits.draft}
+            key={shownVersion?.number ?? "draft"}
+            label={`${format} of ${artifact.title}${shownVersion ? `, v${shownVersion.number}` : ""}`}
+            value={content}
             spellCheck={note}
+            readOnly={!!shownVersion}
+            language={language}
             onChange={(draft) => onEdits({ ...edits, draft })}
           />
         )}
@@ -375,7 +398,7 @@ export function ArtifactPanel({
   onClose,
   onDownloadHtml,
   onDownloadDoc,
-  onDownloadMarkdown,
+  onDownloadSource,
   onExportGoogleDocs,
   exportingGoogleDocs,
 }: Downloads & {
@@ -441,7 +464,7 @@ export function ArtifactPanel({
     onClose,
     onDownloadHtml,
     onDownloadDoc,
-    onDownloadMarkdown,
+    onDownloadSource,
     onExportGoogleDocs,
     exportingGoogleDocs,
   };
