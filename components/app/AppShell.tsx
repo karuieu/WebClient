@@ -88,6 +88,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
   const [hidden, setHidden] = React.useState(false);
   const [drawer, setDrawer] = React.useState(false);
   const peek = usePeek();
+  const drawerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     try {
@@ -97,16 +98,36 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
 
   React.useEffect(() => {
     if (!drawer) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(false);
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusable = () => Array.from(drawerRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex="0"]',
+    ) ?? []).filter((element) => element.getClientRects().length > 0);
+    const frame = requestAnimationFrame(() => focusable()[0]?.focus());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawer(false);
+      if (e.key !== "Tab" || !drawerRef.current?.contains(e.target as Node)) return;
+      const elements = focusable();
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    };
     const onResize = () => window.innerWidth >= 768 && setDrawer(false);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
     return () => {
+      cancelAnimationFrame(frame);
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
+      previousFocus?.focus();
     };
   }, [drawer]);
 
@@ -223,6 +244,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
             />
             <motion.div
               key="drawer"
+              ref={drawerRef}
               role="dialog"
               aria-modal="true"
               aria-label="Sidebar"
@@ -243,7 +265,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
         )}
       </AnimatePresence>
 
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col" inert={drawer}>
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-2 md:hidden">
           <Tooltip label="Open sidebar" keys={["Mod", "B"]}>
             <button
@@ -251,7 +273,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
               onClick={() => setDrawer(true)}
               aria-label="Open sidebar"
               aria-expanded={drawer}
-              className="grid size-10 cursor-pointer place-items-center rounded-full hover:bg-surface active:scale-[0.94]"
+              className="grid size-11 cursor-pointer place-items-center rounded-full hover:bg-surface active:scale-[0.94]"
             >
               <span className="relative block h-3 w-4" aria-hidden="true">
                 <span className="absolute left-0 top-0 h-[1.5px] w-4 bg-fg" />
@@ -264,7 +286,7 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
             <Link
               href="/new"
               aria-label="New chat"
-              className="grid size-10 place-items-center rounded-full hover:bg-surface active:scale-[0.94]"
+              className="grid size-11 place-items-center rounded-full hover:bg-surface active:scale-[0.94]"
             >
               <Plus className="size-[18px]" />
             </Link>

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import {
   ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
   ChevronsUpDown,
   Ellipsis,
   Folder,
@@ -25,8 +27,10 @@ import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Kbd, useShortcut, type Keys } from "@/components/kit/Shortcut";
 import { Tooltip } from "@/components/kit/Tooltip";
 import { cx } from "@/lib/ui/cx";
+import { useNow } from "@/components/kit/useMounted";
+import { groupChats, useRecentMode } from "@/components/app/sidebarHistory";
 
-export type SidebarChat = { id: string; title: string; starred: boolean; projectId?: string; projectName?: string };
+export type SidebarChat = { id: string; title: string; starred: boolean; projectId?: string; projectName?: string; updatedAt?: string };
 export type SidebarProject = { id: string; name: string };
 export type SidebarUser = { name: string | null; email: string; plan: string; isFree: boolean };
 
@@ -34,6 +38,8 @@ export type SidebarProps = {
   chats: SidebarChat[];
   starredProjects: SidebarProject[];
   loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
   active?: { section?: "new" | "chats" | "projects" | null; chatId?: string | null; projectId?: string | null };
   user: SidebarUser;
   onStarChat: (chat: SidebarChat) => void;
@@ -81,7 +87,7 @@ function RowKbd({ keys }: { keys?: Keys }) {
   return (
     <Kbd
       keys={keys}
-      className="relative ml-auto text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+      className="relative ml-auto text-muted opacity-0 transition-opacity duration-150 group-hover:text-fg/80 group-hover:opacity-100 group-focus-visible:opacity-100"
     />
   );
 }
@@ -109,7 +115,7 @@ function NavRow({
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cx(
-        "group relative flex h-9 items-center gap-3 rounded-xl px-3 text-[13.5px] tracking-[-0.01em] transition-colors duration-150",
+        "sidebar-row group relative flex items-center gap-3 rounded-xl px-3 text-[13.5px] tracking-[-0.01em] transition-colors duration-150",
         active ? "text-fg" : "text-muted hover:bg-surface-2/70 hover:text-fg",
       )}
     >
@@ -126,7 +132,7 @@ function SearchRow({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex h-9 cursor-pointer items-center gap-3 rounded-xl px-3 text-[13.5px] tracking-[-0.01em] text-muted transition-colors duration-150 hover:bg-surface-2/70 hover:text-fg"
+      className="sidebar-row group relative flex cursor-pointer items-center gap-3 rounded-xl px-3 text-[13.5px] tracking-[-0.01em] text-muted transition-colors duration-150 hover:bg-surface-2/70 hover:text-fg"
     >
       <Search className="size-4" />
       <span className="truncate">Search</span>
@@ -135,7 +141,7 @@ function SearchRow({ onClick }: { onClick: () => void }) {
   );
 }
 
-function RowMenu({ label, items, onOpenChange }: { label: string; items: MenuItem[]; onOpenChange: (o: boolean) => void }) {
+function RowMenu({ label, items, icon, onOpenChange }: { label: string; items: MenuItem[]; icon?: React.ReactNode; onOpenChange?: (o: boolean) => void }) {
   return (
     <Menu label={label} items={items} onOpenChange={onOpenChange} className="absolute right-1 top-1/2 -translate-y-1/2">
       {({ open, triggerProps }) => (
@@ -143,13 +149,13 @@ function RowMenu({ label, items, onOpenChange }: { label: string; items: MenuIte
           {...triggerProps}
           aria-label={label}
           className={cx(
-            "grid size-7 cursor-pointer place-items-center rounded-lg text-muted transition-[opacity,background-color,color] duration-150 hover:bg-surface-2 hover:text-fg",
+            "sidebar-icon-button relative isolate grid cursor-pointer place-items-center rounded-lg text-muted transition-[opacity,color] duration-150 before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:transition-colors before:duration-150 hover:text-fg hover:before:bg-fg/10",
             open
-              ? "bg-surface-2 text-fg opacity-100"
-              : "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within/row:opacity-100 [@media(hover:hover)]:group-hover/row:opacity-100",
+              ? "text-fg opacity-100 before:bg-fg/10"
+              : "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-has-[:focus-visible]/row:opacity-100 [@media(hover:hover)]:group-hover/row:opacity-100",
           )}
         >
-          <Ellipsis />
+          {icon ?? <Ellipsis />}
         </button>
       )}
     </Menu>
@@ -173,6 +179,7 @@ function ChatRow({ chat, active, p }: { chat: SidebarChat; active: boolean; p: I
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(chat.title);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputId = React.useId();
 
   React.useEffect(() => {
     if (editing) {
@@ -210,21 +217,25 @@ function ChatRow({ chat, active, p }: { chat: SidebarChat; active: boolean; p: I
   return (
     <li className="group/row relative">
       {editing ? (
-        <div className="relative flex h-9 items-center rounded-xl bg-elevated px-3 ring-1 ring-line-strong">
-          <label htmlFor={`rename-${p.variant}-${chat.id}`} className="sr-only">
+        <div className="sidebar-row relative flex items-center rounded-xl bg-elevated px-3 ring-1 ring-line-strong">
+          <label htmlFor={inputId} className="sr-only">
             Chat title
           </label>
           <input
-            id={`rename-${p.variant}-${chat.id}`}
+            id={inputId}
             ref={inputRef}
-            data-focus="within"
             value={draft}
             maxLength={120}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                commit();
+              }
               if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
                 setDraft(chat.title);
                 setEditing(false);
               }
@@ -237,16 +248,17 @@ function ChatRow({ chat, active, p }: { chat: SidebarChat; active: boolean; p: I
           <Link
             href={chat.projectId ? `/projects/${chat.projectId}/${chat.id}` : `/chat/${chat.id}`}
             onClick={p.onNavigate}
+            title={chat.title}
             aria-current={active ? "page" : undefined}
             className={cx(
-              "relative flex h-9 items-center gap-2 rounded-xl pl-3 pr-9 text-[13.5px] tracking-[-0.01em] transition-colors duration-150",
-              active ? "text-fg" : menuOpen ? "bg-surface-2/70 text-fg" : "text-muted hover:bg-surface-2/70 hover:text-fg",
+              "sidebar-row sidebar-chat relative flex items-center gap-2 rounded-xl pl-3 pr-10 text-[13.5px] tracking-[-0.01em] transition-colors duration-150",
+              active ? "text-fg" : menuOpen ? "bg-surface-2/70 text-fg" : "text-muted group-hover/row:bg-surface-2/70 group-hover/row:text-fg",
             )}
           >
             {active && <ActivePill id={`sidebar-active-${p.variant}`} />}
             <span className="relative min-w-0 flex-1 truncate">{chat.title}</span>
             {chat.projectName && (
-              <span className="relative max-w-[6.5rem] shrink-0 truncate font-mono text-[11px] text-muted">
+              <span className={cx("relative max-w-[6.5rem] shrink-0 truncate font-mono text-[11px] group-hover/row:text-fg/80", menuOpen ? "text-fg/80" : "text-muted")}>
                 <span className="sr-only">in project </span>
                 {chat.projectName}
               </span>
@@ -274,8 +286,8 @@ function ProjectRow({ project, active, p }: { project: SidebarProject; active: b
         onClick={p.onNavigate}
         aria-current={active ? "page" : undefined}
         className={cx(
-          "relative flex h-9 items-center gap-2.5 rounded-xl pl-3 pr-9 text-[13.5px] tracking-[-0.01em] transition-colors duration-150",
-          active ? "text-fg" : menuOpen ? "bg-surface-2/70 text-fg" : "text-muted hover:bg-surface-2/70 hover:text-fg",
+          "sidebar-row sidebar-chat relative flex items-center gap-2.5 rounded-xl pl-3 pr-10 text-[13.5px] tracking-[-0.01em] transition-colors duration-150",
+          active ? "text-fg" : menuOpen ? "bg-surface-2/70 text-fg" : "text-muted group-hover/row:bg-surface-2/70 group-hover/row:text-fg",
         )}
       >
         {active && <ActivePill id={`sidebar-active-${p.variant}`} />}
@@ -287,11 +299,37 @@ function ProjectRow({ project, active, p }: { project: SidebarProject; active: b
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function CollapsibleSection({ title, collapsed, onToggle, children, action, menuOpen = false, className }: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  menuOpen?: boolean;
+  className?: string;
+}) {
+  const contentId = React.useId();
   return (
-    <section className="mt-6 first:mt-0">
-      <h2 className="text-label px-3 pb-2 text-fg/80">{title}</h2>
-      {children}
+    <section className={className}>
+      <div className="group/row relative flex min-h-7 items-center gap-1">
+        <h2 className="min-w-0 flex-1">
+          <button
+            type="button"
+            aria-expanded={!collapsed}
+            aria-controls={contentId}
+            onClick={onToggle}
+            className={cx(
+              "sidebar-row relative flex w-full cursor-pointer items-center gap-1.5 rounded-xl pl-3 pr-10 text-left transition-colors duration-150",
+              menuOpen ? "bg-surface-2/70 text-fg" : "text-muted group-hover/row:bg-surface-2/70 group-hover/row:text-fg",
+            )}
+          >
+            <span className={cx("text-label", !menuOpen && "text-fg/80 group-hover/row:text-fg")}>{title}</span>
+            <ChevronDown className={cx("size-3 shrink-0 transition-transform duration-200", collapsed && "-rotate-90")} />
+          </button>
+        </h2>
+        {action}
+      </div>
+      <div id={contentId} hidden={collapsed} className="pt-1">{children}</div>
     </section>
   );
 }
@@ -321,7 +359,7 @@ function Account({ p }: { p: Internal }) {
           {...triggerProps}
           aria-label={`Account: ${user.name || user.email}`}
           className={cx(
-            "flex w-full cursor-pointer items-center gap-3 rounded-xl p-2 text-left transition-colors duration-150",
+            "group/account flex w-full cursor-pointer items-center gap-3 rounded-xl p-2 text-left transition-colors duration-150",
             open ? "bg-surface-2/70" : "hover:bg-surface-2/70",
           )}
         >
@@ -330,7 +368,7 @@ function Account({ p }: { p: Internal }) {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13.5px] font-medium tracking-[-0.01em]">{user.name || user.email}</span>
-            <span className="block font-mono text-[11px] text-muted">{user.plan}</span>
+            <span className={cx("block font-mono text-[11px] group-hover/account:text-fg/80", open ? "text-fg/80" : "text-muted")}>{user.plan}</span>
           </span>
           <ChevronsUpDown className="size-3.5 text-muted" />
         </button>
@@ -339,13 +377,27 @@ function Account({ p }: { p: Internal }) {
   );
 }
 
-export function Sidebar(p: Internal) {
-  const { chats, starredProjects, loading, active, user, variant } = p;
+export function Sidebar(p: Internal): React.JSX.Element {
+  const { chats, starredProjects, loading, error, active, user, variant } = p;
+  const now = useNow();
   const starredChats = chats.filter((c) => c.starred);
-  const recent = chats.filter((c) => !c.starred).slice(0, 10);
+  const recent = chats.filter((c) => !c.starred)
+    .sort((a, b) => (Date.parse(b.updatedAt ?? "") || 0) - (Date.parse(a.updatedAt ?? "") || 0))
+    .slice(0, 30);
   const hasStarred = starredChats.length > 0 || starredProjects.length > 0;
   const pillId = `sidebar-active-${variant}`;
   const action = headerAction[variant];
+  const [recentMode, setRecentMode] = useRecentMode();
+  const [recentMenuOpen, setRecentMenuOpen] = useMenuState(p.onMenuOpenChange);
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
+  const toggleSection = (key: string) => setCollapsed((all) => ({ ...all, [key]: !all[key] }));
+  const recentMenu: MenuItem[] = [
+    { type: "header", content: <span className="text-label text-muted">Group chats</span> },
+    { label: "By date", checked: recentMode === "dates", onSelect: () => setRecentMode("dates") },
+    { label: "No grouping", checked: recentMode === "none", onSelect: () => setRecentMode("none") },
+  ];
+  const groups = recentMode === "dates" ? groupChats(recent, now) : [{ id: "recent", label: "Recent", chats: recent }];
+  const recentOptions = <RowMenu label="Recent options" items={recentMenu} icon={<Sliders className="size-3.5" />} onOpenChange={setRecentMenuOpen} />;
 
   return (
     <aside
@@ -367,87 +419,79 @@ export function Sidebar(p: Internal) {
             type="button"
             aria-label={action.label}
             onClick={p.onHeaderAction}
-            className="grid size-9 cursor-pointer place-items-center rounded-full text-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-2 hover:text-fg active:scale-[0.94]"
+            className={cx("grid cursor-pointer place-items-center rounded-full text-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-2 hover:text-fg active:scale-[0.94]", variant === "drawer" ? "size-11" : "size-9")}
           >
             {action.icon}
           </button>
         </Tooltip>
-        <Link href="/new" onClick={p.onNavigate} aria-label="Karui — new chat" className="flex items-center gap-2 rounded-lg px-1">
+        <Link href="/new" onClick={p.onNavigate} aria-label="Karui: new chat" className="flex min-h-9 items-center gap-2 rounded-lg px-1">
           <Logo className="h-3.5" />
         </Link>
       </div>
 
-      <nav aria-label="Library" className="flex shrink-0 flex-col gap-0.5 px-3">
-        <NavRow
-          href="/new"
-          label="New chat"
-          icon={<Plus className="size-4" />}
-          active={active?.section === "new"}
-          pillId={pillId}
-          shortcut={["Mod", "Shift", "O"]}
-          onNavigate={p.onNavigate}
-        />
-        {p.onOpenSearch && (
-          <SearchRow
-            onClick={() => {
-              p.onNavigate?.();
-              p.onOpenSearch?.();
-            }}
-          />
-        )}
-        <NavRow
-          href="/chats"
-          label="Chats"
-          icon={<MessageSquare className="size-4" />}
-          active={active?.section === "chats"}
-          pillId={pillId}
-          onNavigate={p.onNavigate}
-        />
-        <NavRow
-          href="/projects"
-          label="Projects"
-          icon={<Folder className="size-4" />}
-          active={active?.section === "projects" && !starredProjects.some((x) => x.id === active?.projectId)}
-          pillId={pillId}
-          onNavigate={p.onNavigate}
-        />
-      </nav>
+      <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
+        <nav aria-label="Library" className="flex shrink-0 flex-col gap-0.5 px-3 pb-3 pt-2">
+          <NavRow href="/new" label="New chat" icon={<Plus className="size-4" />} active={active?.section === "new"} pillId={pillId} shortcut={["Mod", "Shift", "O"]} onNavigate={p.onNavigate} />
+          {p.onOpenSearch && (
+            <SearchRow onClick={() => { p.onNavigate?.(); p.onOpenSearch?.(); }} />
+          )}
+          <NavRow href="/chats" label="Chats" icon={<MessageSquare className="size-4" />} active={active?.section === "chats"} pillId={pillId} onNavigate={p.onNavigate} />
+          <NavRow href="/projects" label="Projects" icon={<Folder className="size-4" />} active={active?.section === "projects" && !starredProjects.some((x) => x.id === active?.projectId)} pillId={pillId} onNavigate={p.onNavigate} />
+        </nav>
 
-      <div className="relative mt-5 min-h-0 flex-1">
-        <div className="absolute inset-0 overflow-y-auto overscroll-contain px-3 pb-4 [mask-image:linear-gradient(to_bottom,transparent,black_12px,black_calc(100%-24px),transparent)]">
+        <div className="shrink-0 grow px-3 pb-4 pt-3" aria-busy={loading || undefined}>
           {loading ? (
-            <ul aria-label="Loading chats" className="flex flex-col gap-1 pt-3">
-              {[72, 88, 60, 80, 66, 90].map((w, i) => (
-                <li key={i} className="flex h-9 items-center px-3">
-                  <span className="h-2.5 animate-pulse rounded-full bg-surface-2" style={{ width: `${w}%` }} />
-                </li>
-              ))}
-            </ul>
+            <div role="status">
+              <span className="sr-only">Loading your chats</span>
+              <ul aria-hidden="true" className="flex flex-col gap-1 pt-2">
+                {[72, 88, 60, 80, 66, 90].map((w, i) => (
+                  <li key={i} className="sidebar-row flex items-center px-3">
+                    <span className="h-2.5 animate-pulse rounded-full bg-surface-2" style={{ width: `${w}%` }} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : error ? (
+            <div role="alert" className="px-3 py-3">
+              <p className="text-[13px] font-medium text-fg">Couldn&apos;t load your chats</p>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{error}</p>
+              {p.onRetry && <button type="button" onClick={p.onRetry} className="mt-3 min-h-11 cursor-pointer rounded-full border border-line-strong px-4 text-[13px] text-fg hover:bg-surface-2">Try again</button>}
+            </div>
           ) : (
-            <div className="pt-3">
+            <div className="space-y-3">
               {hasStarred && (
-                <Section title="Starred">
+                <CollapsibleSection title="Starred" collapsed={collapsed.starred ?? false} onToggle={() => toggleSection("starred")}>
                   <ul className="flex flex-col gap-0.5">
-                    {starredProjects.map((x) => (
-                      <ProjectRow key={x.id} project={x} active={active?.projectId === x.id} p={p} />
-                    ))}
-                    {starredChats.map((c) => (
-                      <ChatRow key={c.id} chat={c} active={active?.chatId === c.id} p={p} />
-                    ))}
+                    {starredProjects.map((x) => <ProjectRow key={x.id} project={x} active={active?.projectId === x.id} p={p} />)}
+                    {starredChats.map((c) => <ChatRow key={c.id} chat={c} active={active?.chatId === c.id} p={p} />)}
                   </ul>
-                </Section>
+                </CollapsibleSection>
               )}
-              <Section title="Recent">
-                {recent.length ? (
+              {recent.length > 0 ? groups.map((group, i) => (
+                <CollapsibleSection
+                  key={group.id}
+                  title={group.label}
+                  collapsed={collapsed[`history-${group.id}`] ?? false}
+                  onToggle={() => toggleSection(`history-${group.id}`)}
+                  action={i === 0 ? recentOptions : undefined}
+                  menuOpen={i === 0 && recentMenuOpen}
+                  className={i === 0 && hasStarred ? "pt-3" : undefined}
+                >
                   <ul className="flex flex-col gap-0.5">
-                    {recent.map((c) => (
-                      <ChatRow key={c.id} chat={c} active={active?.chatId === c.id} p={p} />
-                    ))}
+                    {group.chats.map((c) => <ChatRow key={c.id} chat={c} active={active?.chatId === c.id} p={p} />)}
                   </ul>
-                ) : (
-                  <p className="px-3 text-[13px] leading-relaxed text-muted">Your conversations will show up here.</p>
-                )}
-              </Section>
+                </CollapsibleSection>
+              )) : (
+                <CollapsibleSection title="Recent" collapsed={collapsed["history-recent"] ?? false} onToggle={() => toggleSection("history-recent")} action={recentOptions} menuOpen={recentMenuOpen} className={hasStarred ? "pt-3" : undefined}>
+                  <p className="px-3 py-2 text-[13px] leading-relaxed text-muted">{hasStarred ? "Your other conversations will show up here." : "Start a chat. You'll find it here when you come back."}</p>
+                </CollapsibleSection>
+              )}
+              {recent.length > 0 && (
+                <Link href="/chats" onClick={p.onNavigate} className="sidebar-row flex w-full items-center justify-between gap-3 rounded-xl px-3 text-[13.5px] tracking-[-0.01em] text-muted transition-colors duration-150 hover:bg-surface-2/70 hover:text-fg">
+                  <span>See all chats</span>
+                  <ChevronRight className="size-3.5" />
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -458,9 +502,9 @@ export function Sidebar(p: Internal) {
           <button
             type="button"
             onClick={p.onUpgrade}
-            className="group mb-1 flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-2/70"
+            className="group mb-1 flex min-h-9 w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left transition-colors duration-150 hover:bg-surface-2/70 [@media(pointer:coarse)]:min-h-11"
           >
-            <span className="text-[12.5px] leading-snug text-muted">
+            <span className="text-[12.5px] leading-snug text-muted group-hover:text-fg/80">
               <span className="font-medium text-fg">Pro</span> · more models, more room
             </span>
             <ArrowUpRight className="size-3.5 text-muted transition-transform duration-200 ease-out-soft group-hover:-translate-y-px group-hover:translate-x-px" />

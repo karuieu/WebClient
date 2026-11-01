@@ -58,6 +58,7 @@ export function useLibrary() {
   const [chats, setChats] = React.useState<Chat[]>([]);
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string>();
   const [pending, setPending] = React.useState<Pending>(null);
   const [busy, setBusy] = React.useState(false);
   const [projectSettings, setProjectSettings] = React.useState<{ id: string; tab: ProjectSettingsTab } | null>(null);
@@ -78,9 +79,18 @@ export function useLibrary() {
           (a, b) => new Date(b.updated_at ?? b.created_at).getTime() - new Date(a.updated_at ?? a.created_at).getTime(),
         ),
       );
-    } else showError("Failed to load chats");
+      setError(undefined);
+    } else {
+      setError("Check your connection and try again.");
+      showError("Failed to load chats");
+    }
     setLoading(false);
   }, [showError]);
+
+  const retry = React.useCallback(() => {
+    setLoading(true);
+    return load();
+  }, [load]);
 
   React.useEffect(() => {
     sessionStorage.removeItem("karui_reload_chats");
@@ -259,10 +269,13 @@ export function useLibrary() {
       starred: c.starred,
       projectId: c.project_id,
       projectName: c.project_id ? findProject(c.project_id)?.name : undefined,
+      updatedAt: c.updated_at ?? c.created_at,
     })),
     starredProjects: projects.filter((p) => p.starred).map<SidebarProject>((p) => ({ id: p.id, name: p.name })),
     raw: { chats, projects },
     loading,
+    error,
+    retry,
     active: { section, chatId: activeChatId, projectId: activeProjectId },
     actions,
     dialogs,

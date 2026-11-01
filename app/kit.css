@@ -108,6 +108,49 @@ body {
   color: var(--on-inverse);
 }
 
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 8px;
+}
+.sidebar-row {
+  height: 36px;
+}
+.sidebar-icon-button {
+  width: 28px;
+  height: 28px;
+}
+@media (pointer: coarse) {
+  .sidebar-row {
+    min-height: 44px;
+  }
+  .sidebar-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .sidebar-chat {
+    padding-right: 52px;
+  }
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 0;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+.sidebar-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 :focus-visible {
   outline: 2px solid var(--fg);
   outline-offset: 3px;

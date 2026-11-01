@@ -35,6 +35,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           chats: library.chats,
           starredProjects: library.starredProjects,
           loading: library.loading,
+          error: library.error,
+          onRetry: library.retry,
           active: library.active,
           user: {
             name: user?.display_name || null,

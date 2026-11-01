@@ -26,8 +26,20 @@ type Placement = "bottom-end" | "bottom-start" | "top-start" | "top-end";
 const GAP = 6;
 const EDGE = 8;
 
-function position(rect: DOMRect, placement: Placement): React.CSSProperties {
+function position(rect: DOMRect, placement: Placement, panel?: { width: number; height: number }): React.CSSProperties {
   const [side, align] = placement.split("-") as ["top" | "bottom", "start" | "end"];
+  if (panel) {
+    const below = window.innerHeight - rect.bottom - GAP - EDGE;
+    const above = rect.top - GAP - EDGE;
+    const fromTop = side === "top" ? above >= panel.height || above > below : below < panel.height && above > below;
+    const top = fromTop ? rect.top - GAP - panel.height : rect.bottom + GAP;
+    const left = align === "start" ? rect.left : rect.right - panel.width;
+    return {
+      top: Math.max(EDGE, Math.min(top, window.innerHeight - panel.height - EDGE)),
+      left: Math.max(EDGE, Math.min(left, window.innerWidth - panel.width - EDGE)),
+      transformOrigin: `${fromTop ? "bottom" : "top"} ${align === "start" ? "left" : "right"}`,
+    };
+  }
   const style: React.CSSProperties = {};
   if (side === "bottom") style.top = rect.bottom + GAP;
   else style.bottom = window.innerHeight - rect.top + GAP;
@@ -85,22 +97,34 @@ export function Menu({
     els[next].focus();
   }, []);
 
+  React.useLayoutEffect(() => {
+    if (!open || asSheet || !panelRef.current || !triggerRef.current) return;
+    const panel = panelRef.current;
+    setStyle(position(triggerRef.current.getBoundingClientRect(), placement, { width: panel.offsetWidth, height: panel.offsetHeight }));
+  }, [open, asSheet, placement]);
+
   // Popover only: the sheet closes itself.
   React.useEffect(() => {
     if (!open || asSheet) return;
-    requestAnimationFrame(() => (viaKeyboard.current ? focusItem("first") : panelRef.current?.focus()));
+    const anchor = triggerRef.current?.getBoundingClientRect();
+    const frame = requestAnimationFrame(() => (viaKeyboard.current ? focusItem("first") : panelRef.current?.focus({ preventScroll: true })));
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!panelRef.current?.contains(t) && !triggerRef.current?.contains(t)) setOpen(false);
     };
     const close = () => setOpen(false);
+    const onScroll = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect || !anchor || Math.abs(rect.top - anchor.top) > 1 || Math.abs(rect.left - anchor.left) > 1) close();
+    };
     document.addEventListener("pointerdown", onDown);
     window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
+      cancelAnimationFrame(frame);
       document.removeEventListener("pointerdown", onDown);
       window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [open, asSheet, setOpen, focusItem]);
 
@@ -199,7 +223,7 @@ export function Menu({
                 exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98, transition: { duration: 0.12 } }}
                 transition={{ type: "spring", bounce: 0, duration: 0.28 }}
                 className={cx(
-                  "fixed z-[90] min-w-[200px] rounded-2xl border border-line bg-elevated p-1.5 font-sans text-fg shadow-soft",
+                  "fixed z-[90] max-h-[calc(100dvh-1rem)] min-w-[200px] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-line bg-elevated p-1.5 font-sans text-fg shadow-soft",
                   panelClassName,
                 )}
               >
