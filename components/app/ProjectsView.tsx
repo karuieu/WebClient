@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { Button } from "@/components/kit/Button";
-import { Label } from "@/components/kit/Frame";
 import { Ellipsis, Folder, Plus, Sliders, Star, Trash } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { cx } from "@/lib/ui/cx";
@@ -117,8 +116,7 @@ export function ProjectsView({ projects, loading, query, onQueryChange, onNew, a
       <Enter>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="max-w-[34rem]">
-            <Label>Library</Label>
-            <h1 className="text-title mt-4">Projects</h1>
+            <h1 className="text-title">Projects</h1>
           </div>
           <Button onClick={onNew} className="mb-1.5">
             <Plus className="size-4" />

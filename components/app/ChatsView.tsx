@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ButtonLink } from "@/components/kit/Button";
-import { Label } from "@/components/kit/Frame";
 import { Check, Ellipsis, Folder, FolderInput, Pencil, Plus, Search, Star, Trash, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { cx } from "@/lib/ui/cx";
@@ -363,8 +362,7 @@ export function ChatsView({ chats, total, loading, query, onQueryChange, hasMore
       <Enter>
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
-            <Label>Library</Label>
-            <h1 className="text-title mt-4">Chats</h1>
+            <h1 className="text-title">Chats</h1>
           </div>
           <div className="flex items-center gap-2 pb-1.5">
             {!loading && total > 0 && <span className="mr-2 font-mono text-[12px] text-muted tabular-nums">{total} chats</span>}
