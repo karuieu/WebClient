@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, BookOpen, CreditCard, Folder, Gauge, Layers, Lock, Plug, ShieldCheck, Sliders } from "@/components/kit/icons";
+import { AlertCircle, CreditCard, Gauge, Layers, Lock, ShieldCheck, Sliders } from "@/components/kit/icons";
 import { SettingsFrame, type FrameTab } from "./SettingsFrame";
 
-export type SettingsTab = "general" | "usage" | "memory" | "providers" | "billing" | "security" | "danger" | "connectors" | "skills" | "your-memory";
+export type SettingsTab = "general" | "usage" | "memory" | "providers" | "billing" | "security" | "danger";
 
 const TABS: FrameTab<SettingsTab>[] = [
   { id: "general", label: "General", icon: <Sliders className="size-4" /> },
@@ -14,9 +14,6 @@ const TABS: FrameTab<SettingsTab>[] = [
   { id: "billing", label: "Billing", icon: <CreditCard className="size-4" /> },
   { id: "security", label: "Security", icon: <Lock className="size-4" /> },
   { id: "danger", label: "Danger zone", icon: <AlertCircle className="size-4" />, danger: true },
-  { id: "connectors", label: "Connectors", icon: <Plug className="size-4" />, group: "Customize" },
-  { id: "skills", label: "Skills", icon: <BookOpen className="size-4" />, group: "Customize" },
-  { id: "your-memory", label: "Your memory", icon: <Folder className="size-4" />, group: "Customize" },
 ];
 
 export function SettingsDialog(props: {

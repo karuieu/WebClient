@@ -4,15 +4,19 @@ import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { Switch } from "@/components/kit/Controls";
-import { Plus, Trash } from "@/components/kit/icons";
+import { ChevronDown, MessageSquare, Pencil, Plus, Trash } from "@/components/kit/icons";
+import { Menu } from "@/components/kit/Menu";
+import { Segmented } from "@/components/kit/Segmented";
 import { cx } from "@/lib/ui/cx";
-import { Group, SectionIntro } from "./Layout";
+import { PAGE_ACTION, PageActions } from "../PageActions";
+import { LIST_FRAME } from "./Layout";
 
 export type SkillItem = { id: string; name: string; description: string; content: string; enabled: boolean };
 export type SkillFields = Pick<SkillItem, "name" | "description" | "content">;
 export type SkillLimits = { skills: number; name: number; description: number; content: number };
 
 export type SkillsSettingsProps = {
+  /** null while loading. */
   skills: SkillItem[] | null;
   limits: SkillLimits;
   onCreate: (fields: SkillFields) => void;
@@ -61,7 +65,7 @@ function SkillEditor({
   const set = (patch: Partial<SkillFields>) => setDraft((d) => ({ ...d, ...patch }));
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4">
+    <div className="flex flex-col gap-4 bg-surface p-4">
       <div>
         <Label htmlFor={`${id}-name`}>Name</Label>
         <input
@@ -90,13 +94,9 @@ function SkillEditor({
           value={draft.description}
           maxLength={limits.description}
           placeholder="When I ask for my weekly update to the team"
-          aria-describedby={`${id}-description-hint`}
           onChange={(e) => set({ description: e.target.value })}
           className={cx(field, "h-10")}
         />
-        <p id={`${id}-description-hint`} className="mt-1.5 px-1 text-[12.5px] leading-relaxed text-muted">
-          Karui decides from this and the name alone, so say when, not how.
-        </p>
       </div>
       <div>
         <Label
@@ -152,33 +152,16 @@ function SkillEditor({
   );
 }
 
-function Expand({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <motion.div
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: "auto", opacity: 1 }}
-      exit={{ height: 0, opacity: 0 }}
-      transition={spring}
-      className={cx("overflow-hidden", className)}
-    >
-      {children}
-    </motion.div>
-  );
-}
+const ROW = "flex min-h-[4.25rem] items-center gap-3 pr-4 transition-colors duration-150 hover:bg-surface";
 
-function SkillRow({ skill, open, onOpen, onToggle }: { skill: SkillItem; open: boolean; onOpen: () => void; onToggle: (on: boolean) => void }) {
+function SkillRow({ skill, onOpen, onToggle }: { skill: SkillItem; onOpen: () => void; onToggle: (on: boolean) => void }) {
   return (
-    <div className="flex min-h-16 items-center gap-3 pr-4">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onOpen}
-        className="min-w-0 flex-1 cursor-pointer py-3 pl-4 text-left"
-      >
-        <span className={cx("block truncate text-[14.5px] font-medium tracking-[-0.01em] transition-colors duration-150", !skill.enabled && "text-muted")}>
+    <div className={ROW}>
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 cursor-pointer py-3 pl-4 text-left">
+        <span className={cx("block truncate text-[15px] tracking-[-0.01em] transition-colors duration-150", !skill.enabled && "text-muted")}>
           {skill.name}
         </span>
-        <span className="block truncate text-[12.5px] text-muted">{skill.description}</span>
+        <span className="mt-1 block truncate text-[13px] text-muted">{skill.description}</span>
       </button>
       <Switch checked={skill.enabled} onChange={onToggle} label={`Use ${skill.name}`} />
     </div>
@@ -187,94 +170,107 @@ function SkillRow({ skill, open, onOpen, onToggle }: { skill: SkillItem; open: b
 
 function Skeleton() {
   return (
-    <div className="flex flex-col gap-3 px-4 py-4" aria-label="Loading skills">
+    <ul aria-label="Loading skills" className="flex flex-col gap-1">
       {[45, 60, 35].map((w, i) => (
-        <span key={i} className="h-3 animate-pulse rounded-full bg-surface-2" style={{ width: `${w}%` }} />
+        <li key={i} className="flex min-h-[4.25rem] flex-col justify-center gap-2 px-4">
+          <span className="h-3 animate-pulse rounded-full bg-surface-2" style={{ width: `${w}%` }} />
+          <span className="h-2.5 w-1/4 animate-pulse rounded-full bg-surface-2" />
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
 export function SkillsSettings({ skills, limits, onCreate, onUpdate, onToggle, onDelete, onCreateWithKarui }: SkillsSettingsProps) {
   const [editing, setEditing] = React.useState<string | null>(null);
+  const [view, setView] = React.useState<"yours" | "discover">("yours");
   const atLimit = (skills?.length ?? 0) >= limits.skills;
+  // From 80% of the limit the count shows above the list, where it's seen without scrolling.
+  const nearLimit = (skills?.length ?? 0) >= limits.skills * 0.8;
   const nameTakenBy = (exceptId: string | null) => (name: string) =>
     !!name.trim() && !!skills?.some((s) => s.id !== exceptId && s.name.trim().toLowerCase() === name.trim().toLowerCase());
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-label px-1 text-fg/80">Your skills</h3>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onCreateWithKarui}>
-            Create with Karui
-          </Button>
-          <Button variant="secondary" onClick={() => setEditing("new")} disabled={skills === null || atLimit || editing === "new"}>
-            <Plus className="size-3.5" />
-            New skill
-          </Button>
-        </div>
-      </div>
+      <PageActions>
+        <Segmented
+          id="skills-view"
+          label="Skills"
+          options={[
+            { value: "yours", label: "Yours" },
+            { value: "discover", label: "Discover" },
+          ]}
+          value={view}
+          onChange={setView}
+        />
+        <Menu
+          label="New skill"
+          sheetTitle="New skill"
+          items={[
+            { label: "Create with Karui", icon: <MessageSquare className="size-3.5" />, onSelect: onCreateWithKarui },
+            {
+              label: "Write it yourself",
+              icon: <Pencil className="size-3.5" />,
+              onSelect: () => {
+                setView("yours");
+                setEditing("new");
+              },
+            },
+          ]}
+        >
+          {({ open, triggerProps }) => (
+            <Button {...triggerProps} disabled={skills === null || atLimit || editing === "new"} className={PAGE_ACTION}>
+              <Plus className="size-3.5" />
+              New
+              <ChevronDown className={cx("size-3.5 transition-transform duration-200 ease-out-soft", open && "rotate-180")} />
+            </Button>
+          )}
+        </Menu>
+      </PageActions>
 
-      <Group
-        footer={atLimit && <p>You have {limits.skills} skills, the most you can keep. Delete one to add another.</p>}
-      >
-        {skills === null ? (
-          <Skeleton />
-        ) : (
-          <>
+      {view === "discover" ? (
+        // Planned, not built yet.
+        <p className="px-4 py-6 text-[15px] text-muted">Coming soon.</p>
+      ) : skills === null ? (
+        <Skeleton />
+      ) : (
+        <>
+          {nearLimit && (
+            <p className="mb-3 px-4 font-mono text-[11.5px] tabular-nums text-muted">
+              {skills.length} / {limits.skills} skills.{atLimit && " Delete one to add another."}
+            </p>
+          )}
+          {skills.length === 0 && editing !== "new" && <p className="px-4 py-6 text-[15px] text-muted">No skills yet.</p>}
+          <ul className={cx(LIST_FRAME, skills.length === 0 && editing !== "new" && "hidden")}>
             <AnimatePresence initial={false}>
               {editing === "new" && (
-                <Expand key="new">
-                  <SkillEditor
-                    skill={NEW_SKILL}
-                    limits={limits}
-                    isNameTaken={nameTakenBy(null)}
-                    onSave={onCreate}
-                    onClose={() => setEditing(null)}
-                  />
-                </Expand>
+                <motion.li key="new" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={spring} className="overflow-hidden">
+                  <SkillEditor skill={NEW_SKILL} limits={limits} isNameTaken={nameTakenBy(null)} onSave={onCreate} onClose={() => setEditing(null)} />
+                </motion.li>
               )}
             </AnimatePresence>
-            {skills.length === 0 && editing !== "new" && (
-              <p className="px-4 py-5 text-[13.5px] leading-relaxed text-muted">
-                No skills yet. Write one for a task you do often, or ask Karui to write it with you.
-              </p>
-            )}
             {skills.map((s) => (
-              <div key={s.id}>
-                <SkillRow
-                  skill={s}
-                  open={editing === s.id}
-                  onOpen={() => setEditing((e) => (e === s.id ? null : s.id))}
-                  onToggle={(on) => onToggle(s.id, on)}
-                />
-                <AnimatePresence initial={false}>
-                  {editing === s.id && (
-                    <Expand className="border-t border-line">
-                      <SkillEditor
-                        skill={s}
-                        limits={limits}
-                        isNameTaken={nameTakenBy(s.id)}
-                        onSave={(fields) => onUpdate(s.id, fields)}
-                        onDelete={() => {
-                          onDelete(s.id);
-                          setEditing(null);
-                        }}
-                        onClose={() => setEditing(null)}
-                      />
-                    </Expand>
-                  )}
-                </AnimatePresence>
-              </div>
+              <li key={s.id}>
+                {editing === s.id ? (
+                  <SkillEditor
+                    skill={s}
+                    limits={limits}
+                    isNameTaken={nameTakenBy(s.id)}
+                    onSave={(fields) => onUpdate(s.id, fields)}
+                    onDelete={() => {
+                      onDelete(s.id);
+                      setEditing(null);
+                    }}
+                    onClose={() => setEditing(null)}
+                  />
+                ) : (
+                  <SkillRow skill={s} onOpen={() => setEditing(s.id)} onToggle={(on) => onToggle(s.id, on)} />
+                )}
+              </li>
             ))}
-          </>
-        )}
-      </Group>
-
-      <SectionIntro>
-        Skills teach Karui how you like a kind of task done, like a weekly update in your format. Karui reads a skill&apos;s instructions only when your message calls for it. Chats in a project use only the skills picked in its settings.
-      </SectionIntro>
+          </ul>
+        </>
+      )}
     </>
   );
 }

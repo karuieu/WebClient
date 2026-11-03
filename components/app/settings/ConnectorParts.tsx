@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { ChevronRight } from "@/components/kit/icons";
 import { Segmented, type SegmentedOption } from "@/components/kit/Segmented";
 import { cx } from "@/lib/ui/cx";
 import { BrandLogo, isBrandLogoId } from "./BrandLogo";
@@ -13,9 +14,11 @@ export type ConnectorItem = ConnectorInfo & {
   route: ConnectorRoute;
   account?: string;
   custom?: boolean;
+  /** false shows Connect as coming soon. */
   ready?: boolean;
 };
 
+/** Rejecting onConnect with this shows its message and, with href, a link to fix it. */
 export class ConnectError extends Error {
   constructor(
     message: string,
@@ -122,5 +125,23 @@ export function ConnectionControls({
         </button>
       </div>
     </>
+  );
+}
+
+// Same row as the chat list; the connection settings live in the detail it opens.
+export function ConnectorRow({ connector: c, meta, onOpen, className }: { connector: ConnectorItem; meta: React.ReactNode; onOpen: (id: string) => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(c.id)}
+      className={cx("flex min-h-[4.25rem] w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-surface", className)}
+    >
+      <Tile logo={c.id} name={c.name} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] tracking-[-0.01em]">{c.name}</span>
+        <span className="mt-1 block truncate font-mono text-[11.5px] text-muted">{meta}</span>
+      </span>
+      <ChevronRight className="size-3.5 shrink-0 text-muted" />
+    </button>
   );
 }

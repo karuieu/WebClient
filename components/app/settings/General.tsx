@@ -15,10 +15,8 @@ export type GeneralSettingsProps = {
   nameMax: number;
   savingProfile?: boolean;
   onSaveProfile: (displayName: string, fullName: string) => void;
-  instructions: string;
-  instructionsMax: number;
-  savingInstructions?: boolean;
-  onSaveInstructions: (text: string) => void;
+  /** Opens the page outside settings where custom instructions are edited. */
+  onOpenInstructions: () => void;
   titleMode: "ai" | "first-message";
   onTitleMode: (m: "ai" | "first-message") => void;
   artifacts: boolean;
@@ -38,14 +36,11 @@ export function GeneralSettings(p: GeneralSettingsProps) {
   const { preference, setPreference } = useTheme();
   const [name, setName] = React.useState(p.displayName);
   const [full, setFull] = React.useState(p.fullName);
-  const [text, setText] = React.useState(p.instructions);
 
   React.useEffect(() => setName(p.displayName), [p.displayName]);
   React.useEffect(() => setFull(p.fullName), [p.fullName]);
-  React.useEffect(() => setText(p.instructions), [p.instructions]);
 
   const profileDirty = name.trim() !== p.displayName || full.trim() !== p.fullName;
-  const over = text.length > p.instructionsMax;
 
   return (
     <>
@@ -104,36 +99,16 @@ export function GeneralSettings(p: GeneralSettingsProps) {
         />
       </Group>
 
-      <Group title="Custom instructions">
+      <Group>
         <Row
-          label="How should Karui respond?"
-          description="Applies to every chat."
-        >
-          <label htmlFor="settings-instructions" className="sr-only">
-            Custom instructions
-          </label>
-          <textarea
-            id="settings-instructions"
-            data-focus="within"
-            rows={6}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="I'm a product designer in Poznań. Keep answers short, use metric units, and skip the pleasantries."
-            className="w-full resize-y rounded-xl border border-line-strong bg-bg px-3.5 py-3 text-[14px] leading-relaxed outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-subtle focus:border-fg focus:shadow-[0_0_0_3px_var(--line)]"
-          />
-          <div className="mt-2.5 flex items-center justify-between gap-3">
-            <span className={cx("font-mono text-[11px] tabular-nums", over ? "text-danger" : "text-muted")} aria-live="polite">
-              {text.length} / {p.instructionsMax}
-            </span>
-            <Button
-              loading={p.savingInstructions}
-              disabled={text === p.instructions || over}
-              onClick={() => p.onSaveInstructions(text.trim())}
-            >
-              Save
+          label="Custom instructions"
+          description="Read and edit them in Workspace."
+          control={
+            <Button variant="secondary" onClick={p.onOpenInstructions}>
+              Open
             </Button>
-          </div>
-        </Row>
+          }
+        />
       </Group>
 
       <Group title="Chats">

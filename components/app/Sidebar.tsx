@@ -16,6 +16,7 @@ import {
   PanelLeft,
   Pencil,
   Plus,
+  Puzzle,
   Search,
   Sliders,
   Star,
@@ -33,6 +34,7 @@ import { groupChats, useRecentMode } from "@/components/app/sidebarHistory";
 export type SidebarChat = { id: string; title: string; starred: boolean; projectId?: string; projectName?: string; updatedAt?: string };
 export type SidebarProject = { id: string; name: string };
 export type SidebarUser = { name: string | null; email: string; plan: string; isFree: boolean };
+export type SidebarWorkspace = { label: string; href: string };
 
 export type SidebarProps = {
   chats: SidebarChat[];
@@ -40,8 +42,9 @@ export type SidebarProps = {
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
-  active?: { section?: "new" | "chats" | "projects" | null; chatId?: string | null; projectId?: string | null };
+  active?: { section?: "new" | "chats" | "projects" | "workspace" | null; chatId?: string | null; projectId?: string | null };
   user: SidebarUser;
+  workspace?: SidebarWorkspace;
   onStarChat: (chat: SidebarChat) => void;
   onRenameChat: (chat: SidebarChat, title: string) => void;
   onMoveChat: (chat: SidebarChat) => void;
@@ -437,6 +440,9 @@ export function Sidebar(p: Internal): React.JSX.Element {
           )}
           <NavRow href="/chats" label="Chats" icon={<MessageSquare className="size-4" />} active={active?.section === "chats"} pillId={pillId} onNavigate={p.onNavigate} />
           <NavRow href="/projects" label="Projects" icon={<Folder className="size-4" />} active={active?.section === "projects" && !starredProjects.some((x) => x.id === active?.projectId)} pillId={pillId} onNavigate={p.onNavigate} />
+          {p.workspace && (
+            <NavRow href={p.workspace.href} label={p.workspace.label} icon={<Puzzle className="size-4" />} active={active?.section === "workspace"} pillId={pillId} onNavigate={p.onNavigate} />
+          )}
         </nav>
 
         <div className="shrink-0 grow px-3 pb-4 pt-3" aria-busy={loading || undefined}>

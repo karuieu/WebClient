@@ -225,7 +225,7 @@ export function OnboardingView(p: OnboardingViewProps) {
               {
                 value: "on",
                 title: "Yes, remember what matters",
-                description: "You can read, edit and delete everything it keeps in Settings.",
+                description: "You can read, edit and delete everything it keeps in Workspace.",
               },
               { value: "off", title: "Not now", description: "Every chat starts fresh. You can turn memory on later." },
             ]}

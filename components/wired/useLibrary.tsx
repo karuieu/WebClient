@@ -254,13 +254,15 @@ export function useLibrary() {
     </>
   );
 
-  const section: "new" | "chats" | "projects" | null = pathname.startsWith("/new")
+  const section: "new" | "chats" | "projects" | "workspace" | null = pathname.startsWith("/new")
     ? "new"
     : pathname.startsWith("/chats")
       ? "chats"
       : pathname.startsWith("/projects")
         ? "projects"
-        : null;
+        : pathname.startsWith("/workspace")
+          ? "workspace"
+          : null;
 
   return {
     chats: chats.map<SidebarChat>((c) => ({

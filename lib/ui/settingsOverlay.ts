@@ -1,7 +1,7 @@
 
 export const SETTINGS_PARAM = "settings";
 
-export const SETTINGS_TABS = ["general", "usage", "memory", "providers", "billing", "security", "danger", "connectors", "skills", "your-memory"] as const;
+export const SETTINGS_TABS = ["general", "usage", "memory", "providers", "billing", "security", "danger"] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 

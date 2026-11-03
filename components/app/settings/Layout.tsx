@@ -3,6 +3,9 @@
 import * as React from "react";
 import { cx } from "@/lib/ui/cx";
 
+/** A list on a full page: a light frame and hairlines between rows, easy to follow without a filled card. */
+export const LIST_FRAME = "overflow-hidden rounded-2xl border border-line-strong divide-y divide-line";
+
 export function Group({
   title,
   footer,

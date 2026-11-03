@@ -295,7 +295,8 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
 
         <ShellContext.Provider value={{ sidebarHidden: hidden }}>
           {banner}
-          <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {/* Keeps the scrollbar's space, so a short page (Connectors with few rows) doesn't shift sideways. */}
+          <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
             {children}
           </main>
         </ShellContext.Provider>

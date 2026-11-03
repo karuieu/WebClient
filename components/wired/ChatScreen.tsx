@@ -314,7 +314,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     if (!skillFits(fields)) return showError("This skill is too long to save. Ask Karui to shorten it.");
     const { existing } = draftStatus(fields, savedSkills);
     const limit = SKILL_COUNT_LIMIT[getUser()?.tier === "pro" ? "pro" : "free"];
-    if (!existing && savedSkills.length >= limit) return showError(`You can keep up to ${limit} skills. Delete one in Settings to save this one.`);
+    if (!existing && savedSkills.length >= limit) return showError(`You can keep up to ${limit} skills. Delete one in Workspace to save this one.`);
     setSavingSkill(draft.id);
     try {
       const saved = await (existing ? updateSkill(existing.id, fields, existing.updatedAt) : createSkill(fields));

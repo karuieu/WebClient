@@ -9,11 +9,21 @@ import { Segmented } from "@/components/kit/Segmented";
 import { cx } from "@/lib/ui/cx";
 import { CONNECTOR_CATEGORIES, categoryLabel, defaultRoute, type ConnectorCategory, type ConnectorRoute } from "@/lib/connectors/connectors";
 import { Group, Row } from "./Layout";
-import { ConnectError, ConnectionControls, host, routeNote, routeOptions, Tile, type ConnectorItem } from "./ConnectorParts";
+import { ConnectError, ConnectionControls, ConnectorRow, host, routeNote, routeOptions, Tile, type ConnectorItem } from "./ConnectorParts";
 
 type CategoryFilter = "all" | ConnectorCategory;
 
 export type ConnectHandler = (id: string, route: ConnectorRoute, signal: AbortSignal) => Promise<void>;
+
+function CardMeta({ connector: c }: { connector: ConnectorItem }) {
+  const status = <StatusMark connector={c} />;
+  return (
+    <>
+      {c.browser ? "Browser" : "Karui server"}
+      {(c.status !== "available" || c.ready === false) && <> · {status}</>}
+    </>
+  );
+}
 
 function StatusMark({ connector: c }: { connector: ConnectorItem }) {
   if (c.status === "connected") {
@@ -52,26 +62,6 @@ function CategoryMenu({ value, onChange }: { value: CategoryFilter; onChange: (v
         </button>
       )}
     </Menu>
-  );
-}
-
-function Card({ connector: c, onOpen }: { connector: ConnectorItem; onOpen: (id: string) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(c.id)}
-      className="flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-elevated p-4 text-left transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-soft"
-    >
-      <Tile logo={c.id} name={c.name} />
-      <span className="flex min-w-0 flex-1 flex-col self-stretch">
-        <span className="block truncate text-[14.5px] font-medium tracking-[-0.01em]">{c.name}</span>
-        <span className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted">{c.description}</span>
-        <span className="mt-auto flex items-center justify-between gap-2 pt-2.5">
-          <span className="font-mono text-[11px] text-subtle">{c.browser ? "Browser" : "Karui server"}</span>
-          <StatusMark connector={c} />
-        </span>
-      </span>
-    </button>
   );
 }
 
@@ -141,7 +131,7 @@ export function ConnectorsDiscover({
 
       {groups.map((g, i) => (
         <section key={g.id} className={flat ? "mt-4" : "mt-9"}>
-          <div className="mb-3 flex min-h-8 items-center justify-between gap-3 px-1">
+          <div className="mb-3 flex min-h-8 items-center justify-between gap-3 px-4">
             <h3 className="text-label text-fg/80">{g.label}</h3>
             {!flat && i === 0 && (
               <button
@@ -156,21 +146,20 @@ export function ConnectorsDiscover({
               </button>
             )}
           </div>
-          <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
+          <ul className="grid gap-2 sm:grid-cols-2 sm:gap-3">
             {g.items.map((c) => (
-              <Card key={c.id} connector={c} onOpen={onOpen} />
+              <li key={c.id}>
+                <ConnectorRow connector={c} meta={<CardMeta connector={c} />} onOpen={onOpen} className="rounded-2xl border border-line-strong" />
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       ))}
 
       {groups.length === 0 && (
         <section className="mt-9">
-          <div className="rounded-2xl border border-dashed border-line-strong px-6 py-10 text-center">
-            <p className="text-[14.5px] font-medium tracking-[-0.01em]">Nothing here yet</p>
-            <p className="mx-auto mt-1.5 max-w-[22rem] text-pretty text-[13px] leading-relaxed text-muted">
-              If the app you&apos;re after has an MCP server, you can add it yourself.
-            </p>
+          <div className="px-4">
+            <p className="text-[15px] text-muted">Nothing found.</p>
             {onAddOwn && (
               <Button variant="secondary" className="mt-5" onClick={onAddOwn}>
                 <Plus className="size-3.5" />
@@ -181,7 +170,7 @@ export function ConnectorsDiscover({
         </section>
       )}
 
-      <p className="mt-8 px-1 text-pretty text-[12.5px] leading-relaxed text-muted">
+      <p className="mt-10 px-4 text-pretty text-[12.5px] leading-relaxed text-muted">
         Notion, Linear and the other names here are trademarks of their owners. Karui isn&apos;t affiliated with them.
       </p>
     </>

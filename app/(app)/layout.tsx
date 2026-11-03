@@ -12,6 +12,7 @@ import { AnnouncementBanner } from "@/components/app/AnnouncementBanner";
 import { AppShell } from "@/components/app/AppShell";
 import { LibraryContext, useLibrary } from "@/components/wired/useLibrary";
 import { SettingsOverlay } from "@/components/wired/Settings";
+import { WORKSPACE_NAME, WORKSPACE_PATH } from "@/components/wired/Workspace";
 import { SearchHost } from "@/components/wired/SearchHost";
 import { ToolApprovalHost } from "@/components/app/ToolApprovalHost";
 import { ConfirmIdentityHost } from "@/components/wired/ConfirmIdentityHost";
@@ -38,6 +39,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           error: library.error,
           onRetry: library.retry,
           active: library.active,
+          workspace: { label: WORKSPACE_NAME, href: WORKSPACE_PATH },
           user: {
             name: user?.display_name || null,
             email: user?.email ?? "",

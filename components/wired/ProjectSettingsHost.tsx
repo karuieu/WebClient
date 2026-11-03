@@ -1,15 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { getMemorySettings, copyYouIntoProject, hasYouFolder } from "@/lib/chat/memory";
 import { getProject, listProjectFiles, updateProject, type LibraryListing, type Project, type ProjectSettings as Settings } from "@/lib/projects/projects";
-import { setSettingsUrl, settingsHref } from "@/lib/ui/settingsOverlay";
 import { loadConnectors, type UserConnector } from "@/lib/connectors/userConnectors";
 import { listSkills, type Skill } from "@/lib/chat/skills";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
 import { host } from "@/components/app/settings/ConnectorParts";
+import { workspaceHref } from "@/components/wired/Workspace";
 import { ProjectSettings, type ProjectSettingsTab, type YouMode } from "@/components/app/project/ProjectSettings";
 
 const NAME_MAX = 120;
@@ -29,7 +29,6 @@ export function ProjectSettingsHost({
   onDelete: (project: Project) => void;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { user } = useSession();
   const { showError, showSuccess } = useToast();
   const [project, setProject] = React.useState<Project | null>(null);
@@ -87,9 +86,9 @@ export function ProjectSettingsHost({
   };
 
   const toggled = (ids: string[], id: string, on: boolean) => (on ? [...ids.filter((x) => x !== id), id] : ids.filter((x) => x !== id));
-  const openSettings = (target: "connectors" | "skills") => {
+  const openWorkspace = (tab: "connectors" | "skills") => {
     onClose();
-    setSettingsUrl(settingsHref(pathname, target, new URLSearchParams(window.location.search)), "push");
+    router.push(workspaceHref(tab));
   };
   const shown = project ?? { name: "", goal: "", settings: null };
   const settings = project?.settings;
@@ -137,7 +136,7 @@ export function ProjectSettingsHost({
         items: connectors.map((c) => ({ id: c.id, name: c.name, host: host(c.url), logo: c.catalogId })),
         enabled: settings?.connectorIds ?? [],
         onToggle: (id, on) => void saveSettings({ connectorIds: toggled(settings?.connectorIds ?? [], id, on) }),
-        onOpenConnectors: () => openSettings("connectors"),
+        onOpenConnectors: () => openWorkspace("connectors"),
         onUpgrade: () => {
           onClose();
           router.push("/plans");
@@ -147,7 +146,7 @@ export function ProjectSettingsHost({
         items: skills.map(({ id, name, description }) => ({ id, name, description })),
         enabled: settings?.skillIds ?? [],
         onToggle: (id, on) => void saveSettings({ skillIds: toggled(settings?.skillIds ?? [], id, on) }),
-        onOpenSkills: () => openSettings("skills"),
+        onOpenSkills: () => openWorkspace("skills"),
       }}
       onDelete={() => project && onDelete(project)}
     />

@@ -26,7 +26,7 @@ async function saveArtifact(id: string, artifact: Pick<Artifact, "title" | "type
   if (getUser()?.tier !== "pro") throw new Error("Google Docs export comes with Pro.");
   const content = googleDocContent(artifact);
   const connector = (await loadConnectors({ fresh: true })).find((c) => c.api === "docs");
-  if (!connector) throw new Error("Connect Google Docs in Settings, under Connectors, before saving.");
+  if (!connector) throw new Error("Connect Google Docs in Workspace, under Connectors, before saving.");
   const server = await serverFor(connector);
   if (!server) throw new SignInRequired();
   let binding: GoogleDocument | undefined = connector.documents?.[id];

@@ -5,13 +5,13 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
 import { Field } from "@/components/kit/Field";
-import { ChevronDown, ChevronRight, Plus } from "@/components/kit/icons";
+import { Plus } from "@/components/kit/icons";
 import { Segmented, type SegmentedOption } from "@/components/kit/Segmented";
-import { cx } from "@/lib/ui/cx";
 import type { ConnectorRoute } from "@/lib/connectors/connectors";
 import { BrandLogo, type BrandLogoId } from "./BrandLogo";
-import { Group, Row } from "./Layout";
-import { ConnectionControls, host, routeLabel, routeOptions, spring, Tile, type ConnectorItem } from "./ConnectorParts";
+import { PAGE_ACTION, PageActions } from "../PageActions";
+import { LIST_FRAME } from "./Layout";
+import { ConnectorRow, host, routeLabel, routeOptions, spring, type ConnectorItem } from "./ConnectorParts";
 import { ConnectorDetail, ConnectorsDiscover, type ConnectHandler } from "./ConnectorsDiscover";
 
 export { ConnectError, type ConnectorItem, type ConnectorStatus } from "./ConnectorParts";
@@ -23,12 +23,17 @@ export type ConnectorsSettingsProps = {
   locked?: boolean;
   onUpgrade?: () => void;
   connectors: ConnectorItem[];
+  /** false shows Discover as coming soon. */
   discover?: boolean;
+  /** false shows the Karui server route as coming soon. */
   serverRoute?: boolean;
+  /** Runs the sign-in; the signal aborts when the user cancels. Rejecting shows the error in the dialog. */
   onConnect?: ConnectHandler;
   onDisconnect: (id: string) => void;
   onRoute: (id: string, route: ConnectorRoute) => void;
+  /** Rejecting keeps the dialog open and shows the error's message. */
   onAdd?: (connector: NewConnector) => void | Promise<void>;
+  /** When tools wait for "Allow"; omitted hides the choice. */
   approval?: { mode: ToolApprovalMode; onChange: (mode: ToolApprovalMode) => void };
 };
 
@@ -48,136 +53,42 @@ function viewOptions(discover: boolean): readonly SegmentedOption<View>[] {
   ];
 }
 
-function YoursRow({
-  connector: c,
-  serverRoute,
-  onRoute,
-  onDisconnect,
-  onOpen,
-}: {
-  connector: ConnectorItem;
-  serverRoute: boolean;
-  onRoute: (id: string, route: ConnectorRoute) => void;
-  onDisconnect: (id: string) => void;
-  onOpen: (id: string) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const panelId = React.useId();
-  const tools = c.abilities.length;
-  return (
-    <div>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((o) => !o)}
-        className="flex min-h-16 w-full cursor-pointer items-center gap-3 px-4 py-3 text-left"
-      >
-        <Tile logo={c.id} name={c.name} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14.5px] font-medium tracking-[-0.01em]">{c.name}</span>
-          <span className="block truncate font-mono text-[11px] text-muted">
-            {c.status === "expired" ? "Signed out" : (c.account ?? host(c.url))} · {routeLabel(c.route)}
-          </span>
-        </span>
-        <ChevronDown className={cx("size-3.5 text-muted transition-transform duration-300 ease-out-soft", !open && "-rotate-90")} />
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            id={panelId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={spring}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-line px-4 pb-3 pt-4 sm:pl-16">
-              {c.status === "expired" && (
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                  <p className="text-pretty text-[13px] leading-relaxed text-muted">Chats can&apos;t use {c.name} until you sign in again.</p>
-                  <Button onClick={() => onOpen(c.id)}>
-                    Sign in again
-                  </Button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => onOpen(c.id)}
-                className="-mx-2 mb-3 flex w-[calc(100%+1rem)] cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-left transition-colors duration-150 hover:bg-surface"
-              >
-                <span className="text-[14px] font-medium tracking-[-0.01em]">What Karui can do</span>
-                <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
-                  {tools === 1 ? "1 tool" : `${tools} tools`}
-                  <ChevronRight className="size-3.5" />
-                </span>
-              </button>
-              <ConnectionControls connector={c} onRoute={onRoute} onDisconnect={onDisconnect} serverRoute={serverRoute} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 function Yours({
   connectors,
   discover,
-  serverRoute,
-  onRoute,
-  onDisconnect,
   onOpen,
   onDiscover,
-  onAddOwn,
 }: {
   connectors: ConnectorItem[];
   discover: boolean;
-  serverRoute: boolean;
-  onRoute: (id: string, route: ConnectorRoute) => void;
-  onDisconnect: (id: string) => void;
   onOpen: (id: string) => void;
   onDiscover: () => void;
-  onAddOwn?: () => void;
 }) {
   if (connectors.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center">
-        <p className="text-[15px] font-medium tracking-[-0.01em]">Nothing connected yet</p>
-        <p className="mx-auto mt-1.5 max-w-[22rem] text-pretty text-[13.5px] leading-relaxed text-muted">
-          {discover
-            ? "Find the apps you use in Discover, or add your own MCP server."
-            : "Add an MCP server you use. Karui talks to it straight from your browser."}
-        </p>
-        {discover ? (
-          <Button variant="secondary" className="mt-6" onClick={onDiscover}>
+      <div className="px-4 py-6">
+        <p className="text-[15px] text-muted">Nothing connected yet.</p>
+        {discover && (
+          <Button variant="secondary" className="mt-5" onClick={onDiscover}>
             Browse Discover
           </Button>
-        ) : (
-          onAddOwn && (
-            <Button variant="secondary" className="mt-6" onClick={onAddOwn}>
-              <Plus className="size-3.5" />
-              Add your own
-            </Button>
-          )
         )}
       </div>
     );
   }
 
   return (
-    <Group
-      footer={
-        serverRoute
-          ? "Each one talks to its app straight from your browser, unless the app only accepts server connections or you switch it."
-          : "Each one talks to its app straight from your browser. Karui's servers never see what it sends."
-      }
-    >
+    <ul className={LIST_FRAME}>
       {connectors.map((c) => (
-        <YoursRow key={c.id} connector={c} serverRoute={serverRoute} onRoute={onRoute} onDisconnect={onDisconnect} onOpen={onOpen} />
+        <li key={c.id}>
+          <ConnectorRow
+            connector={c}
+            meta={`${c.status === "expired" ? "Signed out" : (c.account ?? host(c.url))} · ${routeLabel(c.route)}`}
+            onOpen={onOpen}
+          />
+        </li>
       ))}
-    </Group>
+    </ul>
   );
 }
 
@@ -363,24 +274,22 @@ function Marketplace(p: ConnectorsSettingsProps) {
 
   return (
     <>
-      <div className="mb-7 flex items-center justify-between gap-3">
-        <div className="w-fit">
-          <Segmented
-            id="connectors-view"
-            label="Connectors"
-            options={viewOptions(discover)}
-            value={view}
-            onChange={(v) => {
-              setView(v);
-              setDetailId(null);
-            }}
-          />
-        </div>
-        <Button variant="secondary" onClick={addOwn} disabled={!addOwn}>
+      <PageActions>
+        <Segmented
+          id="connectors-view"
+          label="Connectors"
+          options={viewOptions(discover)}
+          value={view}
+          onChange={(v) => {
+            setView(v);
+            setDetailId(null);
+          }}
+        />
+        <Button onClick={addOwn} disabled={!addOwn} className={PAGE_ACTION}>
           <Plus className="size-3.5" />
-          Add your own
+          Add own
         </Button>
-      </div>
+      </PageActions>
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -401,16 +310,7 @@ function Marketplace(p: ConnectorsSettingsProps) {
               onDisconnect={requestDisconnect}
             />
           ) : view === "yours" ? (
-            <Yours
-              connectors={connected}
-              discover={discover}
-              serverRoute={serverRoute}
-              onRoute={p.onRoute}
-              onDisconnect={requestDisconnect}
-              onOpen={setDetailId}
-              onDiscover={() => setView("discover")}
-              onAddOwn={addOwn}
-            />
+            <Yours connectors={connected} discover={discover} onOpen={setDetailId} onDiscover={() => setView("discover")} />
           ) : (
             <ConnectorsDiscover connectors={p.connectors} onOpen={setDetailId} onAddOwn={addOwn} />
           )}
@@ -418,29 +318,15 @@ function Marketplace(p: ConnectorsSettingsProps) {
       </AnimatePresence>
 
       {p.approval && !detail && view === "yours" && (
-        <Group
-          className="mt-9"
-          footer="Web pages and tool results can contain instructions aimed at the model, and a tool that only reads can still send data out through the address it opens."
-        >
-          <Row
-            label="Ask before a tool runs"
-            description={
-              p.approval.mode === "always"
-                ? "Every call waits for your OK."
-                : "Tools that change something always ask. Read-only tools ask too once web results or another tool's output are in the chat."
-            }
-            control={
-              <Segmented
-                id="connectors-approval"
-                label="Ask before a tool runs"
-                size="sm"
-                options={approvalOptions}
-                value={p.approval.mode}
-                onChange={p.approval.onChange}
-              />
-            }
-          />
-        </Group>
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-2xl border border-line-strong px-4 py-3.5">
+          <div className="min-w-0">
+            <p className="text-[15px] tracking-[-0.01em]">Ask before a tool runs</p>
+            <p className="mt-1 text-[13px] text-muted">
+              {p.approval.mode === "always" ? "Every tool asks first." : "Changes always ask. Reads ask once a chat has web or tool results."}
+            </p>
+          </div>
+          <Segmented id="connectors-approval" label="Ask before a tool runs" size="sm" options={approvalOptions} value={p.approval.mode} onChange={p.approval.onChange} />
+        </div>
       )}
 
       {p.onAdd && (

@@ -203,7 +203,7 @@ function Connectors({ connectors: c }: ProjectSettingsProps) {
       <div className="flex flex-col items-center px-2 py-14 text-center">
         <h3 className="text-heading">No connectors yet</h3>
         <p className="mt-2 max-w-[24rem] text-pretty text-[14px] leading-relaxed text-muted">
-          Add one in Settings first. Then pick here which of them this project can use.
+          Add one in Workspace first. Then pick here which of them this project can use.
         </p>
         <Button variant="secondary" className="mt-6" onClick={c.onOpenConnectors}>
           Open Connectors
@@ -240,7 +240,7 @@ function Skills({ skills: s }: ProjectSettingsProps) {
       <div className="flex flex-col items-center px-2 py-14 text-center">
         <h3 className="text-heading">No skills yet</h3>
         <p className="mt-2 max-w-[24rem] text-pretty text-[14px] leading-relaxed text-muted">
-          Add one in Settings first. Then pick here which of them this project can use.
+          Add one in Workspace first. Then pick here which of them this project can use.
         </p>
         <Button variant="secondary" className="mt-6" onClick={s.onOpenSkills}>
           Open Skills
@@ -249,7 +249,7 @@ function Skills({ skills: s }: ProjectSettingsProps) {
     );
   return (
     <>
-      <Group footer="A skill switched off in Settings stays off here too.">
+      <Group footer="A skill switched off in Workspace stays off here too.">
         {s.items.map((it) => (
           <div key={it.id} className="flex min-h-16 items-center gap-3 px-4 py-3">
             <span className="min-w-0 flex-1">
