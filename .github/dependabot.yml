@@ -8,6 +8,8 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # 0.11 dropped the production OS check (policy-os) that phalaClient.ts requires; Phala then always fails.
+      - dependency-name: "@phala/aci-verifier"
     # A package lands in the first group it matches; these pairs must move in lockstep.
     groups:
       next:
