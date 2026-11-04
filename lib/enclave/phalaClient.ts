@@ -314,6 +314,24 @@ async function throwForStatus(response: Response, sealed: SealedRequest): Promis
   throw data.code || data.reset_at ? new RateLimitError(message, data.reset_at, data.code) : new Error(message);
 }
 
+// Phala re-verifies Tinfoil's host before the old session expires, so a pin can go stale between two sends. Nothing
+// was generated yet, so the request is sealed again (new nonce) on freshly verified sessions, once.
+async function postSealed(
+  seal: () => Promise<SealedRequest>,
+  post: (sealed: SealedRequest) => Promise<Response>
+): Promise<{ response: Response; sealed: SealedRequest }> {
+  let sealed = await seal();
+  let response = await post(sealed);
+  if (response.status === 412 && sealed.sessionIds.length > 0) {
+    forgetTinfoilSessions(sealed.model);
+    await response.body?.cancel().catch(() => {});
+    sealed = await seal();
+    response = await post(sealed);
+  }
+  await throwForStatus(response, sealed);
+  return { response, sealed };
+}
+
 export interface PhalaStreamResult {
   text: string;
   provider: string;
@@ -340,23 +358,25 @@ export async function streamPhalaChat(
   onToken: (token: string) => void
 ): Promise<PhalaStreamResult> {
   const model = opts.providerModelID;
-  const sealed = await sealRequest(model, opts.turns, {
-    stream: true,
-    // Usage in every chunk lets our proxy bill a stopped answer for what was generated, not the whole hold.
-    stream_options: { include_usage: true, continuous_usage_stats: true },
-    ...(opts.reasoningParams ?? {}),
-  });
-
-  const response = await fetch(`${API_URL}/api/phala/v1/chat/completions`, {
-    method: "POST",
-    headers: sealed.headers,
-    body: sealed.body,
-    signal: opts.signal,
-  }).catch((error: unknown) => {
-    if (opts.signal?.aborted) throw new StoppedError();
-    throw error;
-  });
-  await throwForStatus(response, sealed);
+  const { response, sealed } = await postSealed(
+    () =>
+      sealRequest(model, opts.turns, {
+        stream: true,
+        // Usage in every chunk lets our proxy bill a stopped answer for what was generated, not the whole hold.
+        stream_options: { include_usage: true, continuous_usage_stats: true },
+        ...(opts.reasoningParams ?? {}),
+      }),
+    (sealed) =>
+      fetch(`${API_URL}/api/phala/v1/chat/completions`, {
+        method: "POST",
+        headers: sealed.headers,
+        body: sealed.body,
+        signal: opts.signal,
+      }).catch((error: unknown) => {
+        if (opts.signal?.aborted) throw new StoppedError();
+        throw error;
+      })
+  );
   if (!response.body) throw new Error("Empty response body");
 
   const reader = response.body.getReader();
@@ -501,22 +521,24 @@ export async function phalaCompletion(opts: {
 }): Promise<ToolResponse> {
   const model = opts.providerModelID;
   const tools = opts.tools ?? [];
-  const sealed = await sealRequest(
-    model,
-    tools.length > 0 ? withToolInstructions(opts.turns, tools) : opts.turns,
-    {
-      ...(opts.reasoningParams ?? {}),
-      ...(tools.length > 0 ? { response_format: { type: "json_object" } } : {}),
-    },
-    opts.phase
+  const { response, sealed } = await postSealed(
+    () =>
+      sealRequest(
+        model,
+        tools.length > 0 ? withToolInstructions(opts.turns, tools) : opts.turns,
+        {
+          ...(opts.reasoningParams ?? {}),
+          ...(tools.length > 0 ? { response_format: { type: "json_object" } } : {}),
+        },
+        opts.phase
+      ),
+    (sealed) =>
+      fetch(`${API_URL}/api/phala/v1/chat/completions`, {
+        method: "POST",
+        headers: opts.withoutBasePrompt ? { ...sealed.headers, "X-Karui-Base-Prompt": "none" } : sealed.headers,
+        body: sealed.body,
+      })
   );
-
-  const response = await fetch(`${API_URL}/api/phala/v1/chat/completions`, {
-    method: "POST",
-    headers: opts.withoutBasePrompt ? { ...sealed.headers, "X-Karui-Base-Prompt": "none" } : sealed.headers,
-    body: sealed.body,
-  });
-  await throwForStatus(response, sealed);
   const body = new Uint8Array(await response.arrayBuffer());
   await verifyReceipt(response, body, sealed);
 
