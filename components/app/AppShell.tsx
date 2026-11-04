@@ -295,8 +295,12 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
 
         <ShellContext.Provider value={{ sidebarHidden: hidden }}>
           {banner}
-          {/* Keeps the scrollbar's space, so a short page (Connectors with few rows) doesn't shift sideways. */}
-          <main id="main" className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
+          {/* Keeps the scrollbar's space, so a short page (Connectors with few rows) doesn't shift sideways.
+              Views that scroll their own container (data-own-scroll) would leave that space empty. */}
+          <main
+            id="main"
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] has-[[data-own-scroll]]:[scrollbar-gutter:auto]"
+          >
             {children}
           </main>
         </ShellContext.Provider>

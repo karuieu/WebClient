@@ -425,7 +425,7 @@ export function ChatView({
 
   return (
     <div className="flex min-h-0 flex-1">
-      <div ref={scrollRef} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <div ref={scrollRef} data-own-scroll className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
         <ChatHeader title={title} starred={starred} enclave={enclave} actions={chatActions} project={project} halloween={halloween} />
 
         <div ref={contentRef} className="mx-auto flex w-full max-w-[46rem] flex-1 flex-col gap-10 px-4 pb-10 pt-6 sm:px-6">

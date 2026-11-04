@@ -253,7 +253,7 @@ export function ProjectHome({
 }) {
   const reduce = useReducedMotion();
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div data-own-scroll className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
       <ChatHeader title="" enclave={enclave} project={header} />
       <div className="flex flex-1 flex-col items-center justify-center px-4 pb-[12vh] pt-6 sm:px-6">
         <div className="w-full max-w-[44rem]">
