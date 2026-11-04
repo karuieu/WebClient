@@ -147,12 +147,12 @@ function withVersion(edits: Edits, content: string): Edits {
 
 /** How the panel names what it holds, and the format shown in its subtitle and editor. */
 function kindOf(artifact: ArtifactPanelData): { writing: string; format: string; language?: string } {
-  if (artifact.type === "markdown") return { writing: "Writing note…", format: "Markdown" };
+  if (artifact.type === "markdown") return { writing: "Writing doc…", format: "Markdown" };
   if (artifact.type === "code") {
     const { label, prism } = codeLanguageOf(artifact.path);
     return { writing: "Writing code…", format: label, language: prism };
   }
-  return { writing: "Writing document…", format: "HTML" };
+  return { writing: "Writing site…", format: "HTML" };
 }
 
 function asItem(v: Version): FileVersionItem {
@@ -475,7 +475,7 @@ export function ArtifactPanel({
         {common && desktop && (
           <motion.aside
             key="artifact"
-            aria-label="Document"
+            aria-label="Artifact"
             initial={{ width: 0 }}
             // 100% rather than a measured width, so it follows the sliding sidebar in the same frame.
             animate={{ width: expanded ? "100%" : width }}

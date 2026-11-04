@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Ellipsis,
+  Files,
   Folder,
   FolderInput,
   LogOut,
@@ -42,7 +43,7 @@ export type SidebarProps = {
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
-  active?: { section?: "new" | "chats" | "projects" | "workspace" | null; chatId?: string | null; projectId?: string | null };
+  active?: { section?: "new" | "chats" | "projects" | "artifacts" | "workspace" | null; chatId?: string | null; projectId?: string | null };
   user: SidebarUser;
   workspace?: SidebarWorkspace;
   onStarChat: (chat: SidebarChat) => void;
@@ -440,6 +441,7 @@ export function Sidebar(p: Internal): React.JSX.Element {
           )}
           <NavRow href="/chats" label="Chats" icon={<MessageSquare className="size-4" />} active={active?.section === "chats"} pillId={pillId} onNavigate={p.onNavigate} />
           <NavRow href="/projects" label="Projects" icon={<Folder className="size-4" />} active={active?.section === "projects" && !starredProjects.some((x) => x.id === active?.projectId)} pillId={pillId} onNavigate={p.onNavigate} />
+          <NavRow href="/artifacts" label="Artifacts" icon={<Files className="size-4" />} active={active?.section === "artifacts"} pillId={pillId} onNavigate={p.onNavigate} />
           {p.workspace && (
             <NavRow href={p.workspace.href} label={p.workspace.label} icon={<Puzzle className="size-4" />} active={active?.section === "workspace"} pillId={pillId} onNavigate={p.onNavigate} />
           )}

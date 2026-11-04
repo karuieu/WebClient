@@ -1,12 +1,13 @@
 /**
- * Hands a search hit from the palette to the chat it opens. Kept in memory and
+ * Hands a search hit from the palette, or an artifact from the Artifacts page, to the chat it opens. Kept in memory and
  * never in the URL: on a reload the address reaches our server and its logs,
  * and the search terms are the user's plaintext.
  */
 
 import { onSessionCleared } from "@/lib/account/session";
 
-export type SearchFocus = { chatId: string; messageId: string; terms: string[] };
+/** `openArtifact` is the card to open in the side panel, as `messageId:block`. */
+export type SearchFocus = { chatId: string; messageId: string; terms: string[]; openArtifact?: string };
 
 let pending: SearchFocus | null = null;
 const listeners = new Set<() => void>();

@@ -88,3 +88,24 @@ export function chatFileIndex(turns: ChatTurn[]): { files: LibraryIndexEntry[]; 
     contents: new Map(latest.map(({ file, version }) => [file.path, version.content])),
   };
 }
+
+/** `block` is the artifact's place in that message, as the chat numbers its cards. */
+export type LatestChatFile = { path: string; title: string; type: ArtifactType; content: string; version: number; messageId: string; block: number; savedAt: string };
+
+/** Each file's latest version and the message holding it, for the Artifacts page. */
+export function latestChatFiles(messages: (ChatTurn & { id: string; created_at: string })[]): LatestChatFile[] {
+  return [...chatFiles(messages).values()].map((file) => {
+    const last = file.versions[file.versions.length - 1];
+    const message = messages[last.turn];
+    return {
+      path: file.path,
+      title: file.title,
+      type: file.type,
+      content: last.content,
+      version: file.versions.length,
+      messageId: message.id,
+      block: last.block,
+      savedAt: message.created_at,
+    };
+  });
+}

@@ -194,7 +194,7 @@ function changeStatus(change: ArtifactChange, path: string): string {
   return `Edited · ${change.count === 1 ? "1 change" : `${change.count} changes`} · ${path}`;
 }
 
-const KIND = { markdown: "Note", html: "Document", code: "Code" } as const;
+const KIND = { markdown: "Doc", html: "Site", code: "Code" } as const;
 
 function formatOf({ type, path }: ArtifactData): string {
   if (type === "code") return codeLanguageOf(path).label;

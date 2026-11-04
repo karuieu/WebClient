@@ -1,6 +1,8 @@
-// Search index of message text. Plaintext lives in memory only; IndexedDB holds the same text sealed with the user's AES key. Signing out deletes the database.
+// Search index of message text, plus the latest version of each chat file for the Artifacts page. Plaintext lives in memory
+// only; IndexedDB holds the same data sealed with the user's AES key. Signing out deletes the database.
 
 import { readChatMessages, type Chat, type Message } from "@/lib/chat/chat";
+import { latestChatFiles, type LatestChatFile } from "@/lib/artifacts/chatFiles";
 import { visibleMessages } from "@/lib/messages/conversation";
 import { decryptMessage, encryptMessage } from "@/lib/account/crypto";
 import { ensureAesKey, onSessionCleared } from "@/lib/account/session";
@@ -10,9 +12,10 @@ export type IndexedMessage = { id: string; role: "user" | "assistant"; text: str
 export type IndexProgress = { done: number; total: number; paused: boolean };
 export type IndexState = { version: number; progress: IndexProgress | null };
 
-type IndexedChat = { updatedAt: string; messages: IndexedMessage[] };
+type IndexedChat = { updatedAt: string; messages: IndexedMessage[]; files: LatestChatFile[] };
 type StoredChat = { updatedAt: string; sealed: string };
 type StoredMessage = Pick<IndexedMessage, "id" | "role" | "text">;
+type SealedChat = { messages: StoredMessage[]; files: LatestChatFile[] };
 
 const DB_NAME = "karui-search";
 const STORE = "chats";
@@ -89,6 +92,24 @@ function isStoredMessage(v: unknown): v is StoredMessage {
   return typeof m.id === "string" && (m.role === "user" || m.role === "assistant") && typeof m.text === "string";
 }
 
+function isStoredFile(v: unknown): v is LatestChatFile {
+  if (!v || typeof v !== "object") return false;
+  const f = v as Record<string, unknown>;
+  return (
+    ["path", "title", "content", "messageId", "savedAt"].every((k) => typeof f[k] === "string") &&
+    (f.type === "markdown" || f.type === "html" || f.type === "code") &&
+    typeof f.version === "number" &&
+    typeof f.block === "number"
+  );
+}
+
+// Records from before files were indexed are a bare array: they count as broken and the chat is read again.
+function isSealedChat(v: unknown): v is SealedChat {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const c = v as Record<string, unknown>;
+  return Array.isArray(c.messages) && c.messages.every(isStoredMessage) && Array.isArray(c.files) && c.files.every(isStoredFile);
+}
+
 function indexed(messages: StoredMessage[]): IndexedMessage[] {
   return messages.map((m) => ({ ...m, folded: fold(m.text) }));
 }
@@ -100,8 +121,8 @@ async function loadStored(key: CryptoKey): Promise<void> {
     [...stored].map(async ([id, record]) => {
       try {
         const parsed: unknown = JSON.parse(await decryptMessage(key, record.sealed));
-        if (!Array.isArray(parsed) || !parsed.every(isStoredMessage)) throw new Error("bad record");
-        index.set(id, { updatedAt: record.updatedAt, messages: indexed(parsed) });
+        if (!isSealedChat(parsed)) throw new Error("bad record");
+        index.set(id, { updatedAt: record.updatedAt, messages: indexed(parsed.messages), files: parsed.files });
       } catch {
         broken.push(id);
       }
@@ -114,7 +135,7 @@ async function save(key: CryptoKey, entries: [string, IndexedChat][]): Promise<v
   if (!hasDB()) return;
   const records = await Promise.all(
     entries.map(async ([id, chat]) => {
-      const plain: StoredMessage[] = chat.messages.map(({ id, role, text }) => ({ id, role, text }));
+      const plain: SealedChat = { messages: chat.messages.map(({ id, role, text }) => ({ id, role, text })), files: chat.files };
       return [id, { updatedAt: chat.updatedAt, sealed: await encryptMessage(key, JSON.stringify(plain)) }] as const;
     }),
   );
@@ -185,6 +206,7 @@ async function run(chats: Chat[]): Promise<void> {
       const entry: IndexedChat = {
         updatedAt: stamp(c),
         messages: indexed(shown.map((m) => ({ id: m.id, role: m.role, text: messageSearchText(m.role, m.content) })).filter((m) => m.text)),
+        files: latestChatFiles(shown),
       };
       index.set(c.id, entry);
       fresh.push([c.id, entry]);
@@ -210,6 +232,16 @@ export function searchMessages(terms: string[], chatIds: string[], perChat = 3, 
     if (groups.length === maxChats) break;
   }
   return groups;
+}
+
+export type IndexedArtifact = LatestChatFile & { chatId: string };
+
+/** Every chat's files, newest first; null until the sealed index has been read. */
+export function indexedArtifacts(): IndexedArtifact[] | null {
+  if (!loaded) return null;
+  return [...index]
+    .flatMap(([chatId, chat]) => chat.files.map((f) => ({ ...f, chatId })))
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
 onSessionCleared(() => {

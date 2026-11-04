@@ -115,6 +115,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const onFocusShown = React.useCallback(
     (row: HTMLElement | null) => {
       if (row && focus) markSearchTerms(row, focus.terms)?.startContainer.parentElement?.scrollIntoView({ block: "center" });
+      if (focus?.openArtifact) setOpenArtifact(focus.openArtifact);
       clearPendingFocus();
     },
     [focus],
