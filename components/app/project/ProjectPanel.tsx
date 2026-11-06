@@ -31,10 +31,10 @@ import { Segmented } from "@/components/kit/Segmented";
 import { Spinner } from "@/components/kit/Spinner";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
 import { Tooltip } from "@/components/kit/Tooltip";
-import { artifactTypeOf, codeLanguageOf, toDocument } from "@/lib/artifacts/artifacts";
+import { artifactTypeOf, codeLanguageOf, composeSite, pageNonce, siteFiles, toDocument } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { exactStamp, groupOf, stamp } from "../ChatsView";
-import { DocumentPaper } from "../chat/ArtifactPanel";
+import { DocumentPaper, RunningSite } from "../chat/ArtifactPanel";
 import { ShellContext } from "../AppShell";
 import { DropOverlay } from "../DropOverlay";
 import { NumberedTextArea } from "../NumberedTextArea";
@@ -631,10 +631,12 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const loaded = item.kind === "file" && item.content !== null && !item.error;
   const previewing = paged && view === "preview" && loaded;
-  const document = React.useMemo(
-    () => (previewing ? toDocument({ title: name ?? "", type, content: draft.content }) : ""),
-    [previewing, type, name, draft.content],
-  );
+  // A site with a script runs here as it does in the chat, so it can't be printed.
+  const site = React.useMemo(() => (previewing && type === "html" ? siteFiles(draft.content) : null), [previewing, type, draft.content]);
+  const document = React.useMemo(() => {
+    if (!previewing) return "";
+    return site ? composeSite(site, { nonce: pageNonce() }) : toDocument({ title: name ?? "", type, content: draft.content });
+  }, [previewing, site, type, name, draft.content]);
   const versions = type && loaded ? l.versions : undefined;
   const viewing = versions?.viewing ?? null;
   const file = item.kind === "file" ? item.file : null;
@@ -655,7 +657,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
         ]
       : []),
     ...(compact && versions ? [...versionMenuItems(current, !dirty, versions, now), { type: "separator" as const }] : []),
-    ...(previewing || (viewing && paged)
+    ...((previewing && !site) || (viewing && paged)
       ? [
           { label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: () => frameRef.current?.contentWindow?.print() },
           { type: "separator" as const },
@@ -859,7 +861,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
         <VersionPaper name={name ?? ""} type={type} viewing={viewing} onRetry={() => versions?.onView(viewing.version)} frameRef={frameRef} />
       ) : previewing ? (
         <div className="min-h-0 flex-1 p-3">
-          <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} />
+          {site ? <RunningSite title={name ?? ""} document={document} /> : <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} />}
         </div>
       ) : (
         <NumberedTextArea

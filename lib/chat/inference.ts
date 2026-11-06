@@ -149,6 +149,7 @@ In this project, artifacts are files in its Library: a note (type="markdown") is
 - A change to a file that exists: load it with <read> first. Then ${ARTIFACT_CHANGES}
 - Every save keeps the version it replaces, and the last five stay, so a change can be undone in the Library.
 - When the user asks to keep or back up a file's current version, write <keep_version path="<its path>"/>. A kept version stays until the user deletes it.
+- A site with a script is one .html file holding its <file name="index.html">, "style.css" and "script.js"> blocks; a rewrite carries all three, and each <old> is exact text from one of them.
 After a save, your earlier artifact tags show what happened: saved="created", "updated", "edited", or "failed" with a reason.
 </project_artifacts>`;
 
@@ -156,6 +157,7 @@ const CHAT_ARTIFACTS = `<chat_artifacts>
 In this chat, every note, document and code file you write is a file, named by the path="…" in its tag. Earlier versions in the conversation are replaced by a short note; the latest one is the file.
 - A new file: write the artifact without a path, or add path="name.md" to choose one. Code always has a path with its extension, such as path="backup.py".
 - A change to a file: ${ARTIFACT_CHANGES} It becomes the file's next version. When its latest version isn't in the conversation, load it from <chat_files_index> with <read> first.
+- A site with a script is one file holding its <file> blocks; a rewrite carries all three, and each <old> is exact text from one of them.
 After an edit, its tag shows what happened: changes="N", or reason="…" when nothing changed.
 </chat_artifacts>`;
 

@@ -178,10 +178,17 @@ const PLACEHOLDER_LINE = /^[\s[(<!-]*(?:\.{3}|…)[^.…\n]{0,40}(?:\.{3}|…)?[
 // "# ... rest unchanged", "// … existing code …", "/* ... */ keep".
 const CODE_PLACEHOLDER_LINE = /^\s*(?:#|\/\/|\/\*|--|<!--)\s*(?:\.{3}|…)\s*\p{L}[^\n]{0,60}$/mu;
 
+// A site's stylesheet and script are code: "...state," on its own line is a JavaScript spread, not a gap.
+function hasPlaceholder(artifact: Artifact): boolean {
+  if (artifact.type === "code") return CODE_PLACEHOLDER_LINE.test(artifact.content);
+  const files = artifact.type === "html" ? siteFiles(artifact.content) : null;
+  if (!files) return PLACEHOLDER_LINE.test(artifact.content);
+  return PLACEHOLDER_LINE.test(files["index.html"]) || CODE_PLACEHOLDER_LINE.test(files["style.css"] + "\n" + files["script.js"]);
+}
+
 /** A rewrite of an existing file that leaves its text out: it would wipe the file, so it is refused. */
 function isShortened(artifact: Artifact, current: string | undefined): boolean {
-  const placeholder = artifact.type === "code" ? CODE_PLACEHOLDER_LINE : PLACEHOLDER_LINE;
-  return placeholder.test(artifact.content) && (current === undefined || artifact.content.length < current.length);
+  return hasPlaceholder(artifact) && (current === undefined || artifact.content.length < current.length);
 }
 
 /**
@@ -342,8 +349,89 @@ function bodyHtml(artifact: Pick<Artifact, "type" | "content">): string {
   return stripActiveContent(artifact.type === "markdown" ? markdownToHtml(artifact.content) : artifact.content);
 }
 
-/** Notes and documents only: code is never shown on paper. */
+/** A site with a script is one artifact holding these three files, each in a <file name="…"> block. */
+export const SITE_FILES = ["index.html", "style.css", "script.js"] as const;
+export type SiteFile = (typeof SITE_FILES)[number];
+export type SiteFiles = Record<SiteFile, string>;
+
+const FILE_BLOCK = /<file\s+name="([^"]+)"\s*>\n?([\s\S]*?)\n?<\/file>/g;
+
+function isSiteFile(name: string): name is SiteFile {
+  return (SITE_FILES as readonly string[]).includes(name);
+}
+
+/** The site's files, or null for a site written as one HTML document. */
+export function siteFiles(content: string): SiteFiles | null {
+  const files: SiteFiles = { "index.html": "", "style.css": "", "script.js": "" };
+  let found = false;
+  for (const [, name, text] of content.matchAll(FILE_BLOCK)) {
+    if (!isSiteFile(name)) continue;
+    files[name] = text;
+    found = true;
+  }
+  return found ? files : null;
+}
+
+/** The site with one file's text replaced, or added when the model left that file out. */
+export function withSiteFile(content: string, name: SiteFile, text: string): string {
+  const block = `<file name="${name}">\n${text}\n</file>`;
+  let replaced = false;
+  const next = content.replace(FILE_BLOCK, (whole: string, n: string) => {
+    if (n !== name) return whole;
+    replaced = true;
+    return block;
+  });
+  return replaced ? next : `${content}\n${block}`;
+}
+
+// WebRTC isn't covered by CSP, so it is the one way out a script would still have. Deleting it raises the bar;
+// a determined script can still get it back from a fresh about:blank frame, so this is a hurdle, not a block.
+const NO_WEBRTC =
+  "for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel', 'RTCIceCandidate', 'RTCSessionDescription']) delete window[name];";
+
+function siteCsp(scriptSrc: string): string {
+  return (
+    `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${scriptSrc}; ` +
+    `style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; ` +
+    `frame-src 'none'; form-action 'none'; base-uri 'none'">`
+  );
+}
+
+// A file's text can't close the tag it is inlined in.
+function inlined(text: string): string {
+  return text.replace(/<\/(script|style)/gi, "<\\/$1");
+}
+
+function beforeClose(html: string, tag: string, text: string): string {
+  const close = new RegExp(`</${tag}\\s*>`, "i");
+  return close.test(html) ? html.replace(close, (match) => text + match) : html + text;
+}
+
+/**
+ * index.html with style.css inlined, and script.js only when `run` is given. Its own scripts, handlers and links are
+ * removed, and the CSP lets nothing load or leave. In the app the frame inherits the page's nonce-only CSP, so
+ * `nonce` must be the page's; a downloaded file runs without one.
+ */
+export function composeSite(files: SiteFiles, run?: { nonce?: string }): string {
+  const scriptSrc = !run ? "'none'" : run.nonce ? `'nonce-${run.nonce}'` : "'unsafe-inline'";
+  const nonce = run?.nonce ? ` nonce="${run.nonce}"` : "";
+  const html = stripActiveContent(files["index.html"]).replace(/<link\b[^>]*>/gi, "").replace(/^\s*<!doctype[^>]*>/i, "");
+  const head = `<meta charset="utf-8">` + (/<meta[^>]+name\s*=\s*["']?viewport/i.test(html) ? "" : VIEWPORT_META);
+  const styles = `<style>${inlined(files["style.css"])}</style><style>${MOBILE_GUARD_STYLES}</style>`;
+  const scripts = run ? `<script${nonce}>${NO_WEBRTC}</script><script${nonce}>${inlined(files["script.js"])}</script>` : "";
+  // The CSP goes first: it only governs what is parsed after it.
+  return `<!doctype html>${siteCsp(scriptSrc)}${head}` + beforeClose(beforeClose(html, "head", styles), "body", scripts);
+}
+
+/** Browsers hide a nonce from attributes, but the property keeps it (lib/account/captcha.ts does the same). */
+export function pageNonce(): string | undefined {
+  return document.querySelector<HTMLScriptElement>("script[nonce]")?.nonce || undefined;
+}
+
+/** Notes and documents only: code is never shown on paper. A site with a script is shown still, without it. */
 export function toDocument(artifact: Pick<Artifact, "title" | "type" | "content">): string {
+  const files = artifact.type === "html" ? siteFiles(artifact.content) : null;
+  if (files) return composeSite(files);
   const html = bodyHtml(artifact);
 
   if (!/<html[\s>]/i.test(html)) {
@@ -458,11 +546,17 @@ export function downloadArtifact(artifact: Artifact): void {
   else downloadArtifactSource(artifact);
 }
 
-export function downloadArtifactHtml(artifact: Artifact): void {
+/** A site with a script downloads as one page that runs offline, its files inlined. */
+export function downloadArtifactHtml(artifact: Pick<Artifact, "title" | "type" | "content">): void {
+  const files = artifact.type === "html" ? siteFiles(artifact.content) : null;
   downloadBlob(
-    new Blob([toDocument(artifact)], { type: "text/html;charset=utf-8" }),
+    new Blob([files ? composeSite(files, {}) : toDocument(artifact)], { type: "text/html;charset=utf-8" }),
     fileName(artifact.title, "html")
   );
+}
+
+export function downloadSiteFile(name: SiteFile, text: string): void {
+  downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), name);
 }
 
 export function downloadArtifactDoc(artifact: Artifact): void {

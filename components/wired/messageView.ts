@@ -5,7 +5,7 @@ import { isProviderVerified } from "@/lib/chat/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
-import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, parseArtifacts, type Artifact } from "@/lib/artifacts/artifacts";
+import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, downloadSiteFile, parseArtifacts, siteFiles, type Artifact } from "@/lib/artifacts/artifacts";
 import { chatFiles } from "@/lib/artifacts/chatFiles";
 import type { ArtifactPanel, ArtifactVersion } from "@/components/app/chat/ArtifactPanel";
 import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
@@ -84,6 +84,11 @@ function chatOf(artifact: ShownArtifact): ArtifactData["chat"] {
   return { version: artifact.file.version, change: artifact.changes ? { kind: "edited", count: artifact.changes } : undefined };
 }
 
+function fileCount(artifact: ShownArtifact): number | undefined {
+  const files = artifact.type === "html" && !artifact.edit ? siteFiles(artifact.content) : null;
+  return files ? Object.values(files).filter(Boolean).length : undefined;
+}
+
 function artifactsOf(id: string, artifacts: ShownArtifact[], library?: ChatLibrary): ArtifactData[] {
   return artifacts.map((a, i) => {
     const key = `${id}:${i}`;
@@ -92,6 +97,7 @@ function artifactsOf(id: string, artifacts: ShownArtifact[], library?: ChatLibra
       title: a.title,
       type: a.type,
       path: a.file?.path ?? a.path,
+      files: fileCount(a),
       edit: a.edit,
       streaming: a.streaming,
       library: library && libraryOf(key, a, library),
@@ -141,6 +147,7 @@ export function artifactPanelOf(
     onDownloadHtml: download(downloadArtifactHtml),
     onDownloadDoc: download(downloadArtifactDoc),
     onDownloadSource: download(downloadArtifactSource),
+    onDownloadFile: downloadSiteFile,
   };
 }
 

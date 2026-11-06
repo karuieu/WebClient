@@ -6,7 +6,7 @@ import { Download, Ellipsis, Expand, Printer, RotateCcw, Shrink, X } from "@/com
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Segmented } from "@/components/kit/Segmented";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
-import { codeLanguageOf, toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
+import { codeLanguageOf, composeSite, pageNonce, siteFiles, toDocument, withSiteFile, type ArtifactType, type SiteFile } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { ShellContext } from "../AppShell";
 import { exactStamp } from "../ChatsView";
@@ -20,8 +20,12 @@ const DEFAULT = 720;
 const COMPACT_HEADER = 600;
 // Your own edits kept besides the current one; versions Karui wrote always stay.
 const VERSIONS_BACK = 5;
-// Previews never run scripts; same-origin is only there so the frame can be printed.
+// Docs and single-file sites never run scripts; same-origin is only there so the frame can be printed.
 const SANDBOX = "allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox";
+// A site's script.js runs only in this frame. Never add allow-same-origin here: the page would get the app's origin,
+// and with it the key, the chats and the DOM. Without it the page is an opaque origin with no storage of its own.
+// Forms are allowed so their submit event fires; the page's CSP (form-action 'none') still stops them being sent.
+const RUN_SANDBOX = "allow-scripts allow-forms";
 
 /** A version of a chat's file that Karui wrote, numbered from 1; the last one is `source`. */
 export type ArtifactVersion = { number: number; content: string; savedAt: string };
@@ -102,6 +106,20 @@ export function DocumentPaper({ title, document, frameRef }: { title: string; do
   );
 }
 
+export function RunningSite({ title, document }: { title: string; document: string }) {
+  return (
+    <Paper>
+      <iframe title={title} srcDoc={document} sandbox={RUN_SANDBOX} referrerPolicy="no-referrer" className="size-full border-0 bg-white" />
+    </Paper>
+  );
+}
+
+const SITE_TABS: { value: SiteFile; label: string; language: string }[] = [
+  { value: "index.html", label: "HTML", language: "markup" },
+  { value: "style.css", label: "CSS", language: "css" },
+  { value: "script.js", label: "JS", language: "javascript" },
+];
+
 function WritingSkeleton({ label }: { label: string }) {
   return (
     <Paper>
@@ -123,6 +141,8 @@ type Downloads = {
   onDownloadDoc: (source: string) => void;
   /** The file as written: Markdown for a note, the source file for code. */
   onDownloadSource?: (source: string) => void;
+  /** One file of a site with a script. */
+  onDownloadFile?: (name: SiteFile, text: string) => void;
   onExportGoogleDocs?: (source: string) => void;
   exportingGoogleDocs?: boolean;
 };
@@ -169,6 +189,7 @@ function PanelBody({
   onDownloadHtml,
   onDownloadDoc,
   onDownloadSource,
+  onDownloadFile,
   onExportGoogleDocs,
   exportingGoogleDocs,
   mobile,
@@ -181,8 +202,13 @@ function PanelBody({
   onToggleExpand?: () => void;
   mobile?: boolean;
 }) {
-  const [tab, setTab] = React.useState<"preview" | "edit">("preview");
-  const [viewing, setViewing] = React.useState<number | null>(artifact.openAt ?? null);
+  const [tab, setTab] = React.useState<"preview" | "edit" | SiteFile>("preview");
+  // Restart reloads the running site from its first line.
+  const [run, setRun] = React.useState(0);
+  // A card on the latest version opens the current one, so your edits in the panel stay in view as new versions.
+  const [viewing, setViewing] = React.useState<number | null>(
+    artifact.openAt !== undefined && artifact.openAt !== artifact.history?.at(-1)?.number ? artifact.openAt : null,
+  );
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const compact = useNarrow(rootRef, COMPACT_HEADER);
@@ -197,15 +223,23 @@ function PanelBody({
   const current = edits.versions[edits.versions.length - 1];
   const shownVersion = viewing === null || viewing === current.number ? null : (edits.versions.find((v) => v.number === viewing) ?? null);
   const content = shownVersion ? shownVersion.content : edits.draft;
+  const files = React.useMemo(() => (artifact.type === "html" ? siteFiles(content) : null), [artifact.type, content]);
+  const fileTab = files && SITE_TABS.find((t) => t.value === tab);
   // Code has no paper: it opens straight in the editor, an earlier version read only.
-  const showsPaper = ready && !code && (tab === "preview" || !!shownVersion);
-  const document = React.useMemo(
-    () => (showsPaper ? toDocument({ title: artifact.title, type: artifact.type, content }) : ""),
-    [showsPaper, artifact.title, artifact.type, content],
-  );
+  const showsPaper = ready && !code && (tab === "preview" || (!!shownVersion && !fileTab));
+  const document = React.useMemo(() => {
+    if (!showsPaper) return "";
+    return files ? composeSite(files, { nonce: pageNonce() }) : toDocument({ title: artifact.title, type: artifact.type, content });
+  }, [showsPaper, files, artifact.title, artifact.type, content]);
+  const views = files
+    ? [{ value: "preview" as const, label: "Preview" }, ...SITE_TABS]
+    : [
+        { value: "preview" as const, label: "Preview" },
+        { value: "edit" as const, label: "Edit" },
+      ];
 
   const commit = () => edits.draft !== current.content && onEdits(withVersion(edits, edits.draft));
-  const showTab = (next: "preview" | "edit") => {
+  const showTab = (next: "preview" | "edit" | SiteFile) => {
     if (next === "preview") commit();
     setTab(next);
   };
@@ -232,8 +266,11 @@ function PanelBody({
   };
   const currentVersion = { number: current.number, kept: false };
 
-  // Code is only ever its own file: a web page or Word copy of a program helps no one.
-  const downloads: MenuItem[] = code ? [
+  // Code is only ever its own file: a web page or Word copy of a program helps no one. Neither is a site that runs.
+  const downloads: MenuItem[] = files ? [
+    { label: "Web page", hint: ".html", onSelect: () => onDownloadHtml(content) },
+    ...(onDownloadFile ? SITE_TABS.map((t) => ({ label: t.value, onSelect: () => onDownloadFile(t.value, files[t.value]) })) : []),
+  ] : code ? [
     ...(onDownloadSource ? [{ label: `${format} file`, hint: `.${codeLanguageOf(artifact.path).ext}`, onSelect: () => onDownloadSource(content) }] : []),
   ] : [
     ...(note && onDownloadSource ? [{ label: "Markdown", hint: ".md", onSelect: () => onDownloadSource(content) }] : []),
@@ -244,18 +281,25 @@ function PanelBody({
       : [{ label: "Export to Google Docs", onSelect: () => onExportGoogleDocs(content) }] : []),
   ];
   const print = () => frameRef.current?.contentWindow?.print();
+  const restart = () => setRun((n) => n + 1);
   const menuItems: MenuItem[] = [
     ...(!shownVersion && !code
       ? [
           { type: "header" as const, content: <p className="text-label text-muted">View</p> },
-          { label: "Preview", checked: tab === "preview", onSelect: () => showTab("preview") },
-          { label: "Edit", checked: tab === "edit", onSelect: () => showTab("edit") },
+          ...views.map((v) => ({ label: v.label, checked: tab === v.value, onSelect: () => showTab(v.value) })),
           { type: "separator" as const },
         ]
       : []),
     ...versionMenuItems(currentVersion, false, versions, now),
     { type: "separator" },
-    ...(showsPaper ? [{ label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: print }, { type: "separator" as const }] : []),
+    ...(showsPaper
+      ? [
+          files
+            ? { label: "Restart", icon: <RotateCcw className="size-3.5" />, onSelect: restart }
+            : { label: "Print or save as PDF", icon: <Printer className="size-3.5" />, onSelect: print },
+          { type: "separator" as const },
+        ]
+      : []),
     { type: "header", content: <p className="text-label text-muted">Download</p> },
     ...downloads,
   ];
@@ -264,7 +308,7 @@ function PanelBody({
     ? writing
     : shownVersion
       ? [`v${shownVersion.number}`, now && exactStamp(shownVersion.savedAt, now), "read only"].filter(Boolean).join(" · ")
-      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? "HTML · scripts off" : format].filter(Boolean).join(" · ");
+      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? (files ? "HTML · CSS · JS" : "HTML · scripts off") : format].filter(Boolean).join(" · ");
 
   // An earlier version can't be edited, so Restore takes the place of Preview / Edit.
   const restore = shownVersion && (
@@ -305,10 +349,7 @@ function PanelBody({
                 label="View"
                 size="sm"
                 className="mx-1 shrink-0"
-                options={[
-                  { value: "preview", label: "Preview" },
-                  { value: "edit", label: "Edit" },
-                ]}
+                options={views}
                 value={tab}
                 onChange={showTab}
               />
@@ -322,8 +363,13 @@ function PanelBody({
         )}
         {ready && !compact && (
           <>
-            {/* Disabled rather than hidden while editing, so the header doesn't shift. Code is never printed. */}
-            {!code && (
+            {/* Disabled rather than hidden while editing, so the header doesn't shift. Code is never printed, and a
+                running site can't be: its frame has an origin of its own. */}
+            {files ? (
+              <IconButton label={showsPaper ? "Restart" : "Switch to Preview to restart"} onClick={restart} disabled={!showsPaper}>
+                <RotateCcw className="size-[16px]" />
+              </IconButton>
+            ) : !code && (
               <IconButton label={showsPaper ? "Print or save as PDF" : "Switch to Preview to print"} onClick={print} disabled={!showsPaper}>
                 <Printer className="size-[17px]" />
               </IconButton>
@@ -375,8 +421,22 @@ function PanelBody({
         ) : showsPaper ? (
           // An earlier version sits on the same paper as the current one, so switching doesn't move the page.
           <div className="absolute inset-0 p-3 sm:p-5">
-            <DocumentPaper title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} frameRef={frameRef} />
+            {files ? (
+              <RunningSite key={run} title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} />
+            ) : (
+              <DocumentPaper title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} frameRef={frameRef} />
+            )}
           </div>
+        ) : fileTab ? (
+          <NumberedTextArea
+            key={`${fileTab.value}:${shownVersion?.number ?? "draft"}`}
+            label={`${fileTab.value} of ${artifact.title}${shownVersion ? `, v${shownVersion.number}` : ""}`}
+            value={files[fileTab.value]}
+            spellCheck={false}
+            readOnly={!!shownVersion}
+            language={fileTab.language}
+            onChange={(text) => onEdits({ ...edits, draft: withSiteFile(edits.draft, fileTab.value, text) })}
+          />
         ) : (
           <NumberedTextArea
             key={shownVersion?.number ?? "draft"}
@@ -399,6 +459,7 @@ export function ArtifactPanel({
   onDownloadHtml,
   onDownloadDoc,
   onDownloadSource,
+  onDownloadFile,
   onExportGoogleDocs,
   exportingGoogleDocs,
 }: Downloads & {
@@ -465,6 +526,7 @@ export function ArtifactPanel({
     onDownloadHtml,
     onDownloadDoc,
     onDownloadSource,
+    onDownloadFile,
     onExportGoogleDocs,
     exportingGoogleDocs,
   };

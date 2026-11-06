@@ -40,6 +40,8 @@ export type ArtifactData = {
   type: ArtifactType;
   /** For code, the file's extension names its language. */
   path?: string;
+  /** A site with a script: how many files it has. */
+  files?: number;
   streaming?: boolean;
   /** An edit carries only the changes, not a document: there's nothing to download or open from the message. */
   edit?: boolean;
@@ -196,8 +198,9 @@ function changeStatus(change: ArtifactChange, path: string): string {
 
 const KIND = { markdown: "Doc", html: "Site", code: "Code" } as const;
 
-function formatOf({ type, path }: ArtifactData): string {
+function formatOf({ type, path, files }: ArtifactData): string {
   if (type === "code") return codeLanguageOf(path).label;
+  if (files) return `${files} files`;
   return type === "markdown" ? "Markdown" : "HTML";
 }
 
