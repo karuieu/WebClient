@@ -8,6 +8,7 @@ import { STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
 import { toHex } from "./hex";
 import { parseToolResponse, withToolInstructions, type JsonTool, type ToolResponse } from "./jsonTools";
 import { assertReviewedGateway } from "./phalaGateway";
+import { isReviewedGatewayOs } from "./phalaOs";
 import { forgetTinfoilSessions, tinfoilSessionIds } from "./phalaSessions";
 
 export const PHALA_E2EE_ALGO = "x25519-aes-256-gcm-hkdf-sha256";
@@ -110,7 +111,7 @@ function getClientKeys(): nacl.BoxKeyPair {
 }
 
 interface ReportExtras {
-  attestation?: { freshness?: { stale_after?: number }; evidence?: { app_compose?: string } };
+  attestation?: { freshness?: { stale_after?: number }; evidence?: { app_compose?: string; event_log?: unknown } };
   service_capabilities?: { supported_e2ee_versions?: string[] };
 }
 
@@ -128,7 +129,9 @@ async function verifiedGatewayKeyset(report: AttestationReport & ReportExtras, n
   });
   for (const id of REQUIRED_CHECKS) {
     const line = transcript.lines.find((l) => l.id === id);
-    if (line?.status !== "pass") {
+    const reviewedOs = id === "policy-os" && line?.status === "fail"
+      && isReviewedGatewayOs(report.attestation?.evidence?.event_log);
+    if (line?.status !== "pass" && !reviewedOs) {
       console.warn("[karui] Phala attestation:", line ?? id);
       throw new Error("Phala's attestation didn't verify in your browser, so nothing was sent.");
     }

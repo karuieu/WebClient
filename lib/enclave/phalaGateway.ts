@@ -1,10 +1,10 @@
 import { API_URL, apiFetch } from "@/lib/core/api";
 import { toHex } from "./hex";
 
-// sha256 of each reviewed app_compose of Phala's gateway, with the gateway commit replaced by {commit}. The commit
+// sha256 of the current reviewed app_compose of Phala's gateway, with the gateway commit replaced by {commit}. The commit
 // changes with every release and is checked against the public repo's main instead; any other change (an image, the
 // launch script, routing config) gives a new hash, and Phala stays off until that compose is reviewed and listed.
-const REVIEWED_GATEWAY_COMPOSES = new Set(["9522a0e82f07190b8f893a52c586978c3603e099022a7a20a2ed4549e9fc0274"]);
+const REVIEWED_GATEWAY_COMPOSE = "7516f9a22f46a4e57dc23eb46588e1dde32c7f2fec5257c99383031c0820f305";
 
 const COMMIT_VALUE = /PRIVATE_AI_GATEWAY_REPO_COMMIT=([0-9a-f]{40})/g;
 
@@ -33,6 +33,6 @@ export async function assertReviewedGateway(appCompose: string | undefined): Pro
   const commits = [...(appCompose ?? "").matchAll(COMMIT_VALUE)];
   if (!appCompose || commits.length !== 1) throw new Error(UNREVIEWED);
   const template = appCompose.replace(COMMIT_VALUE, "PRIVATE_AI_GATEWAY_REPO_COMMIT={commit}");
-  if (!REVIEWED_GATEWAY_COMPOSES.has(await sha256Hex(template))) throw new Error(UNREVIEWED);
+  if (await sha256Hex(template) !== REVIEWED_GATEWAY_COMPOSE) throw new Error(UNREVIEWED);
   if (!(await isOnMain(commits[0][1]))) throw new Error(UNREVIEWED);
 }
