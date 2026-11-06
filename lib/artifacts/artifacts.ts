@@ -28,8 +28,8 @@ export function setArtifactsEnabled(enabled: boolean): void {
   } catch {}
 }
 
-/** A note is Markdown, a document is HTML, and code is a program's source file. */
-export type ArtifactType = "markdown" | "html" | "code";
+/** A note is Markdown, a document is HTML, code is a program's source file, and slides are HTML sections. */
+export type ArtifactType = "markdown" | "html" | "code" | "slides";
 
 const SAVED = ["created", "updated", "edited", "failed"] as const;
 export type SavedAs = (typeof SAVED)[number];
@@ -84,6 +84,7 @@ function extensionOf(path: string): string {
 }
 
 export function artifactTypeOf(path: string): ArtifactType | null {
+  if (path.toLowerCase().endsWith(SLIDES_EXTENSION)) return "slides";
   const ext = extensionOf(path);
   if (ext === "md" || ext === "markdown") return "markdown";
   if (ext === "html" || ext === "htm") return "html";
@@ -116,7 +117,7 @@ export function tagAttr(raw: string, name: string): string {
 // Blocks without a type predate notes and are HTML.
 function typeOf(attr: string): ArtifactType {
   const type = attr.toLowerCase();
-  return type === "markdown" || type === "code" ? type : "html";
+  return type === "markdown" || type === "code" || type === "slides" ? type : "html";
 }
 
 // Models wrap code in a Markdown fence out of habit; the fence isn't part of the file.
@@ -150,14 +151,38 @@ function withoutEdgeBreaks(pair: EditPair): EditPair {
 
 const occurrences = (text: string, part: string) => text.split(part).length - 1;
 
-/** All pairs or none: each `old` must appear exactly once. Null when one doesn't fit. */
-export function applyEdits(text: string, pairs: EditPair[]): string | null {
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Models quote a fragment from memory, and its indentation and line breaks drift from the file's. Outside code that
+ * doesn't change what the text says, so the words still have to appear once, in order, with any whitespace between.
+ */
+function looseRange(text: string, old: string): { start: number; end: number } | null {
+  const words = old.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const matches = [...text.matchAll(new RegExp(words.map(escapeRegExp).join("\\s+"), "g"))];
+  if (matches.length !== 1) return null;
+  return { start: matches[0].index, end: matches[0].index + matches[0][0].length };
+}
+
+function applyEdit(text: string, pair: EditPair, loose: boolean): string | null {
+  const fit = [pair, withoutEdgeBreaks(pair)].find((p) => p.old && occurrences(text, p.old) === 1);
+  if (fit) return text.replace(fit.old, () => fit.new);
+  const range = loose ? looseRange(text, pair.old) : null;
+  if (!range) return null;
+  return text.slice(0, range.start) + withoutEdgeBreaks(pair).new + text.slice(range.end);
+}
+
+/**
+ * All pairs or none: each `old` must appear exactly once. Null when one doesn't fit. `loose` lets whitespace differ, for
+ * everything but code, where indentation is part of the program.
+ */
+export function applyEdits(text: string, pairs: EditPair[], { loose = false }: { loose?: boolean } = {}): string | null {
   if (pairs.length === 0) return null;
-  let out = text;
+  let out: string | null = text;
   for (const pair of pairs) {
-    const fit = [pair, withoutEdgeBreaks(pair)].find((p) => p.old && occurrences(out, p.old) === 1);
-    if (!fit) return null;
-    out = out.replace(fit.old, () => fit.new);
+    out = applyEdit(out, pair, loose);
+    if (out === null) return null;
   }
   return out;
 }
@@ -212,7 +237,7 @@ export function planWrites(closed: Artifact[], files: ReadonlyMap<string, string
       }
       const pairs = editPairs(artifact.content);
       const base = before ? before.content : files.get(target);
-      const edited = base === undefined ? null : applyEdits(base, pairs);
+      const edited = base === undefined ? null : applyEdits(base, pairs, { loose: artifact.type !== "code" });
       if (edited === null) {
         writes.push({ kind: "failed", path: target, reason: TEXT_NOT_FOUND });
         continue;
@@ -428,8 +453,99 @@ export function pageNonce(): string | undefined {
   return document.querySelector<HTMLScriptElement>("script[nonce]")?.nonce || undefined;
 }
 
+/** Library files of slides are pages too, so the name ends in .html and still opens in a browser. */
+export const SLIDES_EXTENSION = ".slides.html";
+export const SLIDE_WIDTH = 1280;
+export const SLIDE_HEIGHT = 720;
+export const SLIDE_GAP = 32;
+
+const SLIDES_CSP =
+  `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; ` +
+  `img-src data: blob:; font-src data:; form-action 'none'; base-uri 'none'">`;
+
+// Each layout looks finished on its own; the model's <style> comes after and recolours it through the variables.
+const SLIDES_BASE_STYLES = `
+  :root {
+    color-scheme: light;
+    --bg: #ffffff; --fg: #1b1b1f; --muted: #5d5d68; --accent: #2f4fd8; --on-accent: #ffffff;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  section {
+    padding: 72px 96px; display: flex; flex-direction: column; gap: 28px;
+    background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 30px; line-height: 1.4;
+  }
+  section :is(h1, h2, h3, p, ul, ol, blockquote, figure) { margin: 0; }
+  section h1 { font-size: 80px; line-height: 1.05; letter-spacing: -0.02em; }
+  section h2 { font-size: 52px; line-height: 1.1; letter-spacing: -0.015em; }
+  section h3 { font-size: 34px; line-height: 1.2; }
+  section :is(ul, ol) { padding-left: 1.2em; display: flex; flex-direction: column; gap: 14px; }
+  section li::marker { color: var(--accent); }
+  section img { display: block; max-width: 100%; min-height: 0; object-fit: contain; }
+  section aside.notes { display: none; }
+  [data-layout="title"] { justify-content: center; }
+  [data-layout="title"] h1 { font-size: 96px; max-width: 16ch; }
+  [data-layout="title"] p { color: var(--muted); font-size: 34px; }
+  [data-layout="section"] { justify-content: flex-end; padding-bottom: 96px; background: var(--accent); color: var(--on-accent); }
+  [data-layout="section"] h2 { font-size: 72px; }
+  [data-layout="two-column"] { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 40px 64px; align-content: start; }
+  [data-layout="two-column"] > h2 { grid-column: 1 / -1; }
+  [data-layout="image"] img { flex: 1 1 0; width: 100%; }
+  [data-layout="quote"] { justify-content: center; }
+  [data-layout="quote"] blockquote { font-size: 52px; line-height: 1.25; font-weight: 600; letter-spacing: -0.01em; }
+  [data-layout="quote"] p { color: var(--muted); }
+  [data-layout="big-number"] { justify-content: center; }
+  [data-layout="big-number"] strong { font-size: 200px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; color: var(--accent); }
+`;
+
+// After the model's styles, so a deck always stays a stack of fixed 16:9 slides the panel can scale and step through.
+const SLIDES_FRAME_STYLES = `
+  body { display: flex !important; flex-direction: column !important; gap: ${SLIDE_GAP}px !important; width: ${SLIDE_WIDTH}px !important; margin: 0 !important; }
+  section {
+    box-sizing: border-box !important; position: relative !important; flex: none !important; margin: 0 !important;
+    width: ${SLIDE_WIDTH}px !important; height: ${SLIDE_HEIGHT}px !important; overflow: hidden !important;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @media screen { section { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); } }
+  @media print {
+    @page { size: ${SLIDE_WIDTH}px ${SLIDE_HEIGHT}px; margin: 0; }
+    body { gap: 0 !important; }
+    section { break-after: page; }
+  }
+`;
+
+const SECTION_OPEN = /<section\b/gi;
+
+export function slideCount(content: string): number {
+  return content.match(SECTION_OPEN)?.length ?? 0;
+}
+
+/** The height of a deck's stacked slides, gaps between them included. */
+export function slidesHeight(count: number): number {
+  return Math.max(count, 1) * (SLIDE_HEIGHT + SLIDE_GAP) - SLIDE_GAP;
+}
+
+/** The deck as one page of stacked slides; `only` keeps one slide, for thumbnails. The title names a saved PDF. */
+export function slidesDocument(content: string, { only, title }: { only?: number; title?: string } = {}): string {
+  let body = stripActiveContent(content)
+    .replace(/<link\b[^>]*>/gi, "")
+    .replace(/<!doctype[^>]*>|<\/?(?:html|head|body)\b[^>]*>/gi, "");
+  if (only !== undefined) {
+    const styles = body.match(/<style\b[\s\S]*?<\/style\s*>/gi) ?? [];
+    body = styles.join("") + (body.match(/<section\b[\s\S]*?<\/section\s*>/gi)?.[only] ?? "");
+  }
+  // The CSP goes first: it only governs what is parsed after it.
+  return (
+    `<!doctype html><html><head>${SLIDES_CSP}<meta charset="utf-8">` +
+    (title ? `<title>${escapeHtml(title)}</title>` : "") +
+    `<style>${SLIDES_BASE_STYLES}</style></head>` +
+    `<body>${body}<style>${SLIDES_FRAME_STYLES}</style></body></html>`
+  );
+}
+
 /** Notes and documents only: code is never shown on paper. A site with a script is shown still, without it. */
 export function toDocument(artifact: Pick<Artifact, "title" | "type" | "content">): string {
+  if (artifact.type === "slides") return slidesDocument(artifact.content, { title: artifact.title });
   const files = artifact.type === "html" ? siteFiles(artifact.content) : null;
   if (files) return composeSite(files);
   const html = bodyHtml(artifact);
@@ -478,7 +594,7 @@ export function titleSlug(title: string): string {
     .toLowerCase();
 }
 
-const ARTIFACT_EXTENSION = { markdown: "md", html: "html" } as const;
+const ARTIFACT_EXTENSION = { markdown: "md", html: "html", slides: SLIDES_EXTENSION.slice(1) } as const;
 
 // Code keeps the extension it was given, since that names its language.
 function extensionFor(artifact: Pick<Artifact, "type">, name: string | undefined): string {
@@ -495,7 +611,7 @@ function requestedPath(artifact: Pick<Artifact, "title" | "type" | "path">): { b
     .map((p) => p.replace(UNSAFE_PATH_CHARS, "-").trim())
     .filter((p) => p && p !== "." && p !== "..");
   const last = raw.trimEnd().endsWith("/") ? undefined : parts.pop();
-  const name = last?.replace(/\.[^.]+$/, "") || titleSlug(artifact.title) || "untitled";
+  const name = last?.replace(/\.slides\.html$/i, "").replace(/\.[^.]+$/, "") || titleSlug(artifact.title) || "untitled";
   return { base: [...parts, name].join("/"), ext: extensionFor(artifact, last) };
 }
 
@@ -513,11 +629,11 @@ export function libraryPath(artifact: Pick<Artifact, "title" | "type" | "path">,
   return path;
 }
 
-function fileName(title: string, extension: string): string {
+export function fileName(title: string, extension: string): string {
   return `${titleSlug(title) || "document"}.${extension}`;
 }
 
-function downloadBlob(blob: Blob, name: string): void {
+export function downloadBlob(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -542,7 +658,7 @@ export function downloadArtifactSource(artifact: Artifact): void {
 }
 
 export function downloadArtifact(artifact: Artifact): void {
-  if (artifact.type === "html") downloadArtifactHtml(artifact);
+  if (artifact.type === "html" || artifact.type === "slides") downloadArtifactHtml(artifact);
   else downloadArtifactSource(artifact);
 }
 

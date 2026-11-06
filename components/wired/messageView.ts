@@ -5,7 +5,8 @@ import { isProviderVerified } from "@/lib/chat/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
-import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, downloadSiteFile, parseArtifacts, siteFiles, type Artifact } from "@/lib/artifacts/artifacts";
+import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, downloadSiteFile, parseArtifacts, siteFiles, slideCount, type Artifact } from "@/lib/artifacts/artifacts";
+import { downloadArtifactPptx } from "@/lib/artifacts/slidesPptx";
 import { chatFiles } from "@/lib/artifacts/chatFiles";
 import type { ArtifactPanel, ArtifactVersion } from "@/components/app/chat/ArtifactPanel";
 import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
@@ -98,6 +99,7 @@ function artifactsOf(id: string, artifacts: ShownArtifact[], library?: ChatLibra
       type: a.type,
       path: a.file?.path ?? a.path,
       files: fileCount(a),
+      slides: a.type === "slides" && !a.edit ? slideCount(a.content) : undefined,
       edit: a.edit,
       streaming: a.streaming,
       library: library && libraryOf(key, a, library),
@@ -138,8 +140,8 @@ export function artifactPanelOf(
   onClose: () => void,
   versionsBack = Infinity,
 ): ComponentProps<typeof ArtifactPanel> {
-  const download = (save: (artifact: Artifact) => void) => (source: string) => {
-    if (current) save({ ...current, content: source });
+  const download = (save: (artifact: Artifact) => void | Promise<void>) => (source: string) => {
+    if (current) void save({ ...current, content: source });
   };
   return {
     artifact: id && current ? panelDataOf(id, current, versionsBack) : null,
@@ -148,6 +150,7 @@ export function artifactPanelOf(
     onDownloadDoc: download(downloadArtifactDoc),
     onDownloadSource: download(downloadArtifactSource),
     onDownloadFile: downloadSiteFile,
+    onDownloadPptx: download(downloadArtifactPptx),
   };
 }
 

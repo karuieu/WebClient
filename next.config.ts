@@ -89,6 +89,18 @@ const nextConfig: NextConfig = {
     // incompatible route trees.
     validateRSCRequestHeaders: true,
   },
+  // pptxgenjs reaches for node:fs and node:https only when it runs in Node; its package maps both to nothing in a
+  // browser, but webpack refuses the node: scheme before that mapping applies, so the prefix comes off first.
+  webpack(config, { isServer, webpack }) {
+    if (!isServer) {
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:(fs|https)$/, (resource: { request: string }) => {
+          resource.request = resource.request.slice("node:".length);
+        })
+      );
+    }
+    return config;
+  },
   typescript: {
     ignoreBuildErrors: false,
   },

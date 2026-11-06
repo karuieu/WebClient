@@ -8,7 +8,7 @@ import { useNow } from "@/components/kit/useMounted";
 import { codeLanguageOf, toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { exactStamp } from "../ChatsView";
-import { DocumentPaper } from "../chat/ArtifactPanel";
+import { DocumentPaper, SlideDeck } from "../chat/ArtifactPanel";
 import { NumberedTextArea } from "../NumberedTextArea";
 
 export type FileVersionItem = {
@@ -111,7 +111,7 @@ export function VersionPaper({
   frameRef?: React.Ref<HTMLIFrameElement>;
 }) {
   const { version, content } = viewing;
-  const document = React.useMemo(() => (content === null || type === "code" ? "" : toDocument({ title: name, type, content })), [content, name, type]);
+  const document = React.useMemo(() => (content === null || type === "code" || type === "slides" ? "" : toDocument({ title: name, type, content })), [content, name, type]);
 
   if (viewing.error) {
     return (
@@ -137,7 +137,11 @@ export function VersionPaper({
   );
   return (
     <div className="min-h-0 flex-1 p-3">
-      <DocumentPaper title={`${name}, v${version.number}`} document={document} frameRef={frameRef} />
+      {type === "slides" ? (
+        <SlideDeck title={`${name}, v${version.number}`} source={content} frameRef={frameRef} />
+      ) : (
+        <DocumentPaper title={`${name}, v${version.number}`} document={document} frameRef={frameRef} />
+      )}
     </div>
   );
 }

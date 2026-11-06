@@ -42,6 +42,7 @@ export type ArtifactData = {
   path?: string;
   /** A site with a script: how many files it has. */
   files?: number;
+  slides?: number;
   streaming?: boolean;
   /** An edit carries only the changes, not a document: there's nothing to download or open from the message. */
   edit?: boolean;
@@ -196,10 +197,11 @@ function changeStatus(change: ArtifactChange, path: string): string {
   return `Edited · ${change.count === 1 ? "1 change" : `${change.count} changes`} · ${path}`;
 }
 
-const KIND = { markdown: "Doc", html: "Site", code: "Code" } as const;
+const KIND = { markdown: "Doc", html: "Site", code: "Code", slides: "Slides" } as const;
 
-function formatOf({ type, path, files }: ArtifactData): string {
+function formatOf({ type, path, files, slides }: ArtifactData): string {
   if (type === "code") return codeLanguageOf(path).label;
+  if (type === "slides") return slides === 1 ? "1 slide" : `${slides ?? 0} slides`;
   if (files) return `${files} files`;
   return type === "markdown" ? "Markdown" : "HTML";
 }
@@ -248,6 +250,15 @@ function ArtifactCard({
           <span className="ml-4 h-1 w-1/3 rounded-full bg-line" />
           <span className="h-1 w-2/5 rounded-full bg-line-strong" />
           <span className="ml-2 h-1 w-3/5 rounded-full bg-line" />
+        </div>
+      ) : artifact.type === "slides" ? (
+        <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col justify-center gap-1.5 rounded-lg border border-line bg-bg px-1.5">
+          {[0, 1].map((i) => (
+            <span key={i} className="flex aspect-video w-full flex-col justify-center gap-0.5 rounded-[3px] border border-line-strong px-1">
+              <span className="h-0.5 w-3/5 rounded-full bg-line-strong" />
+              <span className="h-0.5 w-2/5 rounded-full bg-line" />
+            </span>
+          ))}
         </div>
       ) : (
         <div aria-hidden="true" className="flex h-16 w-14 shrink-0 flex-col gap-1.5 rounded-lg border border-line bg-bg p-2">

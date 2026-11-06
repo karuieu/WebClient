@@ -97,7 +97,7 @@ function isStoredFile(v: unknown): v is LatestChatFile {
   const f = v as Record<string, unknown>;
   return (
     ["path", "title", "content", "messageId", "savedAt"].every((k) => typeof f[k] === "string") &&
-    (f.type === "markdown" || f.type === "html" || f.type === "code") &&
+    (f.type === "markdown" || f.type === "html" || f.type === "code" || f.type === "slides") &&
     typeof f.version === "number" &&
     typeof f.block === "number"
   );

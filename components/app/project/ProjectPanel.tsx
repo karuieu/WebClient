@@ -16,6 +16,7 @@ import {
   FolderMinus,
   Layers,
   NotebookText,
+  Presentation,
   PanelRight,
   Pencil,
   Plus,
@@ -34,7 +35,7 @@ import { Tooltip } from "@/components/kit/Tooltip";
 import { artifactTypeOf, codeLanguageOf, composeSite, pageNonce, siteFiles, toDocument } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { exactStamp, groupOf, stamp } from "../ChatsView";
-import { DocumentPaper, RunningSite } from "../chat/ArtifactPanel";
+import { DocumentPaper, RunningSite, SlideDeck } from "../chat/ArtifactPanel";
 import { ShellContext } from "../AppShell";
 import { DropOverlay } from "../DropOverlay";
 import { NumberedTextArea } from "../NumberedTextArea";
@@ -311,7 +312,7 @@ function allFiles(n: TreeNode): LibraryFile[] {
 
 const indent = (depth: number) => ({ paddingLeft: `${12 + depth * 14}px` });
 
-const FILE_ICON = { markdown: NotebookText, html: FileCode, code: FileBraces } as const;
+const FILE_ICON = { markdown: NotebookText, html: FileCode, code: FileBraces, slides: Presentation } as const;
 
 function FileRow({ file, depth, p }: { file: LibraryFile; depth: number; p: Internal }) {
   const name = file.path.split("/").pop() ?? file.path;
@@ -634,7 +635,7 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
   // A site with a script runs here as it does in the chat, so it can't be printed.
   const site = React.useMemo(() => (previewing && type === "html" ? siteFiles(draft.content) : null), [previewing, type, draft.content]);
   const document = React.useMemo(() => {
-    if (!previewing) return "";
+    if (!previewing || type === "slides") return "";
     return site ? composeSite(site, { nonce: pageNonce() }) : toDocument({ title: name ?? "", type, content: draft.content });
   }, [previewing, site, type, name, draft.content]);
   const versions = type && loaded ? l.versions : undefined;
@@ -861,7 +862,13 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
         <VersionPaper name={name ?? ""} type={type} viewing={viewing} onRetry={() => versions?.onView(viewing.version)} frameRef={frameRef} />
       ) : previewing ? (
         <div className="min-h-0 flex-1 p-3">
-          {site ? <RunningSite title={name ?? ""} document={document} /> : <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} />}
+          {site ? (
+            <RunningSite title={name ?? ""} document={document} />
+          ) : type === "slides" ? (
+            <SlideDeck title={name ?? ""} source={draft.content} frameRef={frameRef} />
+          ) : (
+            <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} />
+          )}
         </div>
       ) : (
         <NumberedTextArea

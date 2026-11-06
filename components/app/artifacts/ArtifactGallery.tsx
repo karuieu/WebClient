@@ -3,17 +3,19 @@
 import * as React from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { Enter, cascade } from "@/components/kit/Enter";
-import { FileBraces, FileText, Folder, Globe } from "@/components/kit/icons";
+import { FileBraces, FileText, Folder, Globe, Presentation } from "@/components/kit/icons";
 import { useNow } from "@/components/kit/useMounted";
-import { codeLanguageOf, toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
+import { codeLanguageOf, slidesDocument, toDocument, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { codeTheme } from "../chat/CodeBlock";
+import { SlideThumbnail } from "../chat/Slides";
 import { stamp } from "../ChatsView";
 
 export const ARTIFACT_TYPES: readonly { id: ArtifactType; label: string }[] = [
   { id: "markdown", label: "Docs" },
   { id: "html", label: "Sites" },
   { id: "code", label: "Code" },
+  { id: "slides", label: "Slides" },
 ];
 
 export type ArtifactItem = {
@@ -35,10 +37,11 @@ export type OpenArtifact = (a: ArtifactItem) => void;
 const PAGE_WIDTH = 560;
 const CODE_LINES = 18;
 
-const TYPE_ICON = { markdown: FileText, html: Globe, code: FileBraces } as const;
+const TYPE_ICON = { markdown: FileText, html: Globe, code: FileBraces, slides: Presentation } as const;
 
 function typeLabel({ type, path }: ArtifactItem): string {
   if (type === "code") return codeLanguageOf(path).label;
+  if (type === "slides") return "Slides";
   return type === "markdown" ? "Doc" : "Site";
 }
 
@@ -91,11 +94,32 @@ function ScaledPage({
 
 const frame = "relative block aspect-[4/3] overflow-hidden rounded-2xl ring-1 ring-line-strong transition-[box-shadow] duration-300 group-hover/row:shadow-soft";
 
+/** The opening slide, centred on the tile, fading in once painted like a page does. */
+function SlideThumb({ source }: { source: string }) {
+  const document = React.useMemo(() => slidesDocument(source, { only: 0 }), [source]);
+  const [loaded, setLoaded] = React.useState(false);
+  return (
+    <span className={cx(frame, "grid place-items-center bg-surface px-4")}>
+      <span
+        aria-hidden="true"
+        className={cx(
+          "block w-full transition-[opacity,transform] duration-300 group-hover/row:scale-[1.04] motion-reduce:group-hover/row:scale-100",
+          loaded ? "opacity-100" : "opacity-0",
+        )}
+      >
+        <SlideThumbnail document={document} onLoad={() => setLoaded(true)} />
+      </span>
+    </span>
+  );
+}
+
 function Thumb({ artifact }: { artifact: ArtifactItem }) {
   const document = React.useMemo(
-    () => (artifact.type === "code" ? "" : toDocument({ title: artifact.title, type: artifact.type, content: artifact.source })),
+    () => (artifact.type === "code" || artifact.type === "slides" ? "" : toDocument({ title: artifact.title, type: artifact.type, content: artifact.source })),
     [artifact.title, artifact.type, artifact.source],
   );
+
+  if (artifact.type === "slides") return <SlideThumb source={artifact.source} />;
 
   if (artifact.type === "code") {
     return (

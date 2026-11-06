@@ -2,16 +2,17 @@
 
 import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Download, Ellipsis, Expand, Printer, RotateCcw, Shrink, X } from "@/components/kit/icons";
+import { Download, Ellipsis, Expand, Presentation, Printer, RotateCcw, Shrink, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Segmented } from "@/components/kit/Segmented";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
-import { codeLanguageOf, composeSite, pageNonce, siteFiles, toDocument, withSiteFile, type ArtifactType, type SiteFile } from "@/lib/artifacts/artifacts";
+import { codeLanguageOf, composeSite, pageNonce, siteFiles, slideCount, toDocument, withSiteFile, type ArtifactType, type SiteFile } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { ShellContext } from "../AppShell";
 import { exactStamp } from "../ChatsView";
 import { NumberedTextArea } from "../NumberedTextArea";
 import { VersionPicker, versionMenuItems, type FileVersionItem, type FileVersionsProps } from "../project/FileVersions";
+import { printSlides, SlidePresenter, SlideViewer } from "./Slides";
 
 const WIDTH_KEY = "karui-artifact-width";
 const MIN = 380;
@@ -106,6 +107,23 @@ export function DocumentPaper({ title, document, frameRef }: { title: string; do
   );
 }
 
+/** One slide at a time on the panel's own background; each slide carries its colours to its edge. */
+export function SlideDeck({
+  title,
+  source,
+  frameRef,
+  slide,
+  onSlide,
+}: {
+  title: string;
+  source: string;
+  frameRef?: React.Ref<HTMLIFrameElement>;
+  slide?: number;
+  onSlide?: (slide: number) => void;
+}) {
+  return <SlideViewer title={title} source={source} sandbox={SANDBOX} frameRef={frameRef} slide={slide} onSlide={onSlide} />;
+}
+
 export function RunningSite({ title, document }: { title: string; document: string }) {
   return (
     <Paper>
@@ -143,6 +161,7 @@ type Downloads = {
   onDownloadSource?: (source: string) => void;
   /** One file of a site with a script. */
   onDownloadFile?: (name: SiteFile, text: string) => void;
+  onDownloadPptx?: (source: string) => void;
   onExportGoogleDocs?: (source: string) => void;
   exportingGoogleDocs?: boolean;
 };
@@ -172,7 +191,12 @@ function kindOf(artifact: ArtifactPanelData): { writing: string; format: string;
     const { label, prism } = codeLanguageOf(artifact.path);
     return { writing: "Writing code…", format: label, language: prism };
   }
+  if (artifact.type === "slides") return { writing: "Writing slides…", format: "Slides" };
   return { writing: "Writing site…", format: "HTML" };
+}
+
+function slidesLabel(count: number): string {
+  return count === 1 ? "1 slide" : `${count} slides`;
 }
 
 function asItem(v: Version): FileVersionItem {
@@ -190,6 +214,7 @@ function PanelBody({
   onDownloadDoc,
   onDownloadSource,
   onDownloadFile,
+  onDownloadPptx,
   onExportGoogleDocs,
   exportingGoogleDocs,
   mobile,
@@ -205,6 +230,8 @@ function PanelBody({
   const [tab, setTab] = React.useState<"preview" | "edit" | SiteFile>("preview");
   // Restart reloads the running site from its first line.
   const [run, setRun] = React.useState(0);
+  const [presenting, setPresenting] = React.useState(false);
+  const [slide, setSlide] = React.useState(0);
   // A card on the latest version opens the current one, so your edits in the panel stay in view as new versions.
   const [viewing, setViewing] = React.useState<number | null>(
     artifact.openAt !== undefined && artifact.openAt !== artifact.history?.at(-1)?.number ? artifact.openAt : null,
@@ -218,6 +245,7 @@ function PanelBody({
   const ready = !artifact.streaming;
   const note = artifact.type === "markdown";
   const code = artifact.type === "code";
+  const slides = artifact.type === "slides";
   const { writing, format, language } = kindOf(artifact);
   const edits = saved ?? startEdits(artifact);
   const current = edits.versions[edits.versions.length - 1];
@@ -225,12 +253,13 @@ function PanelBody({
   const content = shownVersion ? shownVersion.content : edits.draft;
   const files = React.useMemo(() => (artifact.type === "html" ? siteFiles(content) : null), [artifact.type, content]);
   const fileTab = files && SITE_TABS.find((t) => t.value === tab);
+  const count = slides ? slideCount(content) : 0;
   // Code has no paper: it opens straight in the editor, an earlier version read only.
   const showsPaper = ready && !code && (tab === "preview" || (!!shownVersion && !fileTab));
   const document = React.useMemo(() => {
-    if (!showsPaper) return "";
+    if (!showsPaper || slides) return "";
     return files ? composeSite(files, { nonce: pageNonce() }) : toDocument({ title: artifact.title, type: artifact.type, content });
-  }, [showsPaper, files, artifact.title, artifact.type, content]);
+  }, [showsPaper, slides, files, artifact.title, artifact.type, content]);
   const views = files
     ? [{ value: "preview" as const, label: "Preview" }, ...SITE_TABS]
     : [
@@ -267,7 +296,11 @@ function PanelBody({
   const currentVersion = { number: current.number, kept: false };
 
   // Code is only ever its own file: a web page or Word copy of a program helps no one. Neither is a site that runs.
-  const downloads: MenuItem[] = files ? [
+  const downloads: MenuItem[] = slides ? [
+    ...(onDownloadPptx ? [{ label: "PowerPoint", hint: ".pptx", onSelect: () => onDownloadPptx(content) }] : []),
+    { label: "PDF", hint: ".pdf", onSelect: () => printSlides(artifact.title, content) },
+    { label: "Web page", hint: ".html", onSelect: () => onDownloadHtml(content) },
+  ] : files ? [
     { label: "Web page", hint: ".html", onSelect: () => onDownloadHtml(content) },
     ...(onDownloadFile ? SITE_TABS.map((t) => ({ label: t.value, onSelect: () => onDownloadFile(t.value, files[t.value]) })) : []),
   ] : code ? [
@@ -282,6 +315,11 @@ function PanelBody({
   ];
   const print = () => frameRef.current?.contentWindow?.print();
   const restart = () => setRun((n) => n + 1);
+  const present = () => {
+    commit();
+    setPresenting(true);
+  };
+  const stopPresenting = React.useCallback(() => setPresenting(false), []);
   const menuItems: MenuItem[] = [
     ...(!shownVersion && !code
       ? [
@@ -292,6 +330,7 @@ function PanelBody({
       : []),
     ...versionMenuItems(currentVersion, false, versions, now),
     { type: "separator" },
+    ...(slides && count > 0 ? [{ label: "Present", icon: <Presentation className="size-3.5" />, onSelect: present }] : []),
     ...(showsPaper
       ? [
           files
@@ -308,7 +347,7 @@ function PanelBody({
     ? writing
     : shownVersion
       ? [`v${shownVersion.number}`, now && exactStamp(shownVersion.savedAt, now), "read only"].filter(Boolean).join(" · ")
-      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? (files ? "HTML · CSS · JS" : "HTML · scripts off") : format].filter(Boolean).join(" · ");
+      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? (files ? "HTML · CSS · JS" : "HTML · scripts off") : slides ? `${format} · ${slidesLabel(count)}` : format].filter(Boolean).join(" · ");
 
   // An earlier version can't be edited, so Restore takes the place of Preview / Edit.
   const restore = shownVersion && (
@@ -359,6 +398,11 @@ function PanelBody({
         {onToggleExpand && (
           <IconButton label={expanded ? "Show the chat again" : "Expand over the chat"} onClick={onToggleExpand}>
             {expanded ? <Shrink className="size-[16px]" /> : <Expand className="size-[16px]" />}
+          </IconButton>
+        )}
+        {ready && !compact && slides && (
+          <IconButton label="Present" onClick={present} disabled={count === 0}>
+            <Presentation className="size-[17px]" />
           </IconButton>
         )}
         {ready && !compact && (
@@ -420,9 +464,17 @@ function PanelBody({
           </div>
         ) : showsPaper ? (
           // An earlier version sits on the same paper as the current one, so switching doesn't move the page.
-          <div className="absolute inset-0 p-3 sm:p-5">
+          <div className={cx("absolute inset-0", !slides && "p-3 sm:p-5")}>
             {files ? (
               <RunningSite key={run} title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} />
+            ) : slides ? (
+              <SlideDeck
+                title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title}
+                source={content}
+                frameRef={frameRef}
+                slide={slide}
+                onSlide={setSlide}
+              />
             ) : (
               <DocumentPaper title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} frameRef={frameRef} />
             )}
@@ -449,6 +501,9 @@ function PanelBody({
           />
         )}
       </div>
+      {presenting && (
+        <SlidePresenter title={artifact.title} source={content} slide={Math.min(slide, Math.max(count - 1, 0))} onSlide={setSlide} onClose={stopPresenting} />
+      )}
     </div>
   );
 }
@@ -460,6 +515,7 @@ export function ArtifactPanel({
   onDownloadDoc,
   onDownloadSource,
   onDownloadFile,
+  onDownloadPptx,
   onExportGoogleDocs,
   exportingGoogleDocs,
 }: Downloads & {
@@ -527,6 +583,7 @@ export function ArtifactPanel({
     onDownloadDoc,
     onDownloadSource,
     onDownloadFile,
+    onDownloadPptx,
     onExportGoogleDocs,
     exportingGoogleDocs,
   };
