@@ -113,21 +113,28 @@ export function ProjectWorkspace({
   };
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Without this the drag also selects text, and the browser cancels the pointer to drag that selection.
+    e.preventDefault();
     const startX = e.clientX;
     const startW = shown;
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
     setExpanded(false);
     setDragging(true);
-    const move = (m: PointerEvent) => setWidth(clampWidth(startW + (startX - m.clientX)));
-    const up = (u: PointerEvent) => {
+    let next = startW;
+    const move = (m: PointerEvent) => {
+      next = clampWidth(startW + (startX - m.clientX));
+      setWidth(next);
+    };
+    // Fires after pointerup and pointercancel alike; a cancelled drag sends no pointerup and would leave the panel unclickable.
+    const end = () => {
       handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("lostpointercapture", end);
       setDragging(false);
-      commit(startW + (startX - u.clientX));
+      commit(next);
     };
     handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
+    handle.addEventListener("lostpointercapture", end);
   };
 
   React.useEffect(() => {

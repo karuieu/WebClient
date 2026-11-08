@@ -332,7 +332,7 @@ function PanelBody({
     ? writing
     : shownVersion
       ? [`v${shownVersion.number}`, now && exactStamp(shownVersion.savedAt, now), "read only"].filter(Boolean).join(" · ")
-      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? (files ? "HTML · CSS · JS" : "HTML · scripts off") : slides ? `${format} · ${slidesLabel(count)}` : format].filter(Boolean).join(" · ");
+      : [current.number > 1 || compact ? `v${current.number}` : null, artifact.type === "html" ? (files ? "HTML · CSS · JS" : "HTML") : slides ? `${format} · ${slidesLabel(count)}` : format].filter(Boolean).join(" · ");
 
   // An earlier version can't be edited, so Restore takes the place of Preview / Edit.
   const restore = shownVersion && (
@@ -543,20 +543,27 @@ export function ArtifactPanel({
   };
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Without this the drag also selects chat text, and the browser cancels the pointer to drag that selection.
+    e.preventDefault();
     const startX = e.clientX;
     const startW = width;
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
     setDragging(true);
-    const move = (m: PointerEvent) => setWidth(Math.min(Math.max(startW + (startX - m.clientX), MIN), maxWidth()));
-    const up = (u: PointerEvent) => {
+    let next = startW;
+    const move = (m: PointerEvent) => {
+      next = Math.min(Math.max(startW + (startX - m.clientX), MIN), maxWidth());
+      setWidth(next);
+    };
+    // Fires after pointerup and pointercancel alike; a cancelled drag sends no pointerup and would leave the page unclickable.
+    const end = () => {
       handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("lostpointercapture", end);
       setDragging(false);
-      commit(startW + (startX - u.clientX));
+      commit(next);
     };
     handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
+    handle.addEventListener("lostpointercapture", end);
   };
 
   const common = artifact && {
