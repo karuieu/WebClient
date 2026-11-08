@@ -93,16 +93,9 @@ function IconButton({
   );
 }
 
-function Paper({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="h-full overflow-hidden rounded-xl bg-white shadow-soft ring-1 ring-line [color-scheme:light]">{children}</div>
-  );
-}
-
-/** A site lies on white paper; a doc (`note`) has no paper and takes the app's theme. */
+/** Fills the panel to its edges. A site keeps a white canvas under its own colours; a doc (`note`) takes the app's theme. */
 export function DocumentPaper({ title, document, frameRef, note }: { title: string; document: string; frameRef?: React.Ref<HTMLIFrameElement>; note?: boolean }) {
-  const frame = <iframe ref={frameRef} title={title} srcDoc={document} sandbox={SANDBOX} className={cx("size-full border-0", !note && "bg-white")} />;
-  return note ? frame : <Paper>{frame}</Paper>;
+  return <iframe ref={frameRef} title={title} srcDoc={document} sandbox={SANDBOX} className={cx("size-full border-0", !note && "bg-white")} />;
 }
 
 /** One slide at a time on the panel's own background; each slide carries its colours to its edge. */
@@ -123,11 +116,7 @@ export function SlideDeck({
 }
 
 export function RunningSite({ title, document }: { title: string; document: string }) {
-  return (
-    <Paper>
-      <iframe title={title} srcDoc={document} sandbox={RUN_SANDBOX} referrerPolicy="no-referrer" className="size-full border-0 bg-white" />
-    </Paper>
-  );
+  return <iframe title={title} srcDoc={document} sandbox={RUN_SANDBOX} referrerPolicy="no-referrer" className="size-full border-0 bg-white" />;
 }
 
 const SITE_TABS: { value: SiteFile; label: string; language: string }[] = [
@@ -138,16 +127,14 @@ const SITE_TABS: { value: SiteFile; label: string; language: string }[] = [
 
 function WritingSkeleton({ label }: { label: string }) {
   return (
-    <Paper>
-      <div className="flex h-full flex-col gap-3 p-8" aria-label={label}>
-        <span className="h-4 w-1/2 animate-pulse rounded-full bg-black/10" />
-        <span className="mt-3 h-2.5 w-full animate-pulse rounded-full bg-black/[0.06]" />
-        <span className="h-2.5 w-11/12 animate-pulse rounded-full bg-black/[0.06]" />
-        <span className="h-2.5 w-4/5 animate-pulse rounded-full bg-black/[0.06]" />
-        <span className="mt-4 h-2.5 w-full animate-pulse rounded-full bg-black/[0.06]" />
-        <span className="h-2.5 w-2/3 animate-pulse rounded-full bg-black/[0.06]" />
-      </div>
-    </Paper>
+    <div className="flex h-full flex-col gap-3 px-8 py-10" aria-label={label}>
+      <span className="h-4 w-1/2 animate-pulse rounded-full bg-surface-2" />
+      <span className="mt-3 h-2.5 w-full animate-pulse rounded-full bg-surface-2" />
+      <span className="h-2.5 w-11/12 animate-pulse rounded-full bg-surface-2" />
+      <span className="h-2.5 w-4/5 animate-pulse rounded-full bg-surface-2" />
+      <span className="mt-4 h-2.5 w-full animate-pulse rounded-full bg-surface-2" />
+      <span className="h-2.5 w-2/3 animate-pulse rounded-full bg-surface-2" />
+    </div>
   );
 }
 
@@ -457,12 +444,12 @@ function PanelBody({
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         {!ready ? (
-          <div className="absolute inset-0 p-3 sm:p-5">
+          <div className="absolute inset-0">
             <WritingSkeleton label={writing} />
           </div>
         ) : showsPaper ? (
-          // An earlier version sits on the same paper as the current one, so switching doesn't move the page.
-          <div className={cx("absolute inset-0", !slides && !note && "p-3 sm:p-5")}>
+          // An earlier version sits in the same frame as the current one, so switching doesn't move the page.
+          <div className="absolute inset-0">
             {files ? (
               <RunningSite key={run} title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} />
             ) : slides ? (
