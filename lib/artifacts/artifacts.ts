@@ -352,9 +352,11 @@ const NOTE_STYLES = `
 const VIEWPORT_META = `<meta name="viewport" content="width=device-width, initial-scale=1">`;
 
 // Append narrow-screen overflow rules after model styles so long URLs, tables, and code do not overflow phones.
+// clip, not hidden: hidden turns a `height: 100%` body into its own scroller, so window scroll events stop and the
+// scroll position jumps whenever the panel crosses 640px.
 const MOBILE_GUARD_STYLES = `
   @media (max-width: 640px) {
-    html, body { max-width: 100%; overflow-x: hidden; }
+    html, body { max-width: 100%; overflow-x: clip; }
     body { overflow-wrap: break-word; word-break: break-word; }
     img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
     table, pre { max-width: 100%; overflow-x: auto; display: block; }
