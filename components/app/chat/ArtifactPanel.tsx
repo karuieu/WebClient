@@ -99,12 +99,10 @@ function Paper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function DocumentPaper({ title, document, frameRef }: { title: string; document: string; frameRef?: React.Ref<HTMLIFrameElement> }) {
-  return (
-    <Paper>
-      <iframe ref={frameRef} title={title} srcDoc={document} sandbox={SANDBOX} className="size-full border-0 bg-white" />
-    </Paper>
-  );
+/** A site lies on white paper; a doc (`note`) has no paper and takes the app's theme. */
+export function DocumentPaper({ title, document, frameRef, note }: { title: string; document: string; frameRef?: React.Ref<HTMLIFrameElement>; note?: boolean }) {
+  const frame = <iframe ref={frameRef} title={title} srcDoc={document} sandbox={SANDBOX} className={cx("size-full border-0", !note && "bg-white")} />;
+  return note ? frame : <Paper>{frame}</Paper>;
 }
 
 /** One slide at a time on the panel's own background; each slide carries its colours to its edge. */
@@ -464,7 +462,7 @@ function PanelBody({
           </div>
         ) : showsPaper ? (
           // An earlier version sits on the same paper as the current one, so switching doesn't move the page.
-          <div className={cx("absolute inset-0", !slides && "p-3 sm:p-5")}>
+          <div className={cx("absolute inset-0", !slides && !note && "p-3 sm:p-5")}>
             {files ? (
               <RunningSite key={run} title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} />
             ) : slides ? (
@@ -476,7 +474,7 @@ function PanelBody({
                 onSlide={setSlide}
               />
             ) : (
-              <DocumentPaper title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} frameRef={frameRef} />
+              <DocumentPaper title={shownVersion ? `${artifact.title}, v${shownVersion.number}` : artifact.title} document={document} frameRef={frameRef} note={note} />
             )}
           </div>
         ) : fileTab ? (

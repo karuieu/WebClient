@@ -861,13 +861,13 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
       ) : type && viewing ? (
         <VersionPaper name={name ?? ""} type={type} viewing={viewing} onRetry={() => versions?.onView(viewing.version)} frameRef={frameRef} />
       ) : previewing ? (
-        <div className="min-h-0 flex-1 p-3">
+        <div className={cx("min-h-0 flex-1", type !== "markdown" && "p-3")}>
           {site ? (
             <RunningSite title={name ?? ""} document={document} />
           ) : type === "slides" ? (
             <SlideDeck title={name ?? ""} source={draft.content} frameRef={frameRef} />
           ) : (
-            <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} />
+            <DocumentPaper title={name ?? ""} document={document} frameRef={frameRef} note={type === "markdown"} />
           )}
         </div>
       ) : (

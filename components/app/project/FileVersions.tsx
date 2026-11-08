@@ -136,11 +136,11 @@ export function VersionPaper({
     <NumberedTextArea label={`${name}, v${version.number}`} value={content} readOnly language={codeLanguageOf(name).prism} />
   );
   return (
-    <div className="min-h-0 flex-1 p-3">
+    <div className={cx("min-h-0 flex-1", type !== "markdown" && "p-3")}>
       {type === "slides" ? (
         <SlideDeck title={`${name}, v${version.number}`} source={content} frameRef={frameRef} />
       ) : (
-        <DocumentPaper title={`${name}, v${version.number}`} document={document} frameRef={frameRef} />
+        <DocumentPaper title={`${name}, v${version.number}`} document={document} frameRef={frameRef} note={type === "markdown"} />
       )}
     </div>
   );

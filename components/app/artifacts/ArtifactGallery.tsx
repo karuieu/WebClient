@@ -84,7 +84,7 @@ function ScaledPage({
           {document === undefined ? (
             children
           ) : (
-            <iframe title="" tabIndex={-1} srcDoc={document} sandbox="" scrolling="no" onLoad={() => setLoaded(true)} className={cx("size-full border-0 bg-white", margin && "px-4 pt-3")} />
+            <iframe title="" tabIndex={-1} srcDoc={document} sandbox="" scrolling="no" onLoad={() => setLoaded(true)} className={cx("size-full border-0", margin ? "px-4 pt-3" : "bg-white")} />
           )}
         </div>
       )}
@@ -135,11 +135,18 @@ function Thumb({ artifact }: { artifact: ArtifactItem }) {
       </span>
     );
   }
+  if (artifact.type === "markdown") {
+    return (
+      <span className={cx(frame, "bg-surface")}>
+        <ScaledPage document={document} margin />
+        {/* A doc runs on below the tile; the fade makes the cut read as intended. */}
+        <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-surface to-transparent" />
+      </span>
+    );
+  }
   return (
     <span className={cx(frame, "bg-white [color-scheme:light]")}>
-      <ScaledPage document={document} margin={artifact.type === "markdown"} />
-      {/* A doc runs on below the tile; the fade makes the cut read as intended. A site keeps its own colours to the edge. */}
-      {artifact.type === "markdown" && <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white to-transparent" />}
+      <ScaledPage document={document} />
     </span>
   );
 }

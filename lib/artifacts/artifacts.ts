@@ -338,6 +338,17 @@ const FRAGMENT_STYLES = `
   @media print { body { max-width: none; padding: 0; } }
 `;
 
+// A doc takes the app's theme from its frame, which inherits color-scheme from the page, and lies on the panel's own background.
+// Colours mirror the kit tokens; print is always light.
+const NOTE_STYLES = `
+  :root { color-scheme: light dark; }
+  body { color: light-dark(#1d1d1f, #f5f5f7); background: transparent; }
+  th, td, blockquote, hr { border-color: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.1)); }
+  code, pre { background: light-dark(#ececef, #1c1c1e); }
+  blockquote { color: light-dark(#6e6e73, #a1a1a6); }
+  @media print { :root { color-scheme: light; } }
+`;
+
 const VIEWPORT_META = `<meta name="viewport" content="width=device-width, initial-scale=1">`;
 
 // Append narrow-screen overflow rules after model styles so long URLs, tables, and code do not overflow phones.
@@ -554,7 +565,7 @@ export function toDocument(artifact: Pick<Artifact, "title" | "type" | "content"
     return (
       `<!doctype html><html><head>${NO_SCRIPTS_CSP}<meta charset="utf-8">${VIEWPORT_META}` +
       `<title>${escapeHtml(artifact.title)}</title>` +
-      `<style>${FRAGMENT_STYLES}</style></head><body>${html}</body></html>`
+      `<style>${FRAGMENT_STYLES}${artifact.type === "markdown" ? NOTE_STYLES : ""}</style></head><body>${html}</body></html>`
     );
   }
 
