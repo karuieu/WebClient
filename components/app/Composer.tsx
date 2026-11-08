@@ -9,9 +9,10 @@ import { Sheet } from "@/components/kit/Sheet";
 import { Spinner } from "@/components/kit/Spinner";
 import { useMediaQuery } from "@/components/kit/useMounted";
 import { cx } from "@/lib/ui/cx";
+import { AttachmentViewer, FileTile, type ViewerAttachment } from "./chat/AttachmentViewer";
 import { ModelPicker } from "./ModelPicker";
 
-export type ComposerAttachment = { id: string; kind: "image" | "file"; name: string; src?: string; meta?: string };
+export type ComposerAttachment = { id: string } & ViewerAttachment;
 
 const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
 
@@ -110,6 +111,7 @@ export function Composer({
   const docsRef = React.useRef<HTMLInputElement>(null);
   const mobile = useMediaQuery("(max-width: 639px)");
   const [addOpen, setAddOpen] = React.useState(false);
+  const [previewed, setPreviewed] = React.useState<number | null>(null);
 
   const projectLabel = project?.name && !project.onClear ? "Move to project" : "Add to project";
   const adds: MenuItem[] = [];
@@ -196,7 +198,7 @@ export function Composer({
           >
             <ul className="flex flex-wrap gap-2 px-3 pt-3">
               <AnimatePresence initial={false} mode="popLayout">
-                {attachments.map((a) => (
+                {attachments.map((a, i) => (
                   <motion.li
                     key={a.id}
                     layout
@@ -206,22 +208,19 @@ export function Composer({
                     transition={spring}
                     className="group/att relative"
                   >
-                    {a.kind === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={a.src}
-                        alt={a.name}
-                        className="size-16 rounded-xl border border-line object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-16 max-w-[220px] items-center gap-2.5 rounded-xl border border-line bg-surface px-3">
-                        <FileText className="text-muted" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-medium">{a.name}</span>
-                          {a.meta && <span className="block font-mono text-[11px] text-muted">{a.meta}</span>}
-                        </span>
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewed(i)}
+                      aria-label={`Preview ${a.name}`}
+                      className="block cursor-pointer rounded-xl transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+                    >
+                      {a.kind === "image" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.src} alt="" className="size-16 rounded-xl border border-line object-cover" />
+                      ) : (
+                        <FileTile name={a.name} content={a.content} small />
+                      )}
+                    </button>
                     {onRemoveAttachment && (
                       <button
                         type="button"
@@ -394,6 +393,7 @@ export function Composer({
           )}
         </div>
       </div>
+      <AttachmentViewer attachments={attachments} index={previewed} onIndexChange={setPreviewed} onClose={() => setPreviewed(null)} />
     </form>
   );
 }

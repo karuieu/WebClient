@@ -83,6 +83,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
       id: `file-${i}`,
       kind: "file" as const,
       name: f.name,
+      content: f.content,
       meta: `${Math.max(1, Math.round(f.content.length / 1024))} KB`,
     })),
   ];
