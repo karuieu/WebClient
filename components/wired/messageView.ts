@@ -153,7 +153,7 @@ export function toUser(m: Message): MessageData {
     text,
     quote,
     images: parsed.images.map((img: ChatImage) => ({ src: img.data, name: img.name })),
-    files: parsed.files.map((f: ChatTextFile) => ({ name: f.name, meta: `${Math.max(1, Math.round(f.content.length / 1024))} KB` })),
+    files: parsed.files.map((f: ChatTextFile) => ({ name: f.name, content: f.content, meta: `${Math.max(1, Math.round(f.content.length / 1024))} KB` })),
     decryptionFailed: m.decryptionFailed,
   };
 }

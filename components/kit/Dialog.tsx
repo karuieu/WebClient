@@ -8,6 +8,41 @@ import { useMounted } from "./useMounted";
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), textarea, select, [tabindex]:not([tabindex="-1"])';
 
+/** Locks page scroll, focuses the panel's [data-autofocus] or first control, and returns focus on close. The handler keeps Tab inside the panel. */
+export function useModalFocus(open: boolean, panelRef: React.RefObject<HTMLElement | null>): (e: React.KeyboardEvent) => void {
+  const returnFocus = React.useRef<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    returnFocus.current = document.activeElement as HTMLElement | null;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => {
+      const first = panelRef.current?.querySelector<HTMLElement>("[data-autofocus]") ?? panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+      first?.focus();
+    });
+    return () => {
+      document.body.style.overflow = prev;
+      returnFocus.current?.focus?.();
+    };
+  }, [open, panelRef]);
+
+  return (e) => {
+    if (e.key !== "Tab") return;
+    const els = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+    if (!els.length) return;
+    const first = els[0];
+    const last = els[els.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+}
+
 export function Dialog({
   open,
   onClose,
@@ -28,24 +63,9 @@ export function Dialog({
   const reduce = useReducedMotion();
   const mounted = useMounted();
   const panelRef = React.useRef<HTMLDivElement>(null);
-  const returnFocus = React.useRef<HTMLElement | null>(null);
+  const trapTab = useModalFocus(open, panelRef);
   const titleId = React.useId();
   const descId = React.useId();
-
-  React.useEffect(() => {
-    if (!open) return;
-    returnFocus.current = document.activeElement as HTMLElement | null;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    requestAnimationFrame(() => {
-      const first = panelRef.current?.querySelector<HTMLElement>("[data-autofocus]") ?? panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-      first?.focus();
-    });
-    return () => {
-      document.body.style.overflow = prev;
-      returnFocus.current?.focus?.();
-    };
-  }, [open]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -53,18 +73,7 @@ export function Dialog({
       onClose();
       return;
     }
-    if (e.key !== "Tab") return;
-    const els = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
-    if (!els.length) return;
-    const first = els[0];
-    const last = els[els.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
+    trapTab(e);
   };
 
   if (!mounted) return null;

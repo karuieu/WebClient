@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Copy,
   Download,
-  FileText,
   Lock,
   RotateCcw,
 } from "@/components/kit/icons";
@@ -19,6 +18,7 @@ import { LogoMark } from "@/components/kit/Logo";
 import { Spinner } from "@/components/kit/Spinner";
 import { codeLanguageOf, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
+import { AttachmentViewer, FileTile, type ViewerAttachment } from "./AttachmentViewer";
 import { Markdown } from "./Markdown";
 import { Processing, type ProcessingStep } from "./Processing";
 import { Preparation, type PreparationSegment } from "./Preparation";
@@ -30,7 +30,7 @@ export type UserMessageData = {
   text: string;
   quote?: string | null;
   images?: { src: string; name: string }[];
-  files?: { name: string; meta?: string }[];
+  files?: { name: string; content: string; meta?: string }[];
   decryptionFailed?: boolean;
 };
 
@@ -140,7 +140,11 @@ function Undecryptable() {
 
 export function UserMessage({ message, enter = true }: { message: UserMessageData; enter?: boolean }) {
   const reduce = useReducedMotion();
-  const hasMedia = !!message.images?.length || !!message.files?.length;
+  const [previewed, setPreviewed] = React.useState<number | null>(null);
+  const attachments: ViewerAttachment[] = [
+    ...(message.images ?? []).map((img) => ({ kind: "image" as const, ...img })),
+    ...(message.files ?? []).map((f) => ({ kind: "file" as const, ...f })),
+  ];
 
   return (
     <motion.div
@@ -149,21 +153,25 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
       transition={spring}
       className="group/msg flex flex-col items-end gap-2"
     >
-      {hasMedia && (
+      {attachments.length > 0 && (
         <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
-          {message.images?.map((img) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={img.src} src={img.src} alt={img.name} className="size-28 rounded-2xl border border-line object-cover" />
+          {attachments.map((a, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setPreviewed(i)}
+              aria-label={`Preview ${a.name}`}
+              className="block cursor-pointer rounded-2xl transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            >
+              {a.kind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.src} alt="" className="size-28 rounded-2xl border border-line object-cover" />
+              ) : (
+                <FileTile name={a.name} content={a.content} meta={a.meta} />
+              )}
+            </button>
           ))}
-          {message.files?.map((f) => (
-            <span key={f.name} className="flex h-14 items-center gap-2.5 rounded-2xl border border-line bg-surface px-3.5">
-              <FileText className="text-muted" />
-              <span>
-                <span className="block max-w-[180px] truncate text-[13px] font-medium">{f.name}</span>
-                {f.meta && <span className="block font-mono text-[11px] text-muted">{f.meta}</span>}
-              </span>
-            </span>
-          ))}
+          <AttachmentViewer attachments={attachments} index={previewed} onIndexChange={setPreviewed} onClose={() => setPreviewed(null)} />
         </div>
       )}
 
