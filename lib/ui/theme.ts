@@ -8,7 +8,7 @@ export { themeScript } from "./themeScript";
 export type Theme = "light" | "dark";
 export type ThemePreference = Theme | "system";
 
-function readTheme(): Theme {
+export function readTheme(): Theme {
   if (typeof document === "undefined") return "light";
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }

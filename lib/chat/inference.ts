@@ -43,6 +43,7 @@ import { isNearAIVerified, prewarmNearAI, streamNearAIChat } from "@/lib/enclave
 import { isPhalaVerified, prewarmPhala, streamPhalaChat } from "@/lib/enclave/phalaClient";
 import { API_URL, apiFetch } from "@/lib/core/api";
 import { fetchSystemPrompt } from "@/lib/enclave/systemPrompt";
+import { readTheme, type Theme } from "@/lib/ui/theme";
 import {
   MEMORY_NOTE_CLOSE,
   MEMORY_NOTE_OPEN,
@@ -161,6 +162,11 @@ In this chat, every note, document, slide deck and code file you write is a file
 After an edit, its tag shows what happened: changes="N", or reason="…" when nothing changed.
 </chat_artifacts>`;
 
+function siteThemeBlock(theme: Theme): string {
+  const colours = theme === "dark" ? "dark background, light text" : "light background, dark text";
+  return `\n\n<user_theme>The user's app is in ${theme} mode. When you make a new site, give it a ${theme} design (${colours}) unless the user asks for other colours. When you edit a site, keep its colours. This applies only to sites.</user_theme>`;
+}
+
 // Providers cache the longest common token prefix, so stable blocks go first and per-message memory goes last.
 async function buildSystemPrompt(opts: {
   displayName: string;
@@ -226,6 +232,7 @@ async function buildSystemPrompt(opts: {
   } else if (opts.hasChatFiles) {
     prompt += `\n\n${CHAT_ARTIFACTS}`;
   }
+  if (getArtifactsEnabled()) prompt += siteThemeBlock(readTheme());
   if (opts.generateTitle) {
     prompt += opts.generateBrief
       ? "\n\n<chat_title_request>This is the first message of a new conversation. Begin your reply with a short conversation title (3-6 words, in the SAME language as the user's message) wrapped exactly like this: <chat_title>Title here</chat_title>, then one sentence of at most 20 words on what this conversation is about, in the same language, wrapped exactly like this: <chat_brief>Sentence here</chat_brief> — then continue with your normal answer. Both tags must appear before any other text and must not be mentioned anywhere else.</chat_title_request>"
