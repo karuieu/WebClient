@@ -18,6 +18,7 @@ import { DropOverlay } from "@/components/app/DropOverlay";
 import { IncognitoChat } from "@/components/wired/IncognitoChat";
 import { useComposer } from "@/components/wired/useComposer";
 import { LibraryContext } from "@/components/wired/useLibrary";
+import { WelcomeHost } from "@/components/wired/WelcomeHost";
 
 export default function NewChatPage() {
   return (
@@ -135,6 +136,7 @@ function NewChat() {
         currentProjectId={project?.id ?? null}
         projects={raw.projects.map((p) => ({ id: p.id, name: p.name }))}
       />
+      <WelcomeHost onMemoryChange={composer.syncMemoryAvailable} />
     </div>
   );
 }

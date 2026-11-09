@@ -3,7 +3,7 @@
 
 import { getUser, onSessionCleared } from "@/lib/account/session";
 import { getArtifactsEnabled } from "@/lib/artifacts/artifacts";
-import { getModelProvider, getProvider, PROVIDERS, type ProviderId } from "@/lib/models/providers";
+import { getModelProvider, HELPER_PROVIDER, PROVIDERS, type ProviderId } from "@/lib/models/providers";
 import { type LiveMemoryEdit, type MemoryFileForChat } from "./memory";
 import { encodeMemoryWriteBlock } from "@/lib/messages/memoryWrite";
 import { blockJSON, parseMessageBlocks, STOPPED_NOTICE, toolCallFailedNotice, UNVERIFIED_ANSWER_CONTEXT, UNVERIFIED_NOTICE } from "@/lib/messages/messageBlocks";
@@ -359,7 +359,7 @@ export interface E2EStreamOptions {
 async function resolveMemoryWrite(opts: E2EStreamOptions, model: HelperModel, request?: MemoryWriteRequest): Promise<string> {
   throwIfStopped(opts.signal);
   const lastUserMessage = [...opts.turns].reverse().find((t) => t.role === "user")?.content ?? "";
-  const helperProvider = getProvider();
+  const helperProvider = HELPER_PROVIDER;
   const helperTurn: HelperTurn = {
     provider: helperProvider,
     main: helperProvider === opts.provider ? async () => model : undefined,

@@ -15,7 +15,6 @@ export default function robots(): MetadataRoute.Robots {
           "/projects",
           "/plans",
           "/settings",
-          "/onboarding",
           "/verify-email",
           "/delete-account",
         ],

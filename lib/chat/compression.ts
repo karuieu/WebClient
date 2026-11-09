@@ -3,7 +3,7 @@
 import { encryptField, fieldAad } from "@/lib/account/crypto";
 import { estimateTokens } from "@/lib/messages/context";
 import { compressHistoryE2E, type CompressionTurn } from "./helperPhases";
-import { getModelProvider, getProvider } from "@/lib/models/providers";
+import { getModelProvider, HELPER_PROVIDER } from "@/lib/models/providers";
 import { chatModelAsHelper } from "./inference";
 import { API_URL, apiFetch } from "@/lib/core/api";
 
@@ -117,7 +117,7 @@ async function runCompression(
   previousSummary: string
 ): Promise<string> {
   const chatProvider = getModelProvider(modelId);
-  const helperProvider = getProvider();
+  const helperProvider = HELPER_PROVIDER;
   if (!chatProvider) throw new Error("Unknown model — no provider to ask for a summary");
   return compressHistoryE2E(
     {

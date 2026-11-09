@@ -4,7 +4,6 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
-import { isOnboardingPending } from "@/lib/account/session";
 import { logout } from "@/lib/account/auth";
 import { setSettingsUrl, settingsHref } from "@/lib/ui/settingsOverlay";
 import { useAnnouncement } from "@/lib/ui/announcement";
@@ -64,7 +63,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { isInitialized, isLoggedIn, user, sessionExpired, appPaused } = useSession();
+  const { isInitialized, isLoggedIn, sessionExpired, appPaused } = useSession();
   const router = useRouter();
   const { showError } = useToast();
   const expiryAnnounced = useRef(false);
@@ -78,12 +77,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isInitialized) return;
     if (appPaused) return;
-    if (!isLoggedIn) {
-      router.replace("/login");
-    } else if (isOnboardingPending(user)) {
-      router.replace("/onboarding");
-    }
-  }, [isInitialized, isLoggedIn, user, appPaused, router]);
+    if (!isLoggedIn) router.replace("/login");
+  }, [isInitialized, isLoggedIn, appPaused, router]);
 
   if (!isInitialized || !isLoggedIn) return null;
 
@@ -92,8 +87,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <StatusView label="App access" state="error" title="Karui is paused." text="The app is temporarily unavailable. Please try again later." />
     </AuthShell>
   );
-
-  if (isOnboardingPending(user)) return null;
 
   return (
     <>

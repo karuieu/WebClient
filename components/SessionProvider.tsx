@@ -4,7 +4,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { restoreKey, isSignedIn, getUser, updateUser, clearSession, isOnboardingPending, type User } from "@/lib/account/session";
+import { restoreKey, isSignedIn, getUser, updateUser, clearSession, type User } from "@/lib/account/session";
 import { getMe, checkSession, getAuthControls } from "@/lib/account/auth";
 
 interface SessionContextType {
@@ -37,13 +37,13 @@ export function useSession(): SessionContextType {
  * true while loading or redirecting so callers hide the form.
  */
 export function useRedirectIfLoggedIn(): boolean {
-  const { isInitialized, isLoggedIn, user, sessionVerified } = useSession();
+  const { isInitialized, isLoggedIn, sessionVerified } = useSession();
   const router = useRouter();
 
   useEffect(() => {
     if (!isInitialized || !sessionVerified || !isLoggedIn) return;
-    router.replace(isOnboardingPending(user) ? "/onboarding" : "/new");
-  }, [isInitialized, sessionVerified, isLoggedIn, user, router]);
+    router.replace("/new");
+  }, [isInitialized, sessionVerified, isLoggedIn, router]);
 
   return !isInitialized || !sessionVerified || isLoggedIn;
 }

@@ -1,6 +1,5 @@
-// Chat models have a fixed provider. getProvider is the separate helper-provider
-// choice used by memory, compression and other helper phases.
-// Settings are local (localStorage, per device).
+// Chat models have a fixed provider. HELPER_PROVIDER runs memory, compression and
+// the other helper phases. Settings are local (localStorage, per device).
 
 import { accountSettingKey } from "@/lib/account/session";
 
@@ -51,7 +50,7 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
   },
 };
 
-export const DEFAULT_PROVIDER: ProviderId = "phala";
+export const HELPER_PROVIDER: ProviderId = "phala";
 
 export const ALL_PROVIDERS: ProviderId[] = ["phala", "nearai"];
 
@@ -68,12 +67,6 @@ function providerAllowed(provider: ProviderId): boolean {
   return !PRO_ONLY_PROVIDERS.has(provider);
 }
 
-export function getProvider(): ProviderId {
-  const chosen = getProviderSettings().provider;
-  if (providerAllowed(chosen)) return chosen;
-  return ALL_PROVIDERS.find(providerAllowed) ?? chosen;
-}
-
 export function getModelProvider(modelId: string): ProviderId | null {
   return (MODEL_PROVIDERS[modelId] ?? []).find(providerAllowed) ?? null;
 }
@@ -85,36 +78,18 @@ export function isModelAvailable(modelId: string): boolean {
 const STORAGE_KEY = "karui_provider_settings";
 
 // Legacy keys are read once, on the first read per device, so existing settings are not lost.
-const LEGACY_PRIORITY_KEY = "karui_provider_priority";
 const LEGACY_AUTO_SEARCH_KEY = "karui_auto_websearch";
 
 export interface ProviderSettings {
-  provider: ProviderId;
   autoWebSearch: boolean;
 }
 
 export const DEFAULT_PROVIDER_SETTINGS: ProviderSettings = {
-  provider: DEFAULT_PROVIDER,
   autoWebSearch: true,
 };
 
-function isProviderId(value: unknown): value is ProviderId {
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(PROVIDERS, value);
-}
-
 function readLegacySettings(): Partial<ProviderSettings> {
   const out: Partial<ProviderSettings> = {};
-  try {
-    const rawPriority = window.localStorage.getItem(LEGACY_PRIORITY_KEY);
-    if (rawPriority) {
-      const parsed: unknown = JSON.parse(rawPriority);
-      if (Array.isArray(parsed)) {
-        const first = parsed.find(isProviderId);
-        if (first) out.provider = first;
-      }
-    }
-  } catch {}
-
   try {
     const rawAuto = window.localStorage.getItem(LEGACY_AUTO_SEARCH_KEY);
     if (rawAuto !== null) out.autoWebSearch = rawAuto === "1";
@@ -127,8 +102,6 @@ function normalizeSettings(raw: unknown): ProviderSettings {
   const s = { ...DEFAULT_PROVIDER_SETTINGS };
   if (raw && typeof raw === "object") {
     const r = raw as Partial<ProviderSettings>;
-    // A stored provider outside the pool falls back to the default; otherwise every turn would go to an enclave that does not exist.
-    if (isProviderId(r.provider)) s.provider = r.provider;
     if (typeof r.autoWebSearch === "boolean") s.autoWebSearch = r.autoWebSearch;
   }
   return s;

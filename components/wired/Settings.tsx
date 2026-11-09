@@ -31,16 +31,7 @@ import { getBillingStatus, type BillingStatus } from "@/lib/chat/chat";
 import { getChatTitleMode, setChatTitleMode, type ChatTitleMode } from "@/lib/chat/chatTitle";
 import { getArtifactsEnabled, setArtifactsEnabled } from "@/lib/artifacts/artifacts";
 import { getTabNamesEnabled, setTabNamesEnabled } from "@/lib/ui/tabTitle";
-import {
-  ALL_PROVIDERS,
-  PROVIDERS,
-  PRO_ONLY_PROVIDERS,
-  getProvider,
-  getProviderSettings,
-  setProviderSettings,
-  type ProviderId,
-  type ProviderSettings,
-} from "@/lib/models/providers";
+import { HELPER_PROVIDER, PROVIDERS, getProviderSettings, setProviderSettings, type ProviderSettings } from "@/lib/models/providers";
 import {
   getMemorySettings,
   getPendingMemoryChats,
@@ -55,7 +46,7 @@ import { workspaceHref } from "@/components/wired/Workspace";
 import { GeneralSettings } from "@/components/app/settings/General";
 import { UsageSettings } from "@/components/app/settings/Usage";
 import { MemorySettings } from "@/components/app/settings/Memory";
-import { ProvidersSettings, type ProviderOption } from "@/components/app/settings/Providers";
+import { ProvidersSettings } from "@/components/app/settings/Providers";
 import { BillingSettings } from "@/components/app/settings/Billing";
 import { DangerSettings } from "@/components/app/settings/Danger";
 import {
@@ -227,32 +218,16 @@ function MemorySection({ onOpenFiles }: { onOpenFiles: () => void }) {
   );
 }
 
-const HELPER_MODELS: Record<ProviderId, string> = {
-  nearai: "GLM 5.3 Flash",
-  phala: "Gemma 4 31B",
-};
+const HELPER = { name: PROVIDERS[HELPER_PROVIDER].name, model: "Gemma 4 31B", links: PROVIDERS[HELPER_PROVIDER].links };
 
 function ProvidersSection() {
-  const { user } = useSession();
-  const tier = user?.tier ?? "free";
   const [settings, setSettings] = React.useState<ProviderSettings>(() => getProviderSettings());
-  const update = (patch: Partial<ProviderSettings>) => setSettings(setProviderSettings(patch));
-
-  const providers: ProviderOption[] = ALL_PROVIDERS.map((id) => ({
-    id,
-    name: PROVIDERS[id].name,
-    model: HELPER_MODELS[id],
-    links: PROVIDERS[id].links,
-    locked: PRO_ONLY_PROVIDERS.has(id) && tier !== "pro",
-  }));
 
   return (
     <ProvidersSettings
-      providers={providers}
-      provider={getProvider()}
-      onProvider={(id) => update({ provider: id as ProviderId })}
+      helper={HELPER}
       autoSearch={settings.autoWebSearch}
-      onAutoSearch={(v) => update({ autoWebSearch: v })}
+      onAutoSearch={(v) => setSettings(setProviderSettings({ autoWebSearch: v }))}
     />
   );
 }

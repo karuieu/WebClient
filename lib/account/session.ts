@@ -29,7 +29,7 @@ const DB_VERSION = 1;
 const KEY_STORE = "keys";
 const KEY_ID = "user_aes_key";
 const PENDING_RECOVERY_ID = "pending_recovery";
-// Long enough for onboarding, short enough that an abandoned one doesn't keep it.
+// Long enough for the welcome dialog, short enough that an abandoned one doesn't keep it.
 const PENDING_RECOVERY_TTL_MS = 60 * 60 * 1000;
 
 // An in-memory key cache — it lets the chat and project helpers read the key
@@ -227,7 +227,7 @@ export async function clearSession(): Promise<void> {
   await Promise.all([idbDelete(KEY_ID), idbDelete(PENDING_RECOVERY_ID)]);
 }
 
-// The recovery phrase made at first sign-in stays sealed with the session key until onboarding shows it. It expires after an hour, on sign-out, or once saved.
+// The recovery phrase made at first sign-in stays sealed with the session key until the welcome dialog shows it. It expires after an hour, on sign-out, or once saved.
 
 type PendingRecoveryRecord = { sealed: string; createdAt: number };
 
@@ -258,7 +258,7 @@ export function updateUser(userData: User): void {
   localStorage.setItem(USER_KEY, JSON.stringify(userData));
 }
 
-// Onboarding state lives on the server (users.onboarding_completed), not in localStorage, so it survives a device change.
-export function isOnboardingPending(user: User | null): boolean {
+// users.onboarding_completed now marks that the welcome dialog on /new is done. It lives on the server, so it survives a device change.
+export function isFirstRun(user: User | null): boolean {
   return !!user && !user.onboarding_completed;
 }

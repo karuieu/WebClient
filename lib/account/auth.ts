@@ -21,7 +21,7 @@ import {
   deletePendingRecovery,
   ensureAesKey,
   getPendingRecovery,
-  isOnboardingPending,
+  isFirstRun,
   isSignedIn,
   putPendingRecovery,
   type User,
@@ -290,8 +290,8 @@ async function completeLogin(data: AuthResponse, password: string, rememberMe: b
     const aesKey = await importAESKey(rawKey);
     const userData = await getMeData();
     await setSession(userData, aesKey, rememberMe);
-    if (isOnboardingPending(userData)) {
-      await prepareOnboardingRecovery(rawKey, aesKey, authKey ?? (await deriveAuthKey(userData.email, password))).catch(
+    if (isFirstRun(userData)) {
+      await prepareFirstRecovery(rawKey, aesKey, authKey ?? (await deriveAuthKey(userData.email, password))).catch(
         () => {}
       );
     }
@@ -306,10 +306,10 @@ export type RecoveryStatus = { enabled: boolean; created_at?: string };
 type PendingRecovery = RecoveryKit & { authKey: string };
 
 /**
- * Makes the phrase onboarding will show, while the raw key is at hand (only at
+ * Makes the phrase the welcome dialog will show, while the raw key is at hand (only at
  * sign-in). Kept sealed with the session key until the user confirms (session.ts).
  */
-async function prepareOnboardingRecovery(rawKey: Uint8Array, aesKey: CryptoKey, authKey: string): Promise<void> {
+async function prepareFirstRecovery(rawKey: Uint8Array, aesKey: CryptoKey, authKey: string): Promise<void> {
   const status = await apiCall<RecoveryStatus>("/api/auth/recovery", { method: "GET" });
   if (status.enabled) return;
   const pending: PendingRecovery = { ...(await createRecoveryKit(rawKey)), authKey };
@@ -327,16 +327,16 @@ async function readPendingRecovery(): Promise<PendingRecovery | null> {
   }
 }
 
-export async function loadOnboardingRecovery(): Promise<string[] | null> {
+export async function loadFirstRecovery(): Promise<string[] | null> {
   return (await readPendingRecovery())?.words ?? null;
 }
 
 /**
- * "I've saved it" in onboarding: the phrase becomes the account's. It never
+ * "I've saved it" in the welcome dialog: the phrase becomes the account's. It never
  * replaces one saved meanwhile in another tab, since the words on screen would
  * then be useless. `gone` means the step can't be finished here any more.
  */
-export async function saveOnboardingRecovery(): Promise<{ error?: string; gone?: boolean }> {
+export async function saveFirstRecovery(): Promise<{ error?: string; gone?: boolean }> {
   const pending = await readPendingRecovery();
   if (!pending) return { error: "This phrase expired. You can make a new one in Settings.", gone: true };
   try {
@@ -633,7 +633,7 @@ export async function requestAccountDeletion(password: string): Promise<void> {
   });
 }
 
-export async function completeOnboarding(): Promise<User> {
+export async function completeFirstRun(): Promise<User> {
   const data: MeResponse = await apiCall<MeResponse>("/api/auth/complete-onboarding", { method: "POST" });
 
   return {

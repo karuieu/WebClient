@@ -12,7 +12,7 @@ import {
 import { annotateMemoryWrites } from "@/lib/messages/memoryWrite";
 import { isUnverifiedAnswer } from "@/lib/messages/messageBlocks";
 import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
-import { getProvider } from "@/lib/models/providers";
+import { HELPER_PROVIDER } from "@/lib/models/providers";
 import {
   createProjectMemoryFile,
   deleteProjectMemoryFile,
@@ -617,7 +617,7 @@ export async function refreshMemory(
 
         // Runs in the enclave: transcripts and the memory tree must never reach the backend in plaintext.
         const operations = await organizeMemoryE2E(
-          getProvider(),
+          HELPER_PROVIDER,
           tree.map((c) => ({
             name: c.name,
             files: c.files.map((f) => ({
@@ -661,7 +661,7 @@ export async function refreshProjectMemory(
       const files = await listProjectMemory(projectId);
       for (const batch of buildBatches(blocks, getMemorySettings().interval)) {
         const { operations, briefs } = await organizeProjectMemoryE2E(
-          getProvider(),
+          HELPER_PROVIDER,
           { name: project.name, goal: project.goal },
           files.map((f) => ({ fileId: f.id, name: f.name, description: f.description, content: f.content })),
           buildTranscript(batch, true),

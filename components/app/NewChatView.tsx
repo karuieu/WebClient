@@ -38,18 +38,15 @@ export function NewChatView({
     if (!greeting) setPicked(pickGreeting({ returning, halloween: !!halloween }));
   }, [greeting, returning, halloween]);
 
+  // Without a name the person is a stranger, so they get the same lines as incognito.
+  const stranger = hidden || !name;
+
   React.useEffect(() => {
-    if (hidden && !incognitoGreeting) setPickedIncognito(pickIncognitoGreeting({ halloween: !!halloween }));
-  }, [hidden, incognitoGreeting, halloween]);
+    if (stranger && !incognitoGreeting) setPickedIncognito(pickIncognitoGreeting({ halloween: !!halloween }));
+  }, [stranger, incognitoGreeting, halloween]);
 
   const g = greeting ?? picked;
-  const lines = hidden
-    ? (incognitoGreeting ?? pickedIncognito)
-    : !name
-      ? ["What's your name,", "stranger?"]
-      : g
-        ? [`${g.lead},`, `${name}${g.end}`]
-        : null;
+  const lines = stranger ? (incognitoGreeting ?? pickedIncognito) : g ? [`${g.lead},`, `${name}${g.end}`] : null;
   const spooky = hidden && !!halloween;
   const IncognitoIcon = halloween ? incognitoCostumes[halloween] : Incognito;
 

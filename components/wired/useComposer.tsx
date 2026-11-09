@@ -149,6 +149,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
     webSearch,
     setWebSearch,
     memoryAvailable,
+    syncMemoryAvailable: () => setMemoryAvailable(getMemorySettings().enabled),
     images: imgs.images,
     files: docs.files,
     busy,
