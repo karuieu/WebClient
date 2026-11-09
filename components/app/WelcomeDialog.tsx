@@ -62,7 +62,10 @@ export function WelcomeDialog({
           </>
         }
       >
-        <RecoveryPhrase words={words} />
+        {/* Focus starts here, not on the blurred words, so nothing looks selected on open. */}
+        <div tabIndex={-1} data-autofocus data-focus="within">
+          <RecoveryPhrase words={words} />
+        </div>
         <Checkbox id="welcome-recovery-saved" checked={saved} onChange={(e) => setSaved(e.target.checked)} className="mt-5">
           <span className="text-fg">I&apos;ve saved my recovery phrase somewhere safe</span>
         </Checkbox>
@@ -89,7 +92,7 @@ export function WelcomeDialog({
         </>
       }
     >
-      <div role="radiogroup" aria-label="Memory" className="flex flex-col gap-2.5">
+      <div role="radiogroup" aria-label="Memory" tabIndex={-1} data-autofocus data-focus="within" className="flex flex-col gap-2.5">
         <MemoryChoice
           active={memory}
           onSelect={() => onMemory(true)}
