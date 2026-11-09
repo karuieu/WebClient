@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
 import { execFileSync } from "node:child_process";
-import packageJson from "./package.json";
 
 // The app's CSP carries a per-request nonce, so middleware.ts sets it; this file keeps the relay's and the rest.
 const isDevBuild = process.env.NODE_ENV !== "production";
@@ -47,10 +46,10 @@ function securityHeaders() {
   return headers;
 }
 
-// Empty when building outside a git checkout; the settings then show only the version number.
-function gitCommit(): string {
+// Empty when building outside a git checkout or when git can't answer.
+function git(...args: string[]): string {
   try {
-    return execFileSync("git", ["rev-parse", "HEAD"], { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    return execFileSync("git", args, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
   } catch {
     return "";
   }
@@ -58,8 +57,9 @@ function gitCommit(): string {
 
 const nextConfig: NextConfig = {
   env: {
-    NEXT_PUBLIC_APP_VERSION: packageJson.version,
-    NEXT_PUBLIC_COMMIT: gitCommit(),
+    // Only a release tag sitting on HEAD (scripts/release.sh, docs/status/wydania.md); beta and local builds show just the commit.
+    NEXT_PUBLIC_APP_VERSION: git("describe", "--tags", "--exact-match", "--match", "v[0-9]*"),
+    NEXT_PUBLIC_COMMIT: git("rev-parse", "HEAD"),
   },
   async headers() {
     return [

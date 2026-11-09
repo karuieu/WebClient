@@ -23,7 +23,8 @@ export type GeneralSettingsProps = {
   onArtifacts: (v: boolean) => void;
   tabNames: boolean;
   onTabNames: (v: boolean) => void;
-  version: string;
+  /** The release tag, missing on a build that isn't exactly on one (beta, local). */
+  version?: string;
   /** Missing when the build had no git checkout to read from. */
   commit?: { hash: string; url: string };
 };
@@ -141,21 +142,19 @@ export function GeneralSettings(p: GeneralSettingsProps) {
       </Group>
 
       <p className="mt-9 flex items-center gap-1.5 px-1 font-mono text-[11px] text-muted">
-        <span>v{p.version}</span>
+        {p.version && <span>{p.version}</span>}
+        {p.version && p.commit && <span aria-hidden>·</span>}
         {p.commit && (
-          <>
-            <span aria-hidden>·</span>
-            <a
-              href={p.commit.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Commit ${p.commit.hash} on GitHub`}
-              className="inline-flex items-center gap-1 underline-offset-4 hover:text-fg hover:underline"
-            >
-              {p.commit.hash}
-              <ArrowUpRight className="size-3" />
-            </a>
-          </>
+          <a
+            href={p.commit.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Commit ${p.commit.hash} on GitHub`}
+            className="inline-flex items-center gap-1 underline-offset-4 hover:text-fg hover:underline"
+          >
+            {p.commit.hash}
+            <ArrowUpRight className="size-3" />
+          </a>
         )}
       </p>
     </>

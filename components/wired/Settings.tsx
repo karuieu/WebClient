@@ -60,7 +60,7 @@ import {
   type TwoFactorSetupStep,
 } from "@/components/app/settings/Security";
 
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || undefined;
 const COMMIT = process.env.NEXT_PUBLIC_COMMIT;
 const BUILD_COMMIT = COMMIT ? { hash: COMMIT.slice(0, 7), url: `https://github.com/karuieu/WebClient/commit/${COMMIT}` } : undefined;
 
