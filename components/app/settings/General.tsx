@@ -70,7 +70,7 @@ export function GeneralSettings(p: GeneralSettingsProps) {
           <div className={cx("flex justify-end overflow-hidden transition-[max-height,opacity,margin] duration-300", profileDirty ? "mt-3 max-h-12 opacity-100" : "max-h-0 opacity-0")}>
             <Button
               loading={p.savingProfile}
-              disabled={!name.trim() || !profileDirty}
+              disabled={!profileDirty}
               onClick={() => p.onSaveProfile(name.trim(), full.trim())}
               tabIndex={profileDirty ? 0 : -1}
             >
