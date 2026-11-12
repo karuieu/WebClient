@@ -71,3 +71,8 @@ export const AMD_ROOTS: Record<string, AmdRoots> = {
 // the old and the new one before the image changes, and drop the old one in the release after. While the list is
 // empty the app refuses every enclave.
 export const ACCEPTED_MEASUREMENTS: string[] = [];
+
+// Whether connectors on Karui's route go through the enclave. Until a build is accepted they keep going through our
+// server, so the app can be released at any time; the first accepted measurement moves them to the enclave for good,
+// with no way back when the enclave is down. NEXT_PUBLIC_ENCLAVE_DEV=1 does the same for a local enclave run with -dev.
+export const ENCLAVE_IN_USE = ACCEPTED_MEASUREMENTS.length > 0 || process.env.NEXT_PUBLIC_ENCLAVE_DEV === "1";
