@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { LANDING_URL } from "@/app/siteUrl";
+import { LANDING_URL, PRICING_URL } from "@/app/siteUrl";
+import { LOGIN_FOR_UPGRADE_PATH } from "@/lib/account/afterLogin";
 import { API_URL } from "@/lib/core/api";
 
 /**
@@ -102,6 +103,12 @@ export function middleware(request: NextRequest) {
 
   if (LANDING_PAGES.has(pathname)) return NextResponse.redirect(`${LANDING_URL}${pathname}`, 308);
 
+  // The plans live on the landing page now; Polar still returns buyers to /plans?success=true.
+  if (pathname === "/plans") {
+    const paid = request.nextUrl.searchParams.get("success") === "true";
+    return NextResponse.redirect(paid ? new URL("/upgrade?success=true", REDIRECT_BASE || request.url) : PRICING_URL, 307);
+  }
+
   // Reject legacy query tokens before Next.js can serialize them into HTML or RSC payloads.
   if (emailedLinkRoutes.has(pathname) && request.nextUrl.searchParams.has("token")) {
     const cleanUrl = new URL(pathname, REDIRECT_BASE || request.url);
@@ -121,7 +128,7 @@ export function middleware(request: NextRequest) {
     // Someone without a session, search engines included, lands on the landing page rather than a sign-in form.
     response = NextResponse.redirect(isLoggedIn ? new URL("/new", REDIRECT_BASE || request.url) : LANDING_URL);
   } else if (!isLoggedIn && isProtectedRoute(pathname)) {
-    response = NextResponse.redirect(new URL("/login", REDIRECT_BASE || request.url));
+    response = NextResponse.redirect(new URL(pathname === "/upgrade" ? LOGIN_FOR_UPGRADE_PATH : "/login", REDIRECT_BASE || request.url));
   } else {
     response = withContentSecurityPolicy(request);
   }

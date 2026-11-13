@@ -1,34 +1,58 @@
 "use client";
 
+import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Button } from "@/components/kit/Button";
-import { X } from "@/components/kit/icons";
+import { Button, ButtonLink } from "@/components/kit/Button";
+import { Dialog } from "@/components/kit/Dialog";
+import { ArrowUpRight, X } from "@/components/kit/icons";
 import { Sheet } from "@/components/kit/Sheet";
 import { useMediaQuery } from "@/components/kit/useMounted";
 
-export type Announcement = { title: string; message: string };
+export type Announcement = { title: string; message: string; link?: { label: string; url: string } };
 
-// Stays mounted after dismissal (open = false) so the card and the sheet can animate out with their text.
 export function AnnouncementBanner({ announcement, open, onDismiss }: { announcement: Announcement; open: boolean; onDismiss: () => void }) {
   const phone = useMediaQuery("(max-width: 639px)");
+  const [reading, setReading] = React.useState(false);
+
+  const dismiss = (): void => {
+    setReading(false);
+    onDismiss();
+  };
+
+  const link = announcement.link && (
+    <ButtonLink href={announcement.link.url} target="_blank" rel="noopener noreferrer" size="lg" variant="secondary">
+      {announcement.link.label}
+      <ArrowUpRight className="size-4" />
+    </ButtonLink>
+  );
+  const gotIt = (
+    <Button size="lg" onClick={dismiss}>
+      Got it
+    </Button>
+  );
 
   return (
     <>
-      <Sheet open={open && phone} onClose={onDismiss} title={announcement.title}>
-        <div className="px-6 pb-2 pt-1">
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-muted">{announcement.message}</p>
-          <Button size="lg" onClick={onDismiss} className="mt-7 w-full">
-            Got it
-          </Button>
+      <AnimatePresence>{open && <AnnouncementPill title={announcement.title} onRead={() => setReading(true)} onDismiss={dismiss} />}</AnimatePresence>
+      <Dialog open={open && reading && !phone} onClose={() => setReading(false)} title={announcement.title} footer={<>{link}{gotIt}</>}>
+        <p className={MESSAGE}>{announcement.message}</p>
+      </Dialog>
+      {/* A phone has no room for the pill, so the notice opens by itself and has to be closed first. */}
+      <Sheet open={open && phone} onClose={dismiss} title={announcement.title}>
+        <div className="flex flex-col gap-2 px-6 pb-2 pt-1">
+          <p className={`${MESSAGE} mb-5`}>{announcement.message}</p>
+          {gotIt}
+          {link}
         </div>
       </Sheet>
-      <AnimatePresence>{open && !phone && <AnnouncementCard announcement={announcement} onDismiss={onDismiss} />}</AnimatePresence>
     </>
   );
 }
 
-// Floats over the screen so incognito and the chat header stay put; the side padding keeps it clear of them.
-function AnnouncementCard({ announcement, onDismiss }: { announcement: Announcement; onDismiss: () => void }) {
+const MESSAGE = "max-h-[50dvh] overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-relaxed text-muted";
+
+// Floats over the screen so incognito and the chat header stay put; one line, so it covers almost nothing.
+function AnnouncementPill({ title, onRead, onDismiss }: { title: string; onRead: () => void; onDismiss: () => void }) {
   return (
     <motion.div
       data-motion-effect=""
@@ -36,21 +60,21 @@ function AnnouncementCard({ announcement, onDismiss }: { announcement: Announcem
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: 0.15 } }}
       transition={{ type: "spring", bounce: 0, duration: 0.5 }}
-      className="pointer-events-none absolute inset-x-0 top-14 z-30 px-4 pt-3 sm:px-14 md:top-0"
+      className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center px-14 pt-3 max-sm:hidden md:top-0"
     >
       <aside
         aria-label="Announcement"
-        className="pointer-events-auto mx-auto flex max-w-[44rem] items-start gap-2 rounded-2xl border border-line bg-surface py-3 pl-4 pr-2 text-[13.5px] leading-relaxed"
+        className="pointer-events-auto flex h-10 min-w-0 max-w-[34rem] items-center rounded-full border border-line-strong bg-elevated pl-4 pr-1 text-[13.5px] shadow-soft"
       >
-        <div className="min-w-0 flex-1">
-          <p className="break-words font-medium">{announcement.title}</p>
-          <p className="mt-0.5 max-h-[30dvh] overflow-y-auto whitespace-pre-wrap break-words text-muted">{announcement.message}</p>
-        </div>
+        <button type="button" onClick={onRead} className="group flex h-full min-w-0 cursor-pointer items-center gap-3 rounded-full pr-2">
+          <span className="truncate font-medium">{title}</span>
+          <span className="shrink-0 text-muted underline-offset-4 transition-colors duration-150 group-hover:text-fg group-hover:underline">Read</span>
+        </button>
         <button
           type="button"
           aria-label="Dismiss announcement"
           onClick={onDismiss}
-          className="-mt-1.5 grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-2 hover:text-fg active:scale-[0.94]"
+          className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-2 hover:text-fg active:scale-[0.94]"
         >
           <X className="size-4" />
         </button>

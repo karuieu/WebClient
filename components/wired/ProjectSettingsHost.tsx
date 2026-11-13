@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { useRouter } from "next/navigation";
 import { getMemorySettings, copyYouIntoProject, hasYouFolder } from "@/lib/chat/memory";
 import { getProject, listProjectFiles, updateProject, type LibraryListing, type Project, type ProjectSettings as Settings } from "@/lib/projects/projects";
@@ -139,7 +140,7 @@ export function ProjectSettingsHost({
         onOpenConnectors: () => openWorkspace("connectors"),
         onUpgrade: () => {
           onClose();
-          router.push("/plans");
+          window.location.assign(PRICING_URL);
         },
       }}
       skills={{

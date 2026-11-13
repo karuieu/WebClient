@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -19,7 +20,6 @@ import { AuthShell } from "@/components/auth/AuthShell";
 import { StatusView } from "@/components/auth/StatusView";
 
 function Shell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
   const { user } = useSession();
   const library = useLibrary();
@@ -48,7 +48,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           ...library.actions,
           onOpenSettings: () => setSettingsUrl(settingsHref(pathname, "general", new URLSearchParams(window.location.search)), "push"),
           onOpenSearch: () => setSearchOpen(true),
-          onUpgrade: () => router.push("/plans"),
+          onUpgrade: () => window.location.assign(PRICING_URL),
           onLogout: logout,
         }}
       >

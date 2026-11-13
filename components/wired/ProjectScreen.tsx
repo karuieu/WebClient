@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { usePathname, useRouter } from "next/navigation";
 import {
   assignChatToProject,
@@ -414,7 +415,7 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
           prepared.current.delete(id);
           setSelection((s) => s && { ...s, items: s.items.filter((i) => i.id !== id) });
         }}
-        onUpgrade={tier === "free" ? () => router.push("/plans") : undefined}
+        onUpgrade={tier === "free" ? () => window.location.assign(PRICING_URL) : undefined}
       />
 
       <ConfirmDeleteDialog

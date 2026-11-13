@@ -4,53 +4,33 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
+import { LANDING_URL, PRICING_URL } from "@/app/siteUrl";
 import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
-import { PlansView, type PlanCard } from "@/components/app/PlansView";
+import { LOGIN_FOR_UPGRADE_PATH } from "@/lib/account/afterLogin";
+import { UpgradeView } from "@/components/app/UpgradeView";
 
-const PLANS: PlanCard[] = [
-  {
-    tier: "free",
-    name: "Free",
-    price: "€0",
-    period: "forever",
-    line: "To try Karui and ask the occasional question.",
-    note: "30,000 tokens a day, roughly 5 messages",
-    features: ["End-to-end encryption", "Light model", "Advanced Memory & one project", "Web search, 10 a day", "Artifacts & images"],
-  },
-  {
-    tier: "pro",
-    name: "Pro",
-    price: "€18",
-    period: "per month + VAT",
-    line: "For everyday use.",
-    note: "800,000 tokens per 5 hours, up to 3.2 million a week, by model cost",
-    features: [
-      "Everything in Free",
-      "Heavy and every other model",
-      "Unlimited projects, longer conversations",
-      "50 web searches a day",
-      "Bring your own MCP connectors",
-    ],
-  },
-];
-
-function Plans() {
-  const { user, refreshUser } = useSession();
+function Upgrade() {
+  const { isInitialized, isLoggedIn, user, refreshUser } = useSession();
   const params = useSearchParams();
   const router = useRouter();
   const { showError } = useToast();
-  const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [checkout, setCheckout] = useState<"confirming" | "pending" | "done" | null>(null);
   const [startNow, setStartNow] = useState(false);
   const [startNowError, setStartNowError] = useState<string | null>(null);
   const current = user?.tier === "pro" ? "pro" : "free";
 
   useEffect(() => {
+    if (isInitialized && !isLoggedIn) router.replace(LOGIN_FOR_UPGRADE_PATH);
+  }, [isInitialized, isLoggedIn, router]);
+
+  useEffect(() => {
     if (params.get("success") !== "true") return;
     setCheckout("confirming");
-    router.replace("/plans");
+    router.replace("/upgrade");
     let cancelled = false;
 
+    // Polar's webhook can land after the buyer is back, so the plan is asked for a few times.
     (async () => {
       for (const delay of [0, 1500, 4000]) {
         if (delay) await new Promise((r) => setTimeout(r, delay));
@@ -69,15 +49,15 @@ function Plans() {
     if ((checkout === "confirming" || checkout === "pending") && current === "pro") setCheckout("done");
   }, [checkout, current]);
 
-  const choose = async (tier: "free" | "pro") => {
-    if (loadingTier || tier === "free") return;
+  const startCheckout = async () => {
+    if (loading) return;
     if (!startNow) {
       setStartNowError("Tick the box to continue to payment.");
       return;
     }
-    setLoadingTier(tier);
+    setLoading(true);
     try {
-      const resp = await apiFetch(`${API_URL}/api/billing/checkout?plan=${tier}&start_now=true`, { headers: JSON_HEADERS });
+      const resp = await apiFetch(`${API_URL}/api/billing/checkout?plan=pro&start_now=true`, { headers: JSON_HEADERS });
       const data = (await resp.json().catch(() => ({}))) as { checkout_url?: unknown; error?: unknown };
       if (!resp.ok) {
         showError(typeof data.error === "string" ? data.error : "Couldn't start checkout. Please try again.");
@@ -92,18 +72,24 @@ function Plans() {
     } catch {
       showError("Couldn't reach Karui. Check your connection and try again.");
     } finally {
-      setLoadingTier(null);
+      setLoading(false);
     }
   };
 
+  if (!isInitialized || !isLoggedIn) return null;
+
   return (
-    <PlansView
-      plans={PLANS}
+    <UpgradeView
+      price="€18"
+      period="per month + VAT"
       current={current}
-      loadingTier={loadingTier}
+      loading={loading}
       checkout={checkout}
-      settingsHref="/plans?settings=billing"
-      onChoose={choose}
+      plansHref={PRICING_URL}
+      termsHref={`${LANDING_URL}/terms`}
+      settingsHref="/new?settings=billing"
+      homeHref="/new"
+      onContinue={startCheckout}
       startNow={startNow}
       startNowError={startNowError}
       onStartNow={(checked) => {
@@ -114,10 +100,10 @@ function Plans() {
   );
 }
 
-export default function PlansPage() {
+export default function UpgradePage() {
   return (
     <Suspense fallback={null}>
-      <Plans />
+      <Upgrade />
     </Suspense>
   );
 }

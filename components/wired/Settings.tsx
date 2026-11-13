@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -556,7 +557,7 @@ export function SettingsOverlay() {
   }, [requested]);
 
   const close = () => setSettingsUrl(closedSettingsHref(pathname, params), "replace");
-  const upgrade = () => router.push("/plans");
+  const upgrade = () => window.location.assign(PRICING_URL);
 
   const showTab = (t: SettingsTab) => {
     setTab(t);

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { PRICING_URL } from "@/app/siteUrl";
 import { getModelProvider, getProviderSettings, isModelAvailable, PROVIDERS } from "@/lib/models/providers";
 import {
   clampReasoningEffort,
@@ -47,7 +47,6 @@ export function buildModelOptions(): ModelOption[] {
 }
 
 export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fixedModel?: boolean }) {
-  const router = useRouter();
   const { showError } = useToast();
   const [text, setText] = React.useState("");
   const [model, setModel] = React.useState<string>(MAIN[0]);
@@ -135,7 +134,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
         setReasoningEffort(e as ReasoningEffort);
       },
       moreLocked: false,
-      onUpgrade: () => router.push("/plans"),
+      onUpgrade: () => window.location.assign(PRICING_URL),
       fixed: fixedModel,
     },
   };
