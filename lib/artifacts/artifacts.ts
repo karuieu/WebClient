@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { parseFragment, serializeOuter, type DefaultTreeAdapterMap } from "parse5";
 import { accountSettingKey } from "@/lib/account/session";
 import { remarkRunOnList } from "@/lib/ui/remarkRunOnList";
 import { remarkSubSup } from "@/lib/ui/remarkSubSup";
@@ -476,61 +477,123 @@ const SLIDES_CSP =
   `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; ` +
   `img-src data: blob:; font-src data:; form-action 'none'; base-uri 'none'">`;
 
-// Each layout looks finished on its own; the model's <style> comes after and recolours it through the variables.
+// Defaults have zero specificity so the model can override them without fighting the layout selectors.
 const SLIDES_BASE_STYLES = `
-  :root {
+  :where(:root) {
     color-scheme: light;
     --bg: #ffffff; --fg: #1b1b1f; --muted: #5d5d68; --accent: #2f4fd8; --on-accent: #ffffff;
     --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  html, body { margin: 0; padding: 0; background: transparent; }
-  section {
+  :where(html, body) { margin: 0; padding: 0; background: transparent; }
+  :where(*, *::before, *::after) { box-sizing: border-box; }
+  :where(body > section) {
     padding: 72px 96px; display: flex; flex-direction: column; gap: 28px;
     background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 30px; line-height: 1.4;
+    overflow-wrap: anywhere;
   }
-  section :is(h1, h2, h3, p, ul, ol, blockquote, figure) { margin: 0; }
-  section h1 { font-size: 80px; line-height: 1.05; letter-spacing: -0.02em; }
-  section h2 { font-size: 52px; line-height: 1.1; letter-spacing: -0.015em; }
-  section h3 { font-size: 34px; line-height: 1.2; }
-  section :is(ul, ol) { padding-left: 1.2em; display: flex; flex-direction: column; gap: 14px; }
-  section li::marker { color: var(--accent); }
-  section img { display: block; max-width: 100%; min-height: 0; object-fit: contain; }
-  section aside.notes { display: none; }
-  [data-layout="title"] { justify-content: center; }
-  [data-layout="title"] h1 { font-size: 96px; max-width: 16ch; }
-  [data-layout="title"] p { color: var(--muted); font-size: 34px; }
-  [data-layout="section"] { justify-content: flex-end; padding-bottom: 96px; background: var(--accent); color: var(--on-accent); }
-  [data-layout="section"] h2 { font-size: 72px; }
-  [data-layout="two-column"] { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 40px 64px; align-content: start; }
-  [data-layout="two-column"] > h2 { grid-column: 1 / -1; }
-  [data-layout="image"] img { flex: 1 1 0; width: 100%; }
-  [data-layout="quote"] { justify-content: center; }
-  [data-layout="quote"] blockquote { font-size: 52px; line-height: 1.25; font-weight: 600; letter-spacing: -0.01em; }
-  [data-layout="quote"] p { color: var(--muted); }
-  [data-layout="big-number"] { justify-content: center; }
-  [data-layout="big-number"] strong { font-size: 200px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; color: var(--accent); }
+  :where(body > section *) { min-width: 0; }
+  :where(section h1, section h2, section h3, section p, section ul, section ol, section blockquote, section figure) { margin: 0; }
+  :where(section h1) { font-size: 80px; line-height: 1.05; letter-spacing: -0.02em; }
+  :where(section h2) { font-size: 52px; line-height: 1.1; letter-spacing: -0.015em; }
+  :where(section h3) { font-size: 34px; line-height: 1.2; }
+  :where(section ul, section ol) { padding-left: 1.2em; display: flex; flex-direction: column; gap: 14px; }
+  :where(section li)::marker { color: var(--accent); }
+  :where(section img, section svg) { display: block; max-width: 100%; min-height: 0; object-fit: contain; }
+  :where(body > section[data-layout="title"]) { justify-content: center; }
+  :where([data-layout="title"] h1) { font-size: 96px; max-width: 16ch; }
+  :where([data-layout="title"] p) { color: var(--muted); font-size: 34px; }
+  :where(body > section[data-layout="section"]) { justify-content: flex-end; padding-bottom: 96px; background: var(--accent); color: var(--on-accent); }
+  :where([data-layout="section"] h2) { font-size: 72px; }
+  :where(body > section[data-layout="two-column"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr); gap: 40px 64px; align-content: start; }
+  :where([data-layout="two-column"] > h1, [data-layout="two-column"] > h2, [data-layout="two-column"] > h3, [data-layout="two-column"] > header, [data-layout="two-column"] > footer, [data-slide-wide]) { grid-column: 1 / -1; }
+  :where([data-slide-columns]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: inherit; }
+  :where([data-layout="image"] img, [data-layout="image"] svg) { flex: 1 1 0; width: 100%; }
+  :where(body > section[data-layout="quote"]) { justify-content: center; }
+  :where([data-layout="quote"] blockquote) { font-size: 52px; line-height: 1.25; font-weight: 600; letter-spacing: -0.01em; }
+  :where([data-layout="quote"] p) { color: var(--muted); }
+  :where(body > section[data-layout="big-number"]) { justify-content: center; }
+  :where([data-layout="big-number"] > strong) { font-size: 200px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; color: var(--accent); }
 `;
 
 // After the model's styles, so a deck always stays a stack of fixed 16:9 slides the panel can scale and step through.
 const SLIDES_FRAME_STYLES = `
-  body { display: flex !important; flex-direction: column !important; gap: ${SLIDE_GAP}px !important; width: ${SLIDE_WIDTH}px !important; margin: 0 !important; }
-  section {
+  html, body { margin: 0 !important; padding: 0 !important; }
+  body {
+    display: flex !important; flex-direction: column !important; align-items: stretch !important; justify-content: flex-start !important;
+    gap: ${SLIDE_GAP}px !important; width: ${SLIDE_WIDTH}px !important; height: auto !important; min-height: 0 !important;
+    max-width: none !important; max-height: none !important; border: 0 !important;
+  }
+  body > section {
     box-sizing: border-box !important; position: relative !important; flex: none !important; margin: 0 !important;
     width: ${SLIDE_WIDTH}px !important; height: ${SLIDE_HEIGHT}px !important; overflow: hidden !important;
+    min-width: ${SLIDE_WIDTH}px !important; max-width: ${SLIDE_WIDTH}px !important;
+    min-height: ${SLIDE_HEIGHT}px !important; max-height: ${SLIDE_HEIGHT}px !important;
   }
+  body > section aside.notes { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @media screen { section { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); } }
+  @media screen { body > section { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); } }
   @media print {
     @page { size: ${SLIDE_WIDTH}px ${SLIDE_HEIGHT}px; margin: 0; }
     body { gap: 0 !important; }
-    section { break-after: page; }
+    body > section { break-after: page; break-inside: avoid; }
+    body > section:last-of-type { break-after: auto; }
   }
 `;
 
-const SECTION_OPEN = /<section\b/gi;
+type SlideNode = DefaultTreeAdapterMap["childNode"];
+type SlideElement = DefaultTreeAdapterMap["element"];
+
+function isSlideElement(node: SlideNode): node is SlideElement {
+  return "tagName" in node;
+}
+
+function slideAttribute(element: SlideElement, name: string): string | undefined {
+  return element.attrs.find((attr) => attr.name === name)?.value;
+}
+
+function slideBodyChildren(element: SlideElement): SlideElement[] {
+  return element.childNodes.filter(isSlideElement).filter((child) =>
+    !["h1", "h2", "h3", "header", "footer"].includes(child.tagName) &&
+    !(child.tagName === "aside" && slideAttribute(child, "class")?.split(/\s+/).includes("notes")),
+  );
+}
+
+function parsedSlides(content: string): { styles: string[]; slides: SlideElement[] } {
+  const fragment = parseFragment(stripActiveContent(content));
+  const styles: string[] = [];
+  const takeStyles = (parent: SlideElement) => {
+    parent.childNodes = parent.childNodes.filter((child) => {
+      if (!isSlideElement(child)) return true;
+      if (child.tagName === "style") styles.push(serializeOuter(child));
+      if (["style", "link", "meta", "base", "script"].includes(child.tagName)) return false;
+      takeStyles(child);
+      return true;
+    });
+  };
+  const slides: SlideElement[] = [];
+  for (const node of fragment.childNodes) {
+    if (!isSlideElement(node)) continue;
+    if (node.tagName === "style") styles.push(serializeOuter(node));
+    if (node.tagName !== "section") continue;
+    takeStyles(node);
+    const body = slideBodyChildren(node);
+    // A model may wrap both columns in its own grid. That wrapper needs the entire slide, not one grid cell.
+    if (slideAttribute(node, "data-layout") === "two-column" && body.length === 1) {
+      const wrapper = body[0];
+      wrapper.attrs = wrapper.attrs.filter((attr) => attr.name !== "data-slide-wide" && attr.name !== "data-slide-columns");
+      wrapper.attrs.push({ name: "data-slide-wide", value: "" });
+      const columns = slideBodyChildren(wrapper);
+      if (columns.length === 2 && columns.every((column) => ["div", "article", "section"].includes(column.tagName))) {
+        wrapper.attrs.push({ name: "data-slide-columns", value: "" });
+      }
+    }
+    slides.push(node);
+  }
+  return { styles, slides };
+}
 
 export function slideCount(content: string): number {
-  return content.match(SECTION_OPEN)?.length ?? 0;
+  return parsedSlides(content).slides.length;
 }
 
 /** The height of a deck's stacked slides, gaps between them included. */
@@ -540,19 +603,22 @@ export function slidesHeight(count: number): number {
 
 /** The deck as one page of stacked slides; `only` keeps one slide, for thumbnails. The title names a saved PDF. */
 export function slidesDocument(content: string, { only, title }: { only?: number; title?: string } = {}): string {
-  let body = stripActiveContent(content)
-    .replace(/<link\b[^>]*>/gi, "")
-    .replace(/<!doctype[^>]*>|<\/?(?:html|head|body)\b[^>]*>/gi, "");
-  if (only !== undefined) {
-    const styles = body.match(/<style\b[\s\S]*?<\/style\s*>/gi) ?? [];
-    body = styles.join("") + (body.match(/<section\b[\s\S]*?<\/section\s*>/gi)?.[only] ?? "");
-  }
+  const { styles, slides } = parsedSlides(content);
+  const selected = only === undefined ? slides : Number.isInteger(only) && only >= 0 ? slides.slice(only, only + 1) : [];
+  // Empty hidden siblings preserve nth-child/nth-of-type themes without copying every slide into each thumbnail.
+  const placeholders = only !== undefined && selected.length ? slides.slice(0, only).map((slide) => serializeOuter({
+    ...slide,
+    childNodes: [],
+    attrs: [...slide.attrs.filter((attr) => attr.name !== "style"),
+      { name: "data-slide-placeholder", value: "" }, { name: "style", value: "display:none!important" }],
+  })).join("") : "";
+  const body = placeholders + selected.map((slide) => serializeOuter(slide)).join("\n");
   // The CSP goes first: it only governs what is parsed after it.
   return (
     `<!doctype html><html><head>${SLIDES_CSP}<meta charset="utf-8">` +
     (title ? `<title>${escapeHtml(title)}</title>` : "") +
-    `<style>${SLIDES_BASE_STYLES}</style></head>` +
-    `<body>${body}<style>${SLIDES_FRAME_STYLES}</style></body></html>`
+    `<style>${SLIDES_BASE_STYLES}</style>${styles.join("")}<style>${SLIDES_FRAME_STYLES}</style></head>` +
+    `<body>${body}</body></html>`
   );
 }
 

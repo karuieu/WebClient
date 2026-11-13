@@ -155,6 +155,8 @@ type Version = ArtifactVersion & { fromKarui?: boolean };
 
 /** Edits are never saved: they live in the panel while the chat is open, and versions are only for going back. */
 type Edits = { versions: Version[]; draft: string };
+type SlideSession = { key: string; slide: number; source: string | null };
+type PresentationControls = { slide: number; onSlide: (slide: number) => void; onPresent: (source: string) => void };
 
 function startEdits(artifact: ArtifactPanelData): Edits {
   const history = artifact.history ?? [{ number: 1, content: artifact.source, savedAt: new Date().toISOString() }];
@@ -192,6 +194,7 @@ function PanelBody({
   artifact,
   edits: saved,
   onEdits,
+  presentation,
   onClose,
   expanded,
   onToggleExpand,
@@ -207,6 +210,7 @@ function PanelBody({
   artifact: ArtifactPanelData;
   edits?: Edits;
   onEdits: (edits: Edits) => void;
+  presentation: PresentationControls;
   onClose: () => void;
   expanded?: boolean;
   onToggleExpand?: () => void;
@@ -215,8 +219,7 @@ function PanelBody({
   const [tab, setTab] = React.useState<"preview" | "edit" | SiteFile>("preview");
   // Restart reloads the running site from its first line.
   const [run, setRun] = React.useState(0);
-  const [presenting, setPresenting] = React.useState(false);
-  const [slide, setSlide] = React.useState(0);
+  const { slide, onSlide: setSlide } = presentation;
   // A card on the latest version opens the current one, so your edits in the panel stay in view as new versions.
   const [viewing, setViewing] = React.useState<number | null>(
     artifact.openAt !== undefined && artifact.openAt !== artifact.history?.at(-1)?.number ? artifact.openAt : null,
@@ -302,9 +305,8 @@ function PanelBody({
   const restart = () => setRun((n) => n + 1);
   const present = () => {
     commit();
-    setPresenting(true);
+    presentation.onPresent(content);
   };
-  const stopPresenting = React.useCallback(() => setPresenting(false), []);
   const menuItems: MenuItem[] = [
     ...(!shownVersion && !code
       ? [
@@ -486,9 +488,6 @@ function PanelBody({
           />
         )}
       </div>
-      {presenting && (
-        <SlidePresenter title={artifact.title} source={content} slide={Math.min(slide, Math.max(count - 1, 0))} onSlide={setSlide} onClose={stopPresenting} />
-      )}
     </div>
   );
 }
@@ -513,6 +512,15 @@ export function ArtifactPanel({
   const [expanded, setExpanded] = React.useState(false);
   // Held here, not in the body, so closing the panel keeps them.
   const [edits, setEdits] = React.useState<Record<string, Edits>>({});
+  // The desktop panel and phone sheet remount on rotation; the presentation must not.
+  const [slideSession, setSlideSession] = React.useState<SlideSession | null>(null);
+  const viewKey = artifact ? `${artifact.id}:${artifact.openAt ?? "latest"}` : "";
+  const activeSession = slideSession?.key === viewKey ? slideSession : null;
+  const changeSlide = React.useCallback((slide: number) => {
+    if (!viewKey) return;
+    setSlideSession((current) => ({ key: viewKey, slide, source: current?.key === viewKey ? current.source : null }));
+  }, [viewKey]);
+  const stopPresenting = React.useCallback(() => setSlideSession((current) => current && { ...current, source: null }), []);
   const desktop = useDesktop();
 
   React.useEffect(() => {
@@ -531,7 +539,10 @@ export function ArtifactPanel({
 
   const open = !!artifact;
   React.useEffect(() => {
-    if (!open) setExpanded(false);
+    if (!open) {
+      setExpanded(false);
+      setSlideSession(null);
+    }
   }, [open]);
 
   const commit = (w: number) => {
@@ -570,6 +581,11 @@ export function ArtifactPanel({
     artifact,
     edits: edits[artifact.id],
     onEdits: (next: Edits) => setEdits((all) => ({ ...all, [artifact.id]: next })),
+    presentation: {
+      slide: activeSession?.slide ?? 0,
+      onSlide: changeSlide,
+      onPresent: (source: string) => setSlideSession({ key: viewKey, slide: activeSession?.slide ?? 0, source }),
+    },
     onClose,
     onDownloadHtml,
     onDownloadDoc,
@@ -643,6 +659,15 @@ export function ArtifactPanel({
           </motion.div>
         )}
       </AnimatePresence>
+      {artifact?.type === "slides" && activeSession?.source != null && (
+        <SlidePresenter
+          title={artifact.title}
+          source={activeSession.source}
+          slide={Math.min(activeSession.slide, Math.max(slideCount(activeSession.source) - 1, 0))}
+          onSlide={changeSlide}
+          onClose={stopPresenting}
+        />
+      )}
     </>
   );
 }

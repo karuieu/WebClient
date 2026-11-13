@@ -5,6 +5,7 @@
  */
 
 import { SLIDE_WIDTH, downloadBlob, fileName, slidesDocument, slidesHeight, slideCount } from "./artifacts";
+import { waitForSlideLayout } from "./slideLayout";
 
 export type Box = { x: number; y: number; w: number; h: number };
 export type Run = { text: string; bold: boolean; italic: boolean; color: string };
@@ -309,8 +310,7 @@ async function renderedDeck<T>(source: string, read: (doc: Document) => T): Prom
     await loaded;
     const doc = frame.contentDocument;
     if (!doc) throw new Error("The slides could not be laid out");
-    await doc.fonts?.ready;
-    await Promise.all(Array.from(doc.images).map((img) => img.decode().catch(() => {})));
+    await waitForSlideLayout(doc);
     return read(doc);
   } finally {
     frame.remove();

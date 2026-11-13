@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "@/components/kit/icons";
 import { SLIDE_GAP, SLIDE_HEIGHT, SLIDE_WIDTH, slideCount, slidesDocument, slidesHeight } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
+import { readSlideOverflow, waitForSlideLayout } from "@/lib/artifacts/slideLayout";
 
 // The frame's light scheme matches the deck's, so the gaps between slides stay see-through in dark mode. A slide is a
 // picture here: clicks and double-clicks pass the frame, so without select-none they would select it as a whole.
@@ -55,6 +56,7 @@ function SlideStage({
   slide,
   sandbox,
   frameRef,
+  onLoad,
 }: {
   title: string;
   document: string;
@@ -62,6 +64,7 @@ function SlideStage({
   slide: number;
   sandbox: string;
   frameRef?: React.Ref<HTMLIFrameElement>;
+  onLoad?: (frame: HTMLIFrameElement) => void;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   const { width, height } = useSize(ref);
@@ -76,6 +79,7 @@ function SlideStage({
             srcDoc={document}
             sandbox={sandbox}
             scrolling="no"
+            onLoad={(event) => onLoad?.(event.currentTarget)}
             className={FRAME}
             style={{
               width: SLIDE_WIDTH,
@@ -133,6 +137,13 @@ export function SlideViewer({
   const slide = Math.min(shown ?? own, last);
   const go = onSlide ?? setOwn;
   const document = React.useMemo(() => slidesDocument(source), [source]);
+  const [overflow, setOverflow] = React.useState<{ document: string; slides: number[] } | null>(null);
+  const checkLayout = async (frame: HTMLIFrameElement) => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    await waitForSlideLayout(doc);
+    if (frame.isConnected && frame.contentDocument === doc) setOverflow({ document, slides: readSlideOverflow(doc) });
+  };
   const thumbnails = React.useMemo(() => Array.from({ length: count }, (_, i) => slidesDocument(source, { only: i })), [source, count]);
   const stripRef = React.useRef<HTMLDivElement>(null);
 
@@ -145,8 +156,9 @@ export function SlideViewer({
       <div className="group/stage relative min-h-0 flex-1">
         <div
           tabIndex={0}
-          aria-label={`${title}, slide ${slide + 1} of ${count}. Arrow keys change the slide.`}
+          aria-label={count > 0 ? `${title}, slide ${slide + 1} of ${count}. Arrow keys change the slide.` : `${title}. No slides to preview.`}
           onKeyDown={(e) => {
+            if (count === 0) return;
             const next = slideAfterKey(e.key, slide, last);
             if (next === null) return;
             e.preventDefault();
@@ -154,7 +166,11 @@ export function SlideViewer({
           }}
           className="size-full rounded-lg p-3 outline-none focus-visible:ring-2 focus-visible:ring-fg/40 sm:p-5"
         >
-          <SlideStage title={title} document={document} count={count} slide={slide} sandbox={sandbox} frameRef={frameRef} />
+          {count > 0 ? (
+            <SlideStage title={title} document={document} count={count} slide={slide} sandbox={sandbox} frameRef={frameRef} onLoad={checkLayout} />
+          ) : (
+            <p role="status" className="grid h-full place-items-center text-sm text-muted">No slides to preview. Each slide needs its own section.</p>
+          )}
         </div>
         {count > 1 && (
           <>
@@ -165,6 +181,13 @@ export function SlideViewer({
               <ChevronRight className="size-5" />
             </button>
           </>
+        )}
+      </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="shrink-0">
+        {overflow?.document === document && overflow.slides.includes(slide) && (
+          <p className="border-t border-line px-3 py-2 text-[13px] leading-relaxed text-fg sm:px-5">
+            Content extends beyond slide {slide + 1}. Shorten it or adjust its layout.
+          </p>
         )}
       </div>
       {count > 1 && (
@@ -204,9 +227,11 @@ export function printSlides(title: string, source: string): void {
   frame.tabIndex = -1;
   frame.style.cssText = `position:fixed;left:-${SLIDE_WIDTH * 2}px;top:0;width:${SLIDE_WIDTH}px;height:${SLIDE_HEIGHT}px;border:0`;
   frame.srcdoc = slidesDocument(source, { title });
-  frame.addEventListener("load", () => {
+  frame.addEventListener("load", async () => {
     const view = frame.contentWindow;
-    if (!view) return frame.remove();
+    const doc = frame.contentDocument;
+    if (!view || !doc) return frame.remove();
+    await waitForSlideLayout(doc);
     // Chrome waits in print(); Firefox returns at once and reports the end with afterprint.
     view.addEventListener("afterprint", () => frame.remove());
     view.print();
