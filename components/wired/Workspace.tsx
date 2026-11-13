@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -347,7 +348,7 @@ export function WorkspacePage() {
       onTab={(t) => router.replace(workspaceHref(t), { scroll: false })}
       sections={{
         skills: <SkillsSection onCreateWithKarui={() => startChat(router, CREATE_SKILL_STARTER)} />,
-        connectors: <ConnectorsSection onUpgrade={() => router.push("/plans")} />,
+        connectors: <ConnectorsSection onUpgrade={() => window.location.assign(PRICING_URL)} />,
         memory: <MemorySection onTalkWithKarui={() => startChat(router, REMEMBER_STARTER)} />,
         instructions: <InstructionsSection />,
       }}

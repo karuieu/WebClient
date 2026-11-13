@@ -1,6 +1,7 @@
 "use client";
 
 import { useContext, useMemo, useRef, useState } from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { useRouter } from "next/navigation";
 import { createProject, uploadProjectFiles } from "@/lib/projects/projects";
 import { LIBRARY_LIMITS, fromDataTransfer, fromInput, prepareFiles, type PickedPath, type PreparedFile } from "@/lib/projects/projectFiles";
@@ -114,10 +115,10 @@ export default function ProjectsPage() {
             prepared.current.delete(id);
             setSelection((s) => ({ ...s, items: s.items.filter((i) => i.id !== id) }));
           },
-          onUpgrade: tier === "free" ? () => router.push("/plans") : undefined,
+          onUpgrade: tier === "free" ? () => window.location.assign(PRICING_URL) : undefined,
         }}
       />
-      <ProjectLimitDialog open={dialog === "limit"} onClose={() => setDialog(null)} onUpgrade={() => router.push("/plans")} />
+      <ProjectLimitDialog open={dialog === "limit"} onClose={() => setDialog(null)} onUpgrade={() => window.location.assign(PRICING_URL)} />
     </>
   );
 }

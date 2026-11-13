@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { afterLoginPath } from "@/lib/account/afterLogin";
 import { login, loginWithCode, maskEmail, sendLoginEmailCode } from "@/lib/account/auth";
 import { prefetchCaptcha } from "@/lib/account/captcha";
 import { useRedirectIfLoggedIn } from "@/components/SessionProvider";
@@ -26,7 +27,7 @@ export default function LoginPage() {
     setIsLoading(true);
     const result = await login(values.email, values.password, values.remember);
     if (result.success) {
-      window.location.href = "/new";
+      window.location.href = afterLoginPath(window.location.search);
       return;
     }
     if (result.twoFactorChallenge) {
@@ -45,7 +46,7 @@ export default function LoginPage() {
     setIsLoading(true);
     const result = await loginWithCode(challenge, value, values.password, values.remember, mode);
     if (result.success) {
-      window.location.href = "/new";
+      window.location.href = afterLoginPath(window.location.search);
       return;
     }
     if (result.challengeExpired) setChallenge(null);

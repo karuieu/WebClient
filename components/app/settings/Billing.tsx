@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { PRICING_URL } from "@/app/siteUrl";
 import { Button, ButtonLink } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
 import { ArrowUpRight } from "@/components/kit/icons";
@@ -42,7 +43,7 @@ export function BillingSettings(p: BillingSettingsProps) {
             <p className="mt-2 font-mono text-[12px] text-muted">{p.price}</p>
           </div>
           {!pro && (
-            <ButtonLink href="/plans" arrow>
+            <ButtonLink href={PRICING_URL} arrow>
               See Pro
             </ButtonLink>
           )}

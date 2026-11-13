@@ -4,6 +4,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { afterLoginPath } from "@/lib/account/afterLogin";
 import { restoreKey, isSignedIn, getUser, updateUser, clearSession, type User } from "@/lib/account/session";
 import { getMe, checkSession, getAuthControls } from "@/lib/account/auth";
 
@@ -42,7 +43,7 @@ export function useRedirectIfLoggedIn(): boolean {
 
   useEffect(() => {
     if (!isInitialized || !sessionVerified || !isLoggedIn) return;
-    router.replace("/new");
+    router.replace(afterLoginPath(window.location.search));
   }, [isInitialized, sessionVerified, isLoggedIn, router]);
 
   return !isInitialized || !sessionVerified || isLoggedIn;

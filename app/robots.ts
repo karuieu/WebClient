@@ -13,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
           "/chats",
           "/new",
           "/projects",
-          "/plans",
+          "/upgrade",
           "/settings",
           "/verify-email",
           "/delete-account",

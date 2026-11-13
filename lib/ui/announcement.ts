@@ -3,7 +3,7 @@ import { API_URL, apiFetch } from "@/lib/core/api";
 
 const DISMISSED_KEY = "karui_announcement_dismissed";
 
-export type AppAnnouncement = { title: string; message: string; updatedAt: string };
+export type AppAnnouncement = { title: string; message: string; link?: { label: string; url: string }; updatedAt: string };
 
 export function parseAnnouncement(body: unknown): AppAnnouncement | null {
   if (!body || typeof body !== "object") return null;
@@ -11,7 +11,15 @@ export function parseAnnouncement(body: unknown): AppAnnouncement | null {
   if (!value || typeof value !== "object") return null;
   const { title, message, updated_at: updatedAt } = value as Record<string, unknown>;
   if (typeof title !== "string" || typeof message !== "string" || typeof updatedAt !== "string") return null;
-  return { title, message, updatedAt };
+  return { title, message, link: parseLink((value as Record<string, unknown>).link), updatedAt };
+}
+
+// The link becomes an href, so anything but a plain https address is dropped rather than trusted.
+function parseLink(value: unknown): AppAnnouncement["link"] {
+  if (!value || typeof value !== "object") return undefined;
+  const { label, url } = value as Record<string, unknown>;
+  if (typeof label !== "string" || typeof url !== "string" || !label || !url.startsWith("https://")) return undefined;
+  return { label, url };
 }
 
 async function getAnnouncement(): Promise<AppAnnouncement | null> {
