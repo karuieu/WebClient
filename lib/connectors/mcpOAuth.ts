@@ -1,11 +1,11 @@
 // OAuth sign-in for MCP connectors, following the MCP authorization spec: protected resource metadata, PKCE, and a
 // client registered on the fly (DCR) or described by our client metadata document. Every request goes through the
 // connector's route, so the app's connect-src stays locked to our API. Apps that need Karui's client secret ('app')
-// exchange codes where the secret is: in Karui's enclave (connectorRelay.ts).
+// exchange codes on our server.
 
 import { apiJSON } from "@/lib/core/api";
 import type { ConnectorApp, ConnectorRoute, GoogleConnector } from "./connectors";
-import { appTokenFetch, connectorFetch } from "./connectorRelay";
+import { connectorFetch, fromServer, type ServerReply } from "./connectorRelay";
 import type { RelayResponse } from "./mcpSandbox";
 
 export type OAuthGrant = {
@@ -228,7 +228,10 @@ function tokenReply(res: RelayResponse): TokenReply & { ok: boolean; status: num
 }
 
 async function requestToken(grant: Pick<OAuthGrant, "app" | "clientId" | "clientSecret" | "tokenEndpoint">, route: ConnectorRoute, params: Record<string, string>) {
-  if (grant.app) return tokenReply(await appTokenFetch(grant.app, params));
+  if (grant.app) {
+    const reply = await apiJSON<ServerReply>("/api/connectors/token", { method: "POST", body: JSON.stringify({ app: grant.app, ...params }) });
+    return tokenReply(fromServer(reply));
+  }
   const form = new URLSearchParams({ ...params, client_id: grant.clientId });
   if (grant.clientSecret) form.set("client_secret", grant.clientSecret);
   return tokenReply(
