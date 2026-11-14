@@ -173,10 +173,13 @@ async function assertSignedBy(signer: Certificate, algorithm: DerNode, signature
 
 type ChipCertificate = { certificate: Certificate; generation: string; firmware: Uint8Array; chipId: Uint8Array };
 
-// Firmware levels sit in extensions .1 to .8 in the byte order of a TCB version.
+// The extension that holds each byte of a TCB version, bootloader first and microcode last. The SNP level is
+// extension .3 but byte 6: the four reserved levels (.4 to .7) come before it.
+const FIRMWARE_LEVEL_EXTENSIONS = [1, 2, 4, 5, 6, 7, 3, 8];
+
 function chipFirmware(extensions: Map<string, Uint8Array>): Uint8Array {
-  return Uint8Array.from({ length: 8 }, (_, i) => {
-    const level = extensions.get(`${OID.amdFirmwareLevel}${i + 1}`);
+  return Uint8Array.from(FIRMWARE_LEVEL_EXTENSIONS, (extension) => {
+    const level = extensions.get(`${OID.amdFirmwareLevel}${extension}`);
     if (!level) fail("the chip certificate lacks a firmware level");
     const value = smallInteger(parseDer(level));
     if (value > 0xff) fail("the chip certificate has a firmware level out of range");

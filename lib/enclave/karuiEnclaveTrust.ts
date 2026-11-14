@@ -70,7 +70,10 @@ export const AMD_ROOTS: Record<string, AmdRoots> = {
 // of the enclave repo. A new image, or new firmware at the host, has a new measurement: release the app with both
 // the old and the new one before the image changes, and drop the old one in the release after. While the list is
 // empty the app refuses every enclave.
-export const ACCEPTED_MEASUREMENTS: string[] = [];
+export const ACCEPTED_MEASUREMENTS: string[] = [
+  // Enclave repo commit 9ba7fdf on a Milan processor.
+  "34c14d0ad48cc85a0b009e59a01aaec390d77e1e15f3056fa1b2f97d073e51ffac10a293d49bb4c500ceb65ec7316895",
+];
 
 // Whether connectors on Karui's route go through the enclave. Until a build is accepted they keep going through our
 // server, so the app can be released at any time; the first accepted measurement moves them to the enclave for good,
