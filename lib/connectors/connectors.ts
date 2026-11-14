@@ -30,7 +30,7 @@ export const CONNECTOR_CATEGORIES: { id: ConnectorCategory; label: string }[] = 
 ];
 
 // 'browser' means the service answers CORS preflight from the relay origin, so the browser can call it directly.
-// 'app' means sign-in needs Karui's registered OAuth app, so the code is exchanged on Karui's server, which holds the secret.
+// 'app' means sign-in needs Karui's registered OAuth app, so the code is exchanged in Karui's enclave, which holds the secret.
 export const CONNECTOR_CATALOG: readonly ConnectorInfo[] = [
   {
     id: "gmail",
