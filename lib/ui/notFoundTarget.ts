@@ -1,4 +1,4 @@
-import type { NotFoundKind } from "@/components/app/ResourceNotFound";
+export type NotFoundKind = "chat" | "project" | "page";
 
 const CHAT = /^\/(?:chat|projects\/[^/]+)\/([^/]+)\/?$/;
 const PROJECT = /^\/projects\/([^/]+)\/?$/;

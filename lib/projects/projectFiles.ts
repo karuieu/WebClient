@@ -1,4 +1,3 @@
-import type { PickedItem, SkipReason, SkippedItem } from "@/components/app/project/Library";
 import { estimateTokens } from "@/lib/messages/context";
 import { artifactPath, libraryPath, parseArtifacts, planWrites, setArtifactAttrs, tagAttr, type Artifact, type BlockWrite } from "@/lib/artifacts/artifacts";
 import { blockJSON } from "@/lib/messages/messageBlocks";
@@ -74,6 +73,12 @@ function extension(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
+
+export type PickedItem =
+  | { kind: "file"; id: string; name: string; size: number }
+  | { kind: "folder"; id: string; name: string; files: { path: string; size: number }[] };
+export type SkipReason = "folder" | "binary" | "secret" | "too-big" | "lockfile" | "unreadable";
+export type SkippedItem = { path: string; reason: SkipReason };
 
 export type PathCheck = { skip: SkipReason; at: string } | { skip: null; pdf: boolean };
 

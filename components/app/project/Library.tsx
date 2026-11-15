@@ -6,6 +6,7 @@ import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
 import { ChevronDown, FilePlus, FileText, Folder, FolderPlus, X } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
+import type { PickedItem, SkippedItem, SkipReason } from "@/lib/projects/projectFiles";
 import { cx } from "@/lib/ui/cx";
 import type { MemoryFileItem } from "../settings/Memory";
 
@@ -14,11 +15,6 @@ export type LibraryFile = { id: string; path: string; size: number; version?: nu
 export type LibraryMemoryFile = MemoryFileItem & { fromYou?: boolean };
 export type LibraryUsage = { used: number; limit: number; files: number; maxFiles: number };
 
-export type PickedItem =
-  | { kind: "file"; id: string; name: string; size: number }
-  | { kind: "folder"; id: string; name: string; files: { path: string; size: number }[] };
-export type SkipReason = "folder" | "binary" | "secret" | "too-big" | "lockfile" | "unreadable";
-export type SkippedItem = { path: string; reason: SkipReason };
 export type ContextSelection = { items: PickedItem[]; skipped: SkippedItem[]; reading?: number };
 
 export const ACCEPT_TEXT_AND_PDF = "text/*,.pdf,.md,.txt,.json,.csv,.ts,.tsx,.js,.jsx,.py,.go,.rs,.java,.c,.h,.cpp,.cs,.rb,.php,.swift,.kt,.sql,.yaml,.yml,.toml,.html,.css,.sh,.tex,.bib";
