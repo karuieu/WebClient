@@ -8,6 +8,36 @@ import { FlatCompat } from "@eslint/eslintrc";
  */
 const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
 
+const STORAGE_MESSAGE =
+  "Browser storage may hold only settings, layout sizes, the account profile and already-encrypted data, " +
+  "never conversation plaintext. If this file stores one of those, add it to browserStorageFiles in eslint.config.mjs.";
+
+// The files that may use localStorage or sessionStorage, and what each one keeps.
+const browserStorageFiles = [
+  // Per-account settings: mode switches and choices, no content.
+  "lib/artifacts/artifacts.ts",
+  "lib/chat/chatTitle.ts",
+  "lib/connectors/toolApproval.ts",
+  "lib/models/providers.ts",
+  "lib/models/reasoning.ts",
+  "lib/ui/tabTitle.ts",
+  // The memory switches (auto, live writes); the memory text itself is stored encrypted on the server.
+  "lib/chat/memory.ts",
+  // Display preferences: theme, dismissed announcement, panel visibility and widths, sidebar mode.
+  "lib/ui/theme.ts",
+  "lib/ui/announcement.ts",
+  "components/app/AppShell.tsx",
+  "components/app/sidebarHistory.ts",
+  "components/app/project/ProjectWorkspace.tsx",
+  "components/app/chat/ArtifactPanel.tsx",
+  // A one-time flag that makes the chat list reload.
+  "components/wired/useLibrary.tsx",
+  // The signed-in profile (id, e-mail, names, plan): account data, not conversations.
+  "lib/account/session.ts",
+  // The connector list, encrypted with the account key before it is written.
+  "lib/connectors/userConnectors.ts",
+];
+
 const config = [
   {
     ignores: [
@@ -27,7 +57,23 @@ const config = [
 
       // Empty catches are intentional for best-effort operations, such as draft writes to full storage.
       "no-empty": ["error", { allowEmptyCatch: true }],
+
+      "no-restricted-globals": [
+        "error",
+        { name: "localStorage", message: STORAGE_MESSAGE },
+        { name: "sessionStorage", message: STORAGE_MESSAGE },
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...["window", "globalThis", "self"].flatMap((object) =>
+          ["localStorage", "sessionStorage"].map((property) => ({ object, property, message: STORAGE_MESSAGE }))
+        ),
+      ],
     },
+  },
+  {
+    files: browserStorageFiles,
+    rules: { "no-restricted-globals": "off", "no-restricted-properties": "off" },
   },
 ]
 
