@@ -2,7 +2,7 @@
 
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { afterLoginPath } from "@/lib/account/afterLogin";
 import { restoreKey, isSignedIn, getUser, updateUser, clearSession, type User } from "@/lib/account/session";
@@ -118,13 +118,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(timer);
   }, [isInitialized, isLoggedIn]);
 
-  const refreshUser = async (): Promise<void> => {
+  const refreshUser = useCallback(async (): Promise<void> => {
     const freshUser = await getMe();
     if (freshUser) {
       updateUser(freshUser);
       setUser(freshUser);
     }
-  };
+  }, []);
 
   return (
     <SessionContext.Provider value={{ isInitialized, isLoggedIn, user, refreshUser, sessionExpired, sessionVerified, appPaused }}>

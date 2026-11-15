@@ -93,6 +93,8 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
 
   const composer = useComposer({ onSubmit: () => submit(), fixedModel: true });
   const setComposerModel = composer.setModel;
+  const setComposerText = composer.setText;
+  const setComposerWebSearch = composer.setWebSearch;
   textRef.current = composer.text;
   const streaming = stream !== null && stream.phase !== "error";
   const model = composer.model as ModelType;
@@ -200,7 +202,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
       const um = st.userMessage;
       if (um) {
         setMessages((prev) => prev.filter((m) => m.id !== um.id));
-        if (st.kind === "send") composer.setText(st.request.content);
+        if (st.kind === "send") setComposerText(st.request.content);
       }
       if (!(st.error instanceof StoppedError)) {
         showError(errorText(st.error, st.kind === "send" ? "Failed to send message" : "Failed to retry"));
@@ -208,8 +210,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     };
     sync();
     return subscribeChatStream(chatId, sync);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId, showError]);
+  }, [chatId, showError, setComposerText]);
 
   React.useEffect(() => {
     const pending = takeFirstMessage(chatId);
@@ -249,11 +250,10 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     if (loading || !pendingRef.current) return;
     const p = pendingRef.current;
     pendingRef.current = null;
-    if (p.webSearch) composer.setWebSearch(true);
-    composer.setModel(p.model);
+    if (p.webSearch) setComposerWebSearch(true);
+    setComposerModel(p.model);
     send(p.content, p.model, p.images ?? [], p.files ?? [], !!p.webSearch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, send]);
+  }, [loading, send, setComposerModel, setComposerWebSearch]);
 
   const refreshGate = React.useCallback(async () => {
     try {
