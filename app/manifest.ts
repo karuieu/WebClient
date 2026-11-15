@@ -1,14 +1,15 @@
 import type { MetadataRoute } from "next";
 
-/** Use minimal-ui to keep the domain visible so users can verify where they are signing in. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Karui — private AI chat",
     short_name: "Karui",
     description:
       "Multi-model AI chat where everything stored is encrypted in your browser.",
-    start_url: "/",
-    display: "minimal-ui",
+    // Not "/": signed out, that redirects to the landing on another origin, which a home screen app opens in a browser overlay.
+    start_url: "/new",
+    scope: "/",
+    display: "standalone",
     background_color: "#0a0a0a",
     theme_color: "#0a0a0a",
     // PNGs next to the SVG: home screens don't take SVG. iOS reads app/apple-icon.png instead.
