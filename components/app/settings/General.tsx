@@ -45,7 +45,7 @@ export function GeneralSettings(p: GeneralSettingsProps) {
 
   return (
     <>
-      <Group title="Profile" footer="Karui uses your name to greet you.">
+      <Group title="Profile">
         <Row label="Name" htmlFor="settings-name">
           <input
             id="settings-name"
@@ -57,7 +57,7 @@ export function GeneralSettings(p: GeneralSettingsProps) {
             className={inputClass()}
           />
         </Row>
-        <Row label="Full name" description="Optional." htmlFor="settings-full-name">
+        <Row label="Full name" htmlFor="settings-full-name">
           <input
             id="settings-full-name"
             data-focus="within"

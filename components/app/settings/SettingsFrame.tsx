@@ -40,6 +40,12 @@ export function SettingsFrame<T extends string>({
   const contentRef = React.useRef<HTMLDivElement>(null);
   const returnFocus = React.useRef<HTMLElement | null>(null);
   const [mobileContent, setMobileContent] = React.useState(false);
+  // The frame stays mounted while closed, so on a phone each opening has to start from the list again.
+  const [wasOpen, setWasOpen] = React.useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setMobileContent(false);
+  }
   const current = tabs.find((t) => t.id === tab) ?? tabs[0];
 
   const groups: { title: string; tabs: FrameTab<T>[] }[] = [];
