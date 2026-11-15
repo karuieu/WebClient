@@ -64,6 +64,12 @@ const config = [
       // Empty catches are intentional for best-effort operations, such as draft writes to full storage.
       "no-empty": ["error", { allowEmptyCatch: true }],
 
+      // A comment that excuses a shortcut gets copied along with the shortcut. Fix the cause instead.
+      "no-warning-comments": [
+        "error",
+        { terms: ["todo", "fixme", "hack", "xxx", "workaround", "for now", "temporary", "quick fix"], location: "anywhere" },
+      ],
+
       "no-restricted-globals": [
         "error",
         { name: "localStorage", message: STORAGE_MESSAGE },
