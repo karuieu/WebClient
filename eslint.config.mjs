@@ -38,6 +38,12 @@ const browserStorageFiles = [
   "lib/connectors/userConnectors.ts",
 ];
 
+// Layers: lib holds logic and must not know the screens; the kit is a copy of design-kit's pure look and may
+// reach only the few helpers design-kit has an equivalent of (cx, theme, the site URL) and the motion presets.
+const LAYER_MESSAGE =
+  "Breaks the layer boundary. lib/ must not import from components/ or app/ (move the shared type or function " +
+  "into lib/); components/kit/ may import only kit files, components/motion, lib/ui/cx, lib/ui/theme and app/siteUrl.";
+
 const config = [
   {
     ignores: [
@@ -74,6 +80,29 @@ const config = [
   {
     files: browserStorageFiles,
     rules: { "no-restricted-globals": "off", "no-restricted-properties": "off" },
+  },
+  {
+    files: ["lib/**"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [{ group: ["@/components/**", "@/app/**"], message: LAYER_MESSAGE }] }],
+    },
+  },
+  {
+    files: ["components/kit/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            // Regexes, because a gitignore pattern cannot re-include a file under an excluded folder.
+            { regex: "^@/lib/(?!ui/(cx|theme)$)", message: LAYER_MESSAGE },
+            { regex: "^@/app/(?!siteUrl$)", message: LAYER_MESSAGE },
+            { regex: "^@/components/(?!kit/|motion(/|$))", message: LAYER_MESSAGE },
+            { regex: "^\\.\\./", message: LAYER_MESSAGE },
+          ],
+        },
+      ],
+    },
   },
 ]
 
