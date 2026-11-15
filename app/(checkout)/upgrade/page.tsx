@@ -42,8 +42,7 @@ function Upgrade() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  }, [params, router, refreshUser]);
 
   useEffect(() => {
     if ((checkout === "confirming" || checkout === "pending") && current === "pro") setCheckout("done");

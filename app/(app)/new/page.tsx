@@ -55,16 +55,16 @@ function NewChat() {
   }, [incognito]);
 
   useEffect(() => registerDraftRescue(() => textRef.current), []);
+  const setComposerText = composer.setText;
   useEffect(() => {
     const take = () => {
       const draft = takeDraft();
-      if (draft) composer.setText(draft);
+      if (draft) setComposerText(draft);
     };
     take();
     window.addEventListener(DRAFT_OFFERED_EVENT, take);
     return () => window.removeEventListener(DRAFT_OFFERED_EVENT, take);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [setComposerText]);
 
   const firstMessage = (): FirstMessage => ({
     content: composer.text.trim(),

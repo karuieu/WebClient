@@ -30,12 +30,13 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
   const started = React.useRef(false);
 
   const composer = useComposer({ onSubmit: () => submit(), fixedModel: true });
+  const { setText: setComposerText, setWebSearch: setComposerWebSearch, setModel: setComposerModel } = composer;
   const streaming = stream !== null;
   const model = composer.model as ModelType;
 
   React.useEffect(() => clearQuoted, []);
 
-  const send = (content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean) => {
+  const send = React.useCallback((content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean) => {
     setQuote(null);
     clearQuoted();
     const history = messagesRef.current.map((m) => ({ role: m.role, content: m.content }));
@@ -68,21 +69,20 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
       .then((pair) => setMessages((prev) => [...prev.filter((m) => m.id !== pending.id), ...pair]))
       .catch((error: unknown) => {
         setMessages((prev) => prev.filter((m) => m.id !== pending.id));
-        composer.setText(content);
+        setComposerText(content);
         showError(errorText(error, "Failed to send message"));
       })
       .finally(() => setStream(null));
-  };
+  }, [setComposerText, showError]);
 
   // A ref, not state: Strict Mode runs this effect twice and the first message must go once.
   React.useEffect(() => {
     if (started.current) return;
     started.current = true;
-    if (first.webSearch) composer.setWebSearch(true);
-    composer.setModel(first.model);
+    if (first.webSearch) setComposerWebSearch(true);
+    setComposerModel(first.model);
     send(first.content, first.model, first.images, first.files, first.webSearch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [first, send, setComposerModel, setComposerWebSearch]);
 
   function submit() {
     if (composer.isEmpty || streaming) return;

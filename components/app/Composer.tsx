@@ -215,7 +215,7 @@ export function Composer({
                       className="block cursor-pointer rounded-xl transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
                     >
                       {a.kind === "image" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
+                        // eslint-disable-next-line @next/next/no-img-element -- a blob or data URL of the user's own file, which next/image cannot optimize
                         <img src={a.src} alt="" className="size-16 rounded-xl border border-line object-cover" />
                       ) : (
                         <FileTile name={a.name} content={a.content} small />

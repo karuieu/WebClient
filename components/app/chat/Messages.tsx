@@ -167,7 +167,7 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
               className="block cursor-pointer rounded-2xl transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               {a.kind === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
+                // eslint-disable-next-line @next/next/no-img-element -- a blob or data URL of the user's own file, which next/image cannot optimize
                 <img src={a.src} alt="" className="size-28 rounded-2xl border border-line object-cover" />
               ) : (
                 <FileTile name={a.name} content={a.content} meta={a.meta} />
