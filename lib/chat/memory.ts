@@ -582,8 +582,9 @@ export async function refreshMemory(
   if (!getMemorySettings().enabled) throw new Error("Memory is disabled");
 
   refreshRunning = true;
+  let updated: MemoryCategory[] | null;
   try {
-    return await withMemoryRefreshLock(async () => {
+    updated = await withMemoryRefreshLock(async () => {
       const settings = getMemorySettings();
       if (!settings.enabled) throw new Error("Memory is disabled");
       const key = await requireAesKey();
@@ -620,12 +621,14 @@ export async function refreshMemory(
         }
         await markProcessed(batch);
       }
-      window.dispatchEvent(new CustomEvent("karui-memory-updated"));
       return tree;
     });
   } finally {
     refreshRunning = false;
   }
+  // After the flag is cleared: a listener that asks isMemoryRefreshRunning() must hear "no".
+  if (updated) window.dispatchEvent(new CustomEvent("karui-memory-updated"));
+  return updated;
 }
 
 export async function refreshProjectMemory(

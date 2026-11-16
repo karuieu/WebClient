@@ -12,6 +12,13 @@ const STORAGE_MESSAGE =
   "Browser storage may hold only settings, layout sizes, the account profile and already-encrypted data, " +
   "never conversation plaintext. If this file stores one of those, add it to browserStorageFiles in eslint.config.mjs.";
 
+const ZERO_DELAY_TIMER =
+  "CallExpression:matches([callee.name='setTimeout'], [callee.property.name='setTimeout'])" +
+  ":matches([arguments.1.value=0], :not([arguments.1]))";
+const ZERO_DELAY_MESSAGE =
+  "A zero-delay timer hides an ordering fault: the reader of some state runs before its writer. " +
+  "Fix the order, or let the reader subscribe to the change instead of waiting a tick.";
+
 // The files that may use localStorage or sessionStorage, and what each one keeps.
 const browserStorageFiles = [
   // Per-account settings: mode switches and choices, no content.
@@ -69,6 +76,9 @@ const config = [
         "error",
         { terms: ["todo", "fixme", "hack", "xxx", "workaround", "for now", "temporary", "quick fix"], location: "anywhere" },
       ],
+
+      // A zero-delay timer moves code behind whatever it was racing, so the race stays and nobody sees it.
+      "no-restricted-syntax": ["error", { selector: ZERO_DELAY_TIMER, message: ZERO_DELAY_MESSAGE }],
 
       "no-restricted-globals": [
         "error",
