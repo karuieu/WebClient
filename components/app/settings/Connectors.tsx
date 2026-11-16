@@ -25,7 +25,7 @@ export type ConnectorsSettingsProps = {
   connectors: ConnectorItem[];
   /** false shows Discover as coming soon. */
   discover?: boolean;
-  /** false shows the Karui server route as coming soon. */
+  /** false shows the Karui Enclave route as coming soon. */
   serverRoute?: boolean;
   /** Runs the sign-in; the signal aborts when the user cancels. Rejecting shows the error in the dialog. */
   onConnect?: ConnectHandler;

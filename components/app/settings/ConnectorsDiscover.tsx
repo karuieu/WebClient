@@ -9,33 +9,23 @@ import { Segmented } from "@/components/kit/Segmented";
 import { cx } from "@/lib/ui/cx";
 import { CONNECTOR_CATEGORIES, categoryLabel, defaultRoute, type ConnectorCategory, type ConnectorRoute } from "@/lib/connectors/connectors";
 import { Group, Row } from "./Layout";
-import { ConnectError, ConnectionControls, ConnectorRow, host, routeNote, routeOptions, Tile, type ConnectorItem } from "./ConnectorParts";
+import { ConnectError, ConnectionControls, ConnectorRow, host, routeLabel, routeNote, routeOptions, Tile, type ConnectorItem } from "./ConnectorParts";
 
 type CategoryFilter = "all" | ConnectorCategory;
 
 export type ConnectHandler = (id: string, route: ConnectorRoute, signal: AbortSignal) => Promise<void>;
 
-function CardMeta({ connector: c }: { connector: ConnectorItem }) {
-  const status = <StatusMark connector={c} />;
-  return (
-    <>
-      {c.browser ? "Browser" : "Karui server"}
-      {(c.status !== "available" || c.ready === false) && <> · {status}</>}
-    </>
-  );
-}
-
 function StatusMark({ connector: c }: { connector: ConnectorItem }) {
   if (c.status === "connected") {
     return (
-      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted">
+      <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted">
         <Check className="size-3" />
         Connected
       </span>
     );
   }
-  if (c.status === "expired") return <span className="font-mono text-[11px] text-muted">Sign in again</span>;
-  if (c.ready === false) return <span className="font-mono text-[11px] text-muted">Soon</span>;
+  if (c.status === "expired") return <span className="shrink-0 font-mono text-[11px] text-muted">Sign in again</span>;
+  if (c.ready === false) return <span className="shrink-0 font-mono text-[11px] text-muted">Soon</span>;
   return null;
 }
 
@@ -149,7 +139,13 @@ export function ConnectorsDiscover({
           <ul className="grid gap-2 sm:grid-cols-2 sm:gap-3">
             {g.items.map((c) => (
               <li key={c.id}>
-                <ConnectorRow connector={c} meta={<CardMeta connector={c} />} onOpen={onOpen} className="rounded-2xl border border-line-strong" />
+                <ConnectorRow
+                  connector={c}
+                  meta={routeLabel(c.browser ? "browser" : "server")}
+                  status={<StatusMark connector={c} />}
+                  onOpen={onOpen}
+                  className="rounded-2xl border border-line-strong"
+                />
               </li>
             ))}
           </ul>
@@ -274,7 +270,7 @@ function ConnectDialog({
             onChange={setRoute}
           />
         ) : (
-          <span className="font-mono text-[11px] text-muted">Karui server</span>
+          <span className="font-mono text-[11px] text-muted">{routeLabel("server")}</span>
         )}
       </div>
       <p className="mt-2 text-pretty text-[13px] leading-relaxed text-muted">{routeNote({ ...c, route })}</p>
@@ -386,7 +382,7 @@ export function ConnectorDetail({
           </div>
         ) : (
           <Row
-            label={c.browser ? "Browser or Karui server" : "Karui server"}
+            label={c.browser ? `Browser or ${routeLabel("server")}` : routeLabel("server")}
             description={c.browser ? undefined : routeNote(c)}
           />
         )}

@@ -30,14 +30,16 @@ export class ConnectError extends Error {
 
 export const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
 
+const ENCLAVE_ROUTE = "Karui Enclave";
+
 export const ROUTES: readonly SegmentedOption<ConnectorRoute>[] = [
   { value: "browser", label: "Browser" },
-  { value: "server", label: "Karui server" },
+  { value: "server", label: ENCLAVE_ROUTE },
 ];
 
 const ROUTES_BROWSER_ONLY: readonly SegmentedOption<ConnectorRoute>[] = [
   { value: "browser", label: "Browser" },
-  { value: "server", label: "Karui server · Soon", disabled: true },
+  { value: "server", label: `${ENCLAVE_ROUTE} · Soon`, disabled: true },
 ];
 
 export function routeOptions(serverRoute: boolean): readonly SegmentedOption<ConnectorRoute>[] {
@@ -53,13 +55,17 @@ export function host(url: string) {
 }
 
 export function routeLabel(route: ConnectorRoute) {
-  return route === "browser" ? "Browser" : "Karui server";
+  return route === "browser" ? "Browser" : ENCLAVE_ROUTE;
 }
 
+// Says no more than the app does: it verifies the enclave's build before sealing a request to it, and our servers
+// forward the sealed request without the key.
+const ENCLAVE_NOTE = "Your browser checks which code the enclave runs before it sends anything, and our servers only pass the encrypted traffic along.";
+
 export function routeNote(c: ConnectorItem) {
-  if (!c.browser) return `${c.name} only accepts connections from a server for now, so this one goes through Karui's servers.`;
-  if (c.route === "server") return `What ${c.name} sends passes through Karui's servers on its way to you.`;
-  if (c.app) return `Signing in goes through Karui's servers. After that, what ${c.name} sends never passes through them.`;
+  if (!c.browser) return `${c.name} only accepts connections from a server for now, so this one goes through Karui's enclave. ${ENCLAVE_NOTE}`;
+  if (c.route === "server") return `What ${c.name} sends passes through Karui's enclave on its way to you. ${ENCLAVE_NOTE}`;
+  if (c.app) return `Signing in goes through Karui's enclave. After that, what ${c.name} sends never passes through Karui.`;
   return `Straight from your browser. What ${c.name} sends never passes through Karui's servers.`;
 }
 
@@ -110,7 +116,7 @@ export function ConnectionControls({
             onChange={(r) => onRoute(c.id, r)}
           />
         ) : (
-          <span className="font-mono text-[11px] text-muted">Karui server</span>
+          <span className="font-mono text-[11px] text-muted">{routeLabel("server")}</span>
         )}
       </div>
       <p className="mt-1.5 max-w-[30rem] text-pretty text-[13px] leading-relaxed text-muted">{routeNote(c)}</p>
@@ -129,7 +135,20 @@ export function ConnectionControls({
 }
 
 // Same row as the chat list; the connection settings live in the detail it opens.
-export function ConnectorRow({ connector: c, meta, onOpen, className }: { connector: ConnectorItem; meta: React.ReactNode; onOpen: (id: string) => void; className?: string }) {
+export function ConnectorRow({
+  connector: c,
+  meta,
+  status,
+  onOpen,
+  className,
+}: {
+  connector: ConnectorItem;
+  meta: React.ReactNode;
+  /** Shown beside the name. */
+  status?: React.ReactNode;
+  onOpen: (id: string) => void;
+  className?: string;
+}) {
   return (
     <button
       type="button"
@@ -138,7 +157,10 @@ export function ConnectorRow({ connector: c, meta, onOpen, className }: { connec
     >
       <Tile logo={c.id} name={c.name} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] tracking-[-0.01em]">{c.name}</span>
+        <span className="flex items-center gap-2">
+          <span className="truncate text-[15px] tracking-[-0.01em]">{c.name}</span>
+          {status}
+        </span>
         <span className="mt-1 block truncate font-mono text-[11.5px] text-muted">{meta}</span>
       </span>
       <ChevronRight className="size-3.5 shrink-0 text-muted" />
