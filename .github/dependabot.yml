@@ -10,6 +10,8 @@ updates:
         update-types: ["version-update:semver-major"]
       # 0.11 dropped the production OS check (policy-os) that phalaClient.ts requires; Phala then always fails.
       - dependency-name: "@phala/aci-verifier"
+      # 0.3 sends x-encryption-version 3; the backend (nearaiproxy) accepts only 2, so every NEAR AI request fails with 400.
+      - dependency-name: "@nearai/inference-sdk"
     # A package lands in the first group it matches; these pairs must move in lockstep.
     groups:
       next:
