@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { deletionErrorText } from "@/lib/core/api";
+import { SESSION_EXPIRED_MESSAGE, deletionErrorText } from "@/lib/core/api";
+import { statusOf } from "@/lib/core/errors";
 import { getChats, deleteChat, renameChat, starChat, getMessages, type Chat, type Message } from "@/lib/chat/chat";
 import { parseMessageContent } from "@/lib/messages/vision";
 import {
@@ -81,7 +82,7 @@ export function useLibrary() {
       );
       setError(undefined);
     } else {
-      setError("Check your connection and try again.");
+      setError(statusOf(c.reason) === 401 ? SESSION_EXPIRED_MESSAGE : "Check your connection and try again.");
       showError("Failed to load chats");
     }
     setLoading(false);

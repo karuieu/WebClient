@@ -2,7 +2,7 @@
 
 import { ensureAesKey } from "@/lib/account/session";
 import { decryptField, encryptField, fieldAad } from "@/lib/account/crypto";
-import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
+import { apiJSON } from "@/lib/core/api";
 
 export const CUSTOM_INSTRUCTIONS_MAX_CHARS = 2000;
 
@@ -10,21 +10,6 @@ async function requireAesKey(): Promise<CryptoKey> {
   const key = await ensureAesKey();
   if (!key) throw new Error("Encryption key unavailable — please sign in again.");
   return key;
-}
-
-async function apiCall<T>(endpoint: string, options: RequestInit): Promise<T> {
-  const response = await apiFetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: { ...JSON_HEADERS, ...options.headers },
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}) as { error?: string });
-    throw new Error(
-      (data as { error?: string }).error || `HTTP error ${response.status} ${response.statusText}`
-    );
-  }
-  if (response.status === 204) return null as unknown as T;
-  return response.json();
 }
 
 export interface UserCustomInstructions {
@@ -46,7 +31,7 @@ interface RawSavedCustomInstructions {
 
 export async function getCustomInstructionsDoc(): Promise<UserCustomInstructions> {
   const key = await requireAesKey();
-  const raw = await apiCall<RawCustomInstructions>("/api/custom-instructions", { method: "GET" });
+  const raw = await apiJSON<RawCustomInstructions>("/api/custom-instructions", { method: "GET" });
   if (!raw.exists || !raw.encrypted_content) {
     return { content: "", updatedAt: raw.updated_at, exists: raw.exists };
   }
@@ -63,7 +48,7 @@ export async function saveCustomInstructions(content: string): Promise<UserCusto
   const key = await requireAesKey();
   const trimmed = content.trim().slice(0, CUSTOM_INSTRUCTIONS_MAX_CHARS);
   const encrypted_content = trimmed ? await encryptField(key, trimmed, fieldAad("custom-instructions")) : "";
-  const raw = await apiCall<RawSavedCustomInstructions>("/api/custom-instructions", {
+  const raw = await apiJSON<RawSavedCustomInstructions>("/api/custom-instructions", {
     method: "PUT",
     body: JSON.stringify({ encrypted_content }),
   });

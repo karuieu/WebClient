@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { afterLoginPath } from "@/lib/account/afterLogin";
 import { login, loginWithCode, maskEmail, sendLoginEmailCode } from "@/lib/account/auth";
 import { prefetchCaptcha } from "@/lib/account/captcha";
-import { useRedirectIfLoggedIn } from "@/components/SessionProvider";
+import { useRedirectIfLoggedIn, useSession } from "@/components/SessionProvider";
 import { LoginView, type LoginValues } from "@/components/auth/LoginView";
 import { CaptchaCheckbox } from "@/components/auth/CaptchaCheckbox";
 import { TwoFactorView, type TwoFactorMode } from "@/components/auth/TwoFactorView";
@@ -13,6 +12,7 @@ import { useAuthControls } from "@/components/auth/useAuthControls";
 
 export default function LoginPage() {
   const redirecting = useRedirectIfLoggedIn();
+  const { adoptSession } = useSession();
   const controls = useAuthControls();
   const [values, setValues] = useState<LoginValues>({ email: "", password: "", remember: false });
   const [error, setError] = useState("");
@@ -27,7 +27,7 @@ export default function LoginPage() {
     setIsLoading(true);
     const result = await login(values.email, values.password, values.remember);
     if (result.success) {
-      window.location.href = afterLoginPath(window.location.search);
+      await adoptSession();
       return;
     }
     if (result.twoFactorChallenge) {
@@ -46,7 +46,7 @@ export default function LoginPage() {
     setIsLoading(true);
     const result = await loginWithCode(challenge, value, values.password, values.remember, mode);
     if (result.success) {
-      window.location.href = afterLoginPath(window.location.search);
+      await adoptSession();
       return;
     }
     if (result.challengeExpired) setChallenge(null);

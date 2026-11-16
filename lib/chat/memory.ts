@@ -11,7 +11,7 @@ import {
 } from "./helperPhases";
 import { annotateMemoryWrites } from "@/lib/messages/memoryWrite";
 import { isUnverifiedAnswer } from "@/lib/messages/messageBlocks";
-import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
+import { apiJSON } from "@/lib/core/api";
 import { HELPER_PROVIDER } from "@/lib/models/providers";
 import {
   createProjectMemoryFile,
@@ -76,21 +76,6 @@ async function requireAesKey(): Promise<CryptoKey> {
   const key = await ensureAesKey();
   if (!key) throw new Error("Encryption key unavailable — please sign in again.");
   return key;
-}
-
-async function apiCall<T>(endpoint: string, options: RequestInit): Promise<T> {
-  const response = await apiFetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: { ...JSON_HEADERS, ...options.headers },
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}) as { error?: string });
-    throw new Error(
-      (data as { error?: string }).error || `HTTP error ${response.status} ${response.statusText}`
-    );
-  }
-  if (response.status === 204) return null as unknown as T;
-  return response.json();
 }
 
 export interface MemoryFile {
@@ -178,7 +163,7 @@ export function getMemoryTree(): Promise<MemoryCategory[]> {
 
 async function fetchMemoryTree(): Promise<MemoryCategory[]> {
   const key = await requireAesKey();
-  const raw = await apiCall<RawCategory[]>("/api/memory/tree", { method: "GET" });
+  const raw = await apiJSON<RawCategory[]>("/api/memory/tree", { method: "GET" });
   const tree = await Promise.all(raw.map((c) => decryptCategory(key, c)));
   // A category whose name doesn't open may be the old 'You'; with no readable 'You' left, start a fresh one.
   const youLost = tree.some((c) => c.undecryptable) && !tree.some(isYou);
@@ -194,7 +179,7 @@ export async function createMemoryCategory(name: string): Promise<MemoryCategory
   const key = await requireAesKey();
   const id = crypto.randomUUID();
   const encrypted_name = await encryptField(key, name, fieldAad("memory-category", id));
-  const raw = await apiCall<RawCategory>("/api/memory/categories", {
+  const raw = await apiJSON<RawCategory>("/api/memory/categories", {
     method: "POST",
     body: JSON.stringify({ id, encrypted_name }),
   });
@@ -205,7 +190,7 @@ export async function createMemoryCategory(name: string): Promise<MemoryCategory
 export async function renameMemoryCategory(categoryId: string, name: string): Promise<MemoryCategory> {
   const key = await requireAesKey();
   const encrypted_name = await encryptField(key, name, fieldAad("memory-category", categoryId));
-  const raw = await apiCall<RawCategory>(`/api/memory/categories/${categoryId}`, {
+  const raw = await apiJSON<RawCategory>(`/api/memory/categories/${categoryId}`, {
     method: "PATCH",
     body: JSON.stringify({ encrypted_name }),
   });
@@ -214,7 +199,7 @@ export async function renameMemoryCategory(categoryId: string, name: string): Pr
 }
 
 export async function deleteMemoryCategory(categoryId: string): Promise<void> {
-  await apiCall<void>(`/api/memory/categories/${categoryId}`, { method: "DELETE" });
+  await apiJSON<void>(`/api/memory/categories/${categoryId}`, { method: "DELETE" });
   window.dispatchEvent(new CustomEvent("karui-memory-updated"));
 }
 
@@ -235,7 +220,7 @@ export async function createMemoryFile(
 ): Promise<MemoryFile> {
   const key = await requireAesKey();
   const id = crypto.randomUUID();
-  const raw = await apiCall<RawFile>(`/api/memory/categories/${categoryId}/files`, {
+  const raw = await apiJSON<RawFile>(`/api/memory/categories/${categoryId}/files`, {
     method: "POST",
     body: JSON.stringify({ id, ...(await encryptFileFields(key, id, name, description, content)) }),
   });
@@ -252,7 +237,7 @@ export async function updateMemoryFile(
   expectedUpdatedAt?: string
 ): Promise<MemoryFile> {
   const key = await requireAesKey();
-  const raw = await apiCall<RawFile>(`/api/memory/files/${fileId}`, {
+  const raw = await apiJSON<RawFile>(`/api/memory/files/${fileId}`, {
     method: "PATCH",
     body: JSON.stringify({
       ...(await encryptFileFields(key, fileId, name, description, content)),
@@ -264,7 +249,7 @@ export async function updateMemoryFile(
 }
 
 export async function deleteMemoryFile(fileId: string): Promise<void> {
-  await apiCall<void>(`/api/memory/files/${fileId}`, { method: "DELETE" });
+  await apiJSON<void>(`/api/memory/files/${fileId}`, { method: "DELETE" });
   window.dispatchEvent(new CustomEvent("karui-memory-updated"));
 }
 
@@ -278,7 +263,7 @@ export interface PendingMemoryChat {
 }
 
 export async function getPendingMemoryChats(): Promise<PendingMemoryChat[]> {
-  return apiCall<PendingMemoryChat[]>("/api/memory/pending", { method: "GET" });
+  return apiJSON<PendingMemoryChat[]>("/api/memory/pending", { method: "GET" });
 }
 
 export interface MemoryFileForChat {
@@ -532,7 +517,7 @@ async function applyOperation(tree: MemoryCategory[], op: MemoryOperation): Prom
 
 async function chatBlocks(key: CryptoKey, pending: PendingMemoryChat[]): Promise<ChatBlock[]> {
 
-  const rawChats = await apiCall<RawChatRow[]>("/api/chats", { method: "GET" });
+  const rawChats = await apiJSON<RawChatRow[]>("/api/chats", { method: "GET" });
   const titles = new Map<string, string>();
   await Promise.all(
     rawChats.map(async (c) => {
@@ -546,7 +531,7 @@ async function chatBlocks(key: CryptoKey, pending: PendingMemoryChat[]): Promise
 
   const blocks: ChatBlock[] = [];
   for (const p of pending) {
-    const rawMessages = await apiCall<RawMessageRow[]>(`/api/chats/${p.chat_id}/messages`, { method: "GET" });
+    const rawMessages = await apiJSON<RawMessageRow[]>(`/api/chats/${p.chat_id}/messages`, { method: "GET" });
     const cursor = p.processed_at ? new Date(p.processed_at).getTime() : 0;
     const fresh = rawMessages.filter((m) => new Date(m.created_at).getTime() > cursor);
     if (fresh.length === 0) continue;
@@ -583,7 +568,7 @@ async function chatBlocks(key: CryptoKey, pending: PendingMemoryChat[]): Promise
 // Cursors advance after EVERY batch — an interrupted pass loses no progress and
 // processes nothing twice.
 function markProcessed(batch: ChatBlock[]): Promise<void> {
-  return apiCall<void>("/api/memory/mark-processed", {
+  return apiJSON<void>("/api/memory/mark-processed", {
     method: "POST",
     body: JSON.stringify({ processed: batch.map((b) => ({ chat_id: b.chatId, through: b.through })) }),
   });
