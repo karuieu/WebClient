@@ -21,7 +21,33 @@ export interface Skill {
 }
 
 export type SkillFields = Pick<Skill, "name" | "description" | "content">;
-export type SkillForChat = Pick<Skill, "id" | "name" | "description" | "content">;
+/** "karui" skills ship with the server, the same for everyone; "user" skills are the user's own. */
+export type SkillSource = "user" | "karui";
+export type SkillForChat = Pick<Skill, "id" | "name" | "description" | "content"> & { source: SkillSource };
+
+/** "always" skills hold parts of how Karui answers (formats the app expects), so they can't be removed. */
+export interface KaruiSkill {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  install: "always" | "default" | "optional";
+}
+
+export interface KaruiSkillState extends KaruiSkill {
+  installed: boolean;
+}
+
+/** Only the user's departures from each skill's default; version is the server's updated_at, null before the first save. */
+interface KaruiChoices {
+  installed: Record<string, boolean>;
+  version: string | null;
+}
+
+interface RawKaruiChoices {
+  encrypted_choices: string;
+  updated_at: string | null;
+}
 
 interface RawSkill {
   id: string;
@@ -96,20 +122,73 @@ export async function deleteSkill(id: string): Promise<void> {
   announce();
 }
 
+function isChoices(value: unknown): value is Record<string, boolean> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) && Object.values(value).every((v) => typeof v === "boolean");
+}
+
+async function loadKaruiChoices(key: CryptoKey): Promise<KaruiChoices> {
+  const raw = await apiJSON<RawKaruiChoices>("/api/skills/karui/choices");
+  if (!raw.updated_at) return { installed: {}, version: null };
+  const parsed: unknown = JSON.parse(await decryptField(key, raw.encrypted_choices, fieldAad("karui-skill-choices")));
+  if (!isChoices(parsed)) throw new Error("Saved Karui skill choices are not in the expected shape.");
+  return { installed: parsed, version: raw.updated_at };
+}
+
+function isInstalled(skill: KaruiSkill, installed: Record<string, boolean>): boolean {
+  return skill.install === "always" || (installed[skill.id] ?? skill.install === "default");
+}
+
+export async function listKaruiSkills(): Promise<KaruiSkillState[]> {
+  const key = await requireAesKey();
+  const [catalog, choices] = await Promise.all([apiJSON<KaruiSkill[]>("/api/skills/karui"), loadKaruiChoices(key)]);
+  return catalog.map((s) => ({ ...s, installed: isInstalled(s, choices.installed) }));
+}
+
+/** Reads the latest choices right before writing; a save from another device in between is rejected (409), not overwritten. */
+export async function setKaruiSkillInstalled(id: string, installed: boolean): Promise<void> {
+  const key = await requireAesKey();
+  const choices = await loadKaruiChoices(key);
+  const next = JSON.stringify({ ...choices.installed, [id]: installed });
+  await apiJSON<RawKaruiChoices>("/api/skills/karui/choices", {
+    method: "PUT",
+    body: JSON.stringify({
+      encrypted_choices: await encryptField(key, next, fieldAad("karui-skill-choices")),
+      expected_updated_at: choices.version,
+    }),
+  });
+  announce();
+}
+
+async function userSkillsForChat(allowedIds?: string[]): Promise<SkillForChat[]> {
+  if (allowedIds?.length === 0) return [];
+  const skills = await listSkills();
+  return skills
+    .filter((s) => s.enabled && s.name && s.content && (!allowedIds || allowedIds.includes(s.id)))
+    .map(({ id, name, description, content }) => ({ id, name, description, content, source: "user" }));
+}
+
+// Karui's skills carry formats the system prompt points to, so a chat still gets the defaults when the user's choices can't be read.
+async function karuiSkillsForChat(): Promise<SkillForChat[]> {
+  const key = await requireAesKey();
+  const [catalog, installed] = await Promise.all([
+    apiJSON<KaruiSkill[]>("/api/skills/karui"),
+    loadKaruiChoices(key).then(
+      (c) => c.installed,
+      () => ({}),
+    ),
+  ]);
+  return catalog
+    .filter((s) => isInstalled(s, installed))
+    .map(({ id, name, description, content }) => ({ id, name, description, content, source: "karui" }));
+}
+
 /**
- * The skills a chat may use: every enabled one, or in a project only those its settings allow. A failed load
- * gives none, so the answer never waits on skills.
+ * The skills a chat may use: the user's enabled ones (in a project only those its settings allow) and the Karui skills
+ * they have. A failed load gives none of that kind, so the answer never waits on skills.
  */
 export async function getSkillsForChat(allowedIds?: string[]): Promise<SkillForChat[]> {
-  if (allowedIds?.length === 0) return [];
-  try {
-    const skills = await listSkills();
-    return skills
-      .filter((s) => s.enabled && s.name && s.content && (!allowedIds || allowedIds.includes(s.id)))
-      .map(({ id, name, description, content }) => ({ id, name, description, content }));
-  } catch {
-    return [];
-  }
+  const [user, karui] = await Promise.all([userSkillsForChat(allowedIds).catch(() => []), karuiSkillsForChat().catch(() => [])]);
+  return [...user, ...karui];
 }
 
 function sameSkillName(a: string, b: string): boolean {
@@ -130,7 +209,8 @@ export function skillsPromptBlock(skills: SkillForChat[], tokenCap: number): { b
   const names: string[] = [];
   let left = tokenCap;
   for (const s of skills) {
-    const part = `<saved_skill name=${JSON.stringify(s.name)}>\n${s.content}\n</saved_skill>`;
+    const tag = s.source === "karui" ? "karui_skill" : "saved_skill";
+    const part = `<${tag} name=${JSON.stringify(s.name)}>\n${s.content}\n</${tag}>`;
     const tokens = estimateTokens(part);
     if (tokens > left) continue;
     left -= tokens;

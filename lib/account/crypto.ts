@@ -178,7 +178,8 @@ export type FieldKind =
   | "custom-instructions"
   | "skill-name"
   | "skill-description"
-  | "skill-content";
+  | "skill-content"
+  | "karui-skill-choices";
 
 export function fieldAad(kind: FieldKind, ...ids: string[]): string {
   return ["karui/v2", kind, ...ids].join("|");

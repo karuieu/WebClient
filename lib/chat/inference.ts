@@ -262,9 +262,9 @@ async function buildSystemPrompt(opts: {
   const skills = opts.skillsBlock.trim();
   if (skills) {
     prompt +=
-      "\n\n<user_skills>\nSkills the user saved, picked for this message: their own instructions for this kind of task. Follow them.\n" +
+      "\n\n<loaded_skills>\nSkills picked for this message: a <saved_skill> is the user's own instructions for this kind of task, a <karui_skill> is Karui's format for it. Follow them.\n" +
       skills +
-      "\n</user_skills>";
+      "\n</loaded_skills>";
   }
 
   const memory = opts.memoryBlock.trim();
