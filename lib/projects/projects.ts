@@ -1,6 +1,6 @@
 import { ensureAesKey } from "@/lib/account/session";
 import { decryptField, encryptField, fieldAad } from "@/lib/account/crypto";
-import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
+import { API_URL, JSON_HEADERS, apiFetch, failureMessage } from "@/lib/core/api";
 
 async function requireAesKey(): Promise<CryptoKey> {
   const key = await ensureAesKey();
@@ -23,10 +23,7 @@ async function apiCall<T>(endpoint: string, options: RequestInit): Promise<T> {
     ...options,
     headers: { ...JSON_HEADERS, ...options.headers },
   });
-  if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new ProjectApiError(data.error || `HTTP error: ${response.status}`, response.status);
-  }
+  if (!response.ok) throw new ProjectApiError(await failureMessage(response), response.status);
   if (response.status === 204) return null as unknown as T;
   return response.json();
 }
