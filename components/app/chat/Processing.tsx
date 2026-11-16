@@ -159,7 +159,7 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
     case "skills":
       return (
         <div>
-          <StepLabel live={live}>{step.names.length === 1 ? "Followed your skill" : `Followed ${step.names.length} of your skills`}</StepLabel>
+          <StepLabel live={live}>{step.names.length === 1 ? "Followed a skill" : `Followed ${step.names.length} skills`}</StepLabel>
           <ul className="flex flex-col gap-1 pl-3.5">
             {step.names.map((name) => (
               <li key={name} className="truncate text-[14px] text-fg/85">

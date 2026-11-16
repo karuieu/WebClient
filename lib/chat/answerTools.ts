@@ -9,6 +9,7 @@ import { callGoogleTool } from "@/lib/connectors/googleWorkspace";
 import type { LibraryIndexEntry } from "@/lib/projects/projectFiles";
 import { getToolApprovalMode, requestToolApproval } from "@/lib/connectors/toolApproval";
 import { type MemoryFileForChat } from "./memory";
+import { type SkillSource } from "./skills";
 import { type MemoryWriteRequest } from "./helperPhases";
 import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND, toolCallFailedNotice, type ToolCallFailure } from "@/lib/messages/messageBlocks";
 import { API_URL, apiFetch } from "@/lib/core/api";
@@ -27,6 +28,7 @@ export interface SkillIndexEntry {
   id: string;
   name: string;
   description: string;
+  source: SkillSource;
 }
 
 export interface ContextIndex {
@@ -159,7 +161,7 @@ const LIBRARY_RULES =
   "or, for a broad question about the project's material, the few most relevant ones.";
 
 const SKILL_RULES =
-  `<skill_index> lists skills the user saved, each their own instructions for a kind of task (id, name, when to use it). Load the skills whose "when to use it" ` +
+  `<skill_index> lists skills (id, name, when to use it): the user's own instructions for a kind of task, and Karui's (from="Karui"), which hold formats the app expects. Load the skills whose "when to use it" ` +
   `matches what the latest message asks for, at most ${MAX_SKILLS_PER_TURN}. Load none when no skill clearly fits: a skill loaded by mistake changes how the whole answer is written.`;
 
 const CHAT_FILE_RULES =
@@ -186,7 +188,7 @@ function indexBlocks(index: ContextIndex): string[] {
   return [
     index.memory.length > 0 ? `<memory_index>\n${index.memory.map((f, i) => `<file id="${aliasOf("memory", i)}" category="${f.category}" name="${f.name}">${f.description}</file>`).join("\n")}\n</memory_index>` : "",
     index.library.length > 0 ? `<library_index>\n${index.library.map((f, i) => `<file id="${aliasOf("library", i)}" path=${JSON.stringify(f.path)} size="${f.size}">${f.preview}</file>`).join("\n")}\n</library_index>` : "",
-    index.skills.length > 0 ? `<skill_index>\n${index.skills.map((s, i) => `<skill id="${aliasOf("skill", i)}" name=${JSON.stringify(s.name)}>${s.description}</skill>`).join("\n")}\n</skill_index>` : "",
+    index.skills.length > 0 ? `<skill_index>\n${index.skills.map((s, i) => `<skill id="${aliasOf("skill", i)}" name=${JSON.stringify(s.name)}${s.source === "karui" ? ' from="Karui"' : ""}>${s.description}</skill>`).join("\n")}\n</skill_index>` : "",
     index.chat.length > 0 ? `<chat_files_index>\n${index.chat.map((f, i) => `<file id="${aliasOf("chat", i)}" path=${JSON.stringify(f.path)} size="${f.size}">${f.preview}</file>`).join("\n")}\n</chat_files_index>` : "",
   ];
 }

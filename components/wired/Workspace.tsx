@@ -24,7 +24,19 @@ import { addConnector, connectCatalogConnector, loadConnectors, removeConnector,
 import { CONNECTOR_CATALOG, defaultRoute } from "@/lib/connectors/connectors";
 import { openSignInWindow } from "@/lib/connectors/mcpOAuth";
 import { getToolApprovalMode, setToolApprovalMode, type ToolApprovalMode } from "@/lib/connectors/toolApproval";
-import { createSkill, deleteSkill, listSkills, setSkillEnabled, SKILL_COUNT_LIMIT, SKILL_LIMITS, updateSkill, type Skill } from "@/lib/chat/skills";
+import {
+  createSkill,
+  deleteSkill,
+  listKaruiSkills,
+  listSkills,
+  setKaruiSkillInstalled,
+  setSkillEnabled,
+  SKILL_COUNT_LIMIT,
+  SKILL_LIMITS,
+  updateSkill,
+  type KaruiSkillState,
+  type Skill,
+} from "@/lib/chat/skills";
 import { offerDraft } from "@/lib/ui/draftRescue";
 import { WORKSPACE_TABS, WorkspaceView, type WorkspaceTab } from "@/components/app/WorkspaceView";
 import { MemoryFiles } from "@/components/app/settings/Memory";
@@ -87,6 +99,7 @@ function SkillsSection({ onCreateWithKarui }: { onCreateWithKarui: () => void })
   const { user } = useSession();
   const { showSuccess, showError } = useToast();
   const [skills, setSkills] = React.useState<Skill[] | null>(null);
+  const [karuiSkills, setKaruiSkills] = React.useState<KaruiSkillState[] | null>(null);
 
   React.useEffect(() => {
     listSkills()
@@ -94,6 +107,12 @@ function SkillsSection({ onCreateWithKarui }: { onCreateWithKarui: () => void })
       .catch(() => {
         setSkills([]);
         showError("Failed to load skills");
+      });
+    listKaruiSkills()
+      .then(setKaruiSkills)
+      .catch(() => {
+        setKaruiSkills([]);
+        showError("Failed to load Karui's skills");
       });
   }, [showError]);
 
@@ -103,6 +122,7 @@ function SkillsSection({ onCreateWithKarui }: { onCreateWithKarui: () => void })
   return (
     <SkillsSettings
       skills={skills}
+      karuiSkills={karuiSkills}
       limits={{ ...SKILL_LIMITS, skills: SKILL_COUNT_LIMIT[user?.tier === "pro" ? "pro" : "free"] }}
       onCreate={async (fields) => {
         try {
@@ -133,6 +153,15 @@ function SkillsSection({ onCreateWithKarui }: { onCreateWithKarui: () => void })
           setSkills((all) => (all ?? []).filter((s) => s.id !== id));
         } catch (error) {
           showError(deletionErrorText(error, "Failed to delete skill"));
+        }
+      }}
+      onInstall={async (id, installed) => {
+        try {
+          await setKaruiSkillInstalled(id, installed);
+          setKaruiSkills((all) => (all ?? []).map((s) => (s.id === id ? { ...s, installed } : s)));
+          showSuccess(installed ? "Skill added" : "Skill removed");
+        } catch (error) {
+          showError(error instanceof Error ? error.message : "Failed to update skill");
         }
       }}
       onCreateWithKarui={onCreateWithKarui}
