@@ -12,6 +12,18 @@ export const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
  * credentials: "include". NEAR's SDK calls the global fetch and has no option for that, so the page's fetch adds it
  * to every request to the API. Requests anywhere else (MCP servers, Cap) are left alone.
  */
+let onSessionRejected: (() => void) | null = null;
+
+/** SessionProvider registers here: it is told once the API refuses the session, whichever code made the call. */
+export function setSessionRejectedHandler(handler: (() => void) | null): void {
+  onSessionRejected = handler;
+}
+
+// A wrong password or code also answers 401 under /api/auth/, so only the profile check there means the session ended.
+function sessionEnded(url: URL, response: Response): boolean {
+  return response.status === 401 && (!url.pathname.startsWith("/api/auth/") || url.pathname === "/api/auth/me");
+}
+
 function sendCookiesToAPI(): void {
   if (typeof window === "undefined") return;
   const native = window.fetch;
@@ -20,7 +32,11 @@ function sendCookiesToAPI(): void {
   const withCookies = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
     if (url.origin !== apiOrigin) return native.call(window, input, init);
-    const send = () => native.call(window, input, { ...init, credentials: "include" });
+    const send = async () => {
+      const response = await native.call(window, input, { ...init, credentials: "include" });
+      if (sessionEnded(url, response)) onSessionRejected?.();
+      return response;
+    };
     // A Request's body can't be sent twice, so only plain URLs go through the confirmation below.
     if (input instanceof Request) return send();
     const response = await send();
@@ -141,16 +157,22 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   }
 }
 
+export const SESSION_EXPIRED_MESSAGE = "Your session has expired. Please sign in again.";
+
+/** What to show for a failed API response: the server's own text, or the expired-session text when it rejected the session. */
+export async function failureMessage(response: Response): Promise<string> {
+  if (response.status === 401) return SESSION_EXPIRED_MESSAGE;
+  const data = (await response.json().catch(() => ({}))) as { error?: string };
+  return data.error || `HTTP error ${response.status} ${response.statusText}`;
+}
+
 /** A JSON call to our API that throws the server's error message. */
 export async function apiJSON<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const response = await apiFetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: { ...JSON_HEADERS, ...options.headers },
   });
-  if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || `HTTP error ${response.status} ${response.statusText}`);
-  }
+  if (!response.ok) throw new Error(await failureMessage(response));
   if (response.status === 204) return null as unknown as T;
   return response.json();
 }

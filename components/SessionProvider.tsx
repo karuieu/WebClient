@@ -2,17 +2,20 @@
 
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { afterLoginPath } from "@/lib/account/afterLogin";
 import { restoreKey, isSignedIn, getUser, updateUser, clearSession, type User } from "@/lib/account/session";
 import { getMe, checkSession, getAuthControls } from "@/lib/account/auth";
+import { setSessionRejectedHandler } from "@/lib/core/api";
 
 interface SessionContextType {
   isInitialized: boolean;
   isLoggedIn: boolean;
   user: User | null;
   refreshUser: () => Promise<void>;
+  /** Takes over the session a sign-in just stored, so the app can open without reloading the page. */
+  adoptSession: () => Promise<void>;
   /** AppLayout reports session rejection because this provider sits above ToastProvider and cannot use its context. */
   sessionExpired: boolean;
   sessionVerified: boolean;
@@ -24,6 +27,7 @@ const SessionContext = createContext<SessionContextType>({
   isLoggedIn: false,
   user: null,
   refreshUser: async () => {},
+  adoptSession: async () => {},
   sessionExpired: false,
   sessionVerified: false,
   appPaused: false,
@@ -56,6 +60,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sessionVerified, setSessionVerified] = useState(false);
   const [appPaused, setAppPaused] = useState(false);
+  const sessionLive = useRef(false);
+
+  // Clear first, then hide the app: the screens hand their unsent text to the sign-out only while they are still mounted.
+  const endSession = useCallback(async (): Promise<void> => {
+    sessionLive.current = false;
+    await clearSession().catch(() => {});
+    setIsLoggedIn(false);
+    setUser(null);
+    setSessionExpired(true);
+  }, []);
+
+  useEffect(() => {
+    setSessionRejectedHandler(() => {
+      if (sessionLive.current) void endSession();
+    });
+    return () => setSessionRejectedHandler(null);
+  }, [endSession]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +92,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (signedIn && storedUser && hasKey) {
         setUser(storedUser);
         setIsLoggedIn(true);
+        sessionLive.current = true;
 
         // Clear the session only on confirmed rejection; network failures do not prove invalidity and must
         // not delete the AES key.
@@ -84,12 +106,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          if (result.status === "rejected") {
-            void clearSession().catch(() => {});
-            setIsLoggedIn(false);
-            setUser(null);
-            setSessionExpired(true);
-          }
+          if (result.status === "rejected") void endSession();
           if (result.status === "paused") setAppPaused(true);
           // Backend unreachable: keep the cached session.
         }).finally(() => {
@@ -106,7 +123,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [endSession]);
 
   useEffect(() => {
     if (!isInitialized || !isLoggedIn) return;
@@ -118,16 +135,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(timer);
   }, [isInitialized, isLoggedIn]);
 
-  const refreshUser = async (): Promise<void> => {
+  const refreshUser = useCallback(async (): Promise<void> => {
     const freshUser = await getMe();
     if (freshUser) {
       updateUser(freshUser);
       setUser(freshUser);
     }
-  };
+  }, []);
+
+  const adoptSession = useCallback(async (): Promise<void> => {
+    const hasKey = await restoreKey();
+    const storedUser = getUser();
+    if (!isSignedIn() || !storedUser || !hasKey) return;
+    sessionLive.current = true;
+    setUser(storedUser);
+    setSessionExpired(false);
+    setIsLoggedIn(true);
+  }, []);
 
   return (
-    <SessionContext.Provider value={{ isInitialized, isLoggedIn, user, refreshUser, sessionExpired, sessionVerified, appPaused }}>
+    <SessionContext.Provider value={{ isInitialized, isLoggedIn, user, refreshUser, adoptSession, sessionExpired, sessionVerified, appPaused }}>
       {children}
     </SessionContext.Provider>
   );

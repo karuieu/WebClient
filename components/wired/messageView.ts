@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ComponentProps } from "react";
 import { type Message } from "@/lib/chat/chat";
+import { SESSION_EXPIRED_MESSAGE } from "@/lib/core/api";
 import { limitOf, statusOf } from "@/lib/core/errors";
 import { isProviderVerified } from "@/lib/chat/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
@@ -36,7 +37,7 @@ export function errorText(error: unknown, fallback: string): string {
   if (limit.code === "pro_token_limit") return `You've reached the Pro limit for now.${reset}`;
   const status = statusOf(error);
   if (status === 400) return "That request didn't go through. Please try again.";
-  if (status === 401 || msg.includes("unauthorized")) return "Your session has expired. Please sign in again.";
+  if (status === 401 || msg.includes("unauthorized")) return SESSION_EXPIRED_MESSAGE;
   return msg;
 }
 

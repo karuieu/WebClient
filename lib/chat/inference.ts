@@ -34,14 +34,14 @@ import {
   type ContextIndex,
 } from "./answerTools";
 import { buildReasoningParams, type ReasoningEffort } from "@/lib/models/reasoning";
-import { StoppedError, throwIfStopped } from "@/lib/core/errors";
+import { HttpError, StoppedError, throwIfStopped } from "@/lib/core/errors";
 import { REPETITION_NOTICE } from "@/lib/messages/repetition";
 import { contextBudget, trimTurns } from "@/lib/messages/context";
 import { libraryBlock, type LibraryIndexEntry } from "@/lib/projects/projectFiles";
 import { skillsPromptBlock, type SkillForChat } from "./skills";
 import { isNearAIVerified, prewarmNearAI, streamNearAIChat } from "@/lib/enclave/nearaiClient";
 import { isPhalaVerified, prewarmPhala, streamPhalaChat } from "@/lib/enclave/phalaClient";
-import { API_URL, apiFetch } from "@/lib/core/api";
+import { API_URL, SESSION_EXPIRED_MESSAGE, apiFetch } from "@/lib/core/api";
 import { fetchSystemPrompt } from "@/lib/enclave/systemPrompt";
 import { readTheme, type Theme } from "@/lib/ui/theme";
 import {
@@ -74,7 +74,9 @@ onSessionCleared(() => {
 async function loadModelCatalog(fresh = false): Promise<Record<string, CachedModel>> {
   if (!modelCatalog || fresh) {
     const response = await apiFetch(`${API_URL}/api/ai/models`);
-    if (!response.ok) throw new Error("Could not fetch the model list");
+    if (!response.ok) {
+      throw new HttpError(response.status === 401 ? SESSION_EXPIRED_MESSAGE : "Could not fetch the model list", response.status);
+    }
     const payload = (await response.json()) as {
       models?: Array<{
         id: string;

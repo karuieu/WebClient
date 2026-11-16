@@ -1,3 +1,14 @@
+/** A failed API response that keeps its status, so the UI can tell an expired session from other failures. */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
 export class RateLimitError extends Error {
   resetAt?: string;
   code?: string;

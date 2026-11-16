@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/kit/Button";
 import { Dialog } from "@/components/kit/Dialog";
-import { setToolApprovalHandler, type ToolApprovalRequest } from "@/lib/connectors/toolApproval";
+import { setToolApprovalHandler, toolSummary, type ToolApprovalRequest } from "@/lib/connectors/toolApproval";
 
 type Pending = ToolApprovalRequest & { resolve: (ok: boolean) => void };
 
@@ -22,6 +22,7 @@ export function ToolApprovalHost() {
   };
 
   const args = current ? JSON.stringify(current.args, null, 2) : "";
+  const summary = current?.description ? toolSummary(current.description) : "";
 
   return (
     <Dialog
@@ -42,7 +43,7 @@ export function ToolApprovalHost() {
     >
       {current && (
         <>
-          {current.description && <p className="text-pretty text-[13.5px] leading-relaxed text-muted">{current.description}</p>}
+          {summary && <p className="text-pretty text-[13.5px] leading-relaxed text-muted">{summary}</p>}
           {args !== "{}" && (
             <pre className="mt-3 max-h-56 overflow-auto rounded-xl bg-surface p-3 font-mono text-[11.5px] leading-relaxed text-fg/85">
               {args}

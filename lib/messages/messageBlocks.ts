@@ -114,6 +114,9 @@ const BLOCKS =
 
 function parseBlocks(content: string): { steps: MessageStep[]; answer: string } {
   const steps: MessageStep[] = [];
+  // Failed connector calls that no later call has made up for. The model is told why a call failed and usually
+  // writes it again correctly; the notices of those attempts are dropped once a call runs.
+  let failedCalls: MessageStep[] = [];
 
   let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, memoryRead?: string, tool?: string, library?: string, skills?: string, page?: string, kept?: string) => {
     if (reasoning !== undefined) {
@@ -141,7 +144,7 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
       } else if (notice !== undefined) {
         const d = JSON.parse(notice);
         if (d && typeof d.kind === "string") {
-          steps.push({
+          const step: MessageStep = {
             kind: "notice",
             text:
               d.kind === REPETITION_NOTICE_KIND
@@ -161,7 +164,9 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
                     providerName: String(d.provider_name ?? d.provider ?? ""),
                     e2e: d.e2e === true,
                   }),
-          });
+          };
+          steps.push(step);
+          if (d.kind === "tool_call_failed") failedCalls.push(step);
         }
       } else if (memory !== undefined) {
         const d = parseMemoryWriteBlock(memory);
@@ -182,6 +187,8 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
         const d = JSON.parse(tool);
         if (d && typeof d.connector === "string" && typeof d.tool === "string") {
           const status = d.status === "error" || d.status === "declined" ? d.status : "ok";
+          for (const failed of failedCalls) steps.splice(steps.indexOf(failed), 1);
+          failedCalls = [];
           steps.push({ kind: "tool", connector: d.connector, tool: d.tool, status });
         }
       } else if (library !== undefined) {

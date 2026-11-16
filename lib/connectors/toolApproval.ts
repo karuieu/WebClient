@@ -20,6 +20,15 @@ export function requestToolApproval(request: ToolApprovalRequest): Promise<boole
   return handler ? handler(request) : Promise.resolve(false);
 }
 
+const SUMMARY_MAX_CHARS = 160;
+
+// A server writes its tool descriptions for the model, sometimes as a page of rules. People get the opening sentence.
+export function toolSummary(description: string): string {
+  const opening = description.trim().split(/\n|\s#+\s/)[0];
+  const sentence = /^.*?[.!?](?=\s+[^a-z]|$)/.exec(opening)?.[0] ?? opening;
+  return sentence.length > SUMMARY_MAX_CHARS ? `${sentence.slice(0, SUMMARY_MAX_CHARS - 1).trimEnd()}…` : sentence;
+}
+
 // When connector tools wait for approval. 'untrusted' (default) asks for data-changing tools always, and for read-only ones once untrusted content is in the context: a read-only fetch with a URL can still send data out.
 export type ToolApprovalMode = "untrusted" | "always";
 

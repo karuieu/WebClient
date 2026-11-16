@@ -35,7 +35,7 @@ import {
   type CompressionQuota,
 } from "./compression";
 import { afterSummary, type ChatTurn, type HistoryMessage } from "@/lib/messages/conversation";
-import { RateLimitError } from "@/lib/core/errors";
+import { HttpError, RateLimitError } from "@/lib/core/errors";
 import {
   type ChatImage,
   type ChatTextFile,
@@ -44,7 +44,7 @@ import {
   modelSupportsImages,
   IMAGES_UNSUPPORTED_NOTE,
 } from "@/lib/messages/vision";
-import { API_URL, JSON_HEADERS, apiFetch } from "@/lib/core/api";
+import { API_URL, JSON_HEADERS, SESSION_EXPIRED_MESSAGE, apiFetch } from "@/lib/core/api";
 
 function requireProvider(modelId: string): ProviderId {
   const provider = getModelProvider(modelId);
@@ -229,9 +229,9 @@ async function apiCall<T>(endpoint: string, options: RequestInit): Promise<T> {
       const errorData: ApiError = await response.json().catch(() => ({
         error: `HTTP error ${response.status} ${response.statusText}`,
       }));
-      const message = errorData.error || `HTTP error ${response.status}`;
+      const message = response.status === 401 ? SESSION_EXPIRED_MESSAGE : errorData.error || `HTTP error ${response.status}`;
       if (errorData.reset_at || errorData.code) throw new RateLimitError(message, errorData.reset_at, errorData.code);
-      throw response.status === 404 ? new NotFoundError(message) : new Error(message);
+      throw response.status === 404 ? new NotFoundError(message) : new HttpError(message, response.status);
     }
 
     if (response.status === 204) {

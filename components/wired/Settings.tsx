@@ -185,9 +185,7 @@ function MemorySection({ onOpenFiles }: { onOpenFiles: () => void }) {
   React.useEffect(() => {
     const onUpdated = () => {
       loadPending();
-      setTimeout(() => {
-        if (!isMemoryRefreshRunning()) setRefreshing(null);
-      }, 0);
+      if (!isMemoryRefreshRunning()) setRefreshing(null);
     };
     window.addEventListener("karui-memory-updated", onUpdated);
     return () => window.removeEventListener("karui-memory-updated", onUpdated);

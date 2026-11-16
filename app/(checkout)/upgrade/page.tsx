@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -24,26 +24,34 @@ function Upgrade() {
     if (isInitialized && !isLoggedIn) router.replace(LOGIN_FOR_UPGRADE_PATH);
   }, [isInitialized, isLoggedIn, router]);
 
+  const isMounted = useRef(false);
+  const returnHandled = useRef(false);
+
+  // The loop below must outlive the params change that router.replace causes, so only leaving the page stops it.
+  // Strict Mode runs this effect twice, hence the flag is raised in the body and dropped in the cleanup.
   useEffect(() => {
-    if (params.get("success") !== "true") return;
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (params.get("success") !== "true" || returnHandled.current) return;
+    returnHandled.current = true;
     setCheckout("confirming");
     router.replace("/upgrade");
-    let cancelled = false;
 
     // Polar's webhook can land after the buyer is back, so the plan is asked for a few times.
     (async () => {
       for (const delay of [0, 1500, 4000]) {
         if (delay) await new Promise((r) => setTimeout(r, delay));
-        if (cancelled) return;
+        if (!isMounted.current) return;
         await refreshUser().catch(() => {});
       }
-      if (!cancelled) setCheckout((c) => (c === "confirming" ? "pending" : c));
+      if (isMounted.current) setCheckout((c) => (c === "confirming" ? "pending" : c));
     })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  }, [params, router, refreshUser]);
 
   useEffect(() => {
     if ((checkout === "confirming" || checkout === "pending") && current === "pro") setCheckout("done");

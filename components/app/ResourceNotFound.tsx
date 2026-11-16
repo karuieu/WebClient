@@ -1,3 +1,4 @@
+import type { NotFoundKind } from "@/lib/ui/notFoundTarget";
 import { SystemState } from "./SystemState";
 
 const COPY = {
@@ -22,9 +23,7 @@ const COPY = {
     text: undefined,
     caption: "Address",
   },
-} as const;
-
-export type NotFoundKind = keyof typeof COPY;
+} as const satisfies Record<NotFoundKind, unknown>;
 
 /** Shown inside the app shell when the id (or address) in the URL has nothing behind it on this account. */
 export function ResourceNotFound({ kind, value }: { kind: NotFoundKind; value: string }) {
