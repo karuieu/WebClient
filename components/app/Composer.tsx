@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Switch } from "@/components/kit/Controls";
-import { ArrowUp, Camera, ChevronRight, FileText, Folder, FolderInput, Globe, ImageIcon, Layers, Paperclip, Plus, X } from "@/components/kit/icons";
+import { ArrowUp, BookOpen, Camera, ChevronRight, FileText, Folder, FolderInput, Globe, ImageIcon, Layers, Paperclip, Plus, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Sheet } from "@/components/kit/Sheet";
 import { Spinner } from "@/components/kit/Spinner";
@@ -11,6 +11,9 @@ import { useMediaQuery } from "@/components/kit/useMounted";
 import { cx } from "@/lib/ui/cx";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./chat/AttachmentViewer";
 import { ModelPicker } from "./ModelPicker";
+import { ComposerCommands, type ComposerCommand, type ComposerSkill, type ComposerSkills } from "./ComposerCommands";
+import { skillCommandName } from "@/lib/messages/skillInvocation";
+import { SkillComposerInput, type SkillComposerInputHandle } from "./SkillComposerInput";
 
 export type ComposerAttachment = { id: string } & ViewerAttachment;
 
@@ -18,7 +21,7 @@ const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
 
 const addButtonClass = (open: boolean): string =>
   cx(
-    "grid size-9 cursor-pointer place-items-center rounded-full transition-[background-color,color,transform] duration-150 hover:bg-surface hover:text-fg active:scale-[0.94]",
+    "grid size-11 cursor-pointer place-items-center rounded-full transition-[background-color,color,transform] duration-150 hover:bg-surface hover:text-fg active:scale-[0.94] sm:size-9",
     open ? "bg-surface text-fg" : "text-muted",
   );
 
@@ -26,21 +29,23 @@ function AddIcon({ open }: { open: boolean }) {
   return <Plus className={cx("size-[18px] transition-transform duration-300 ease-out-soft", open && "rotate-45")} />;
 }
 
+// A non-default setting of this message, shown next to "+"; clicking it undoes the setting.
 function Chip({ icon, label, undo, onClick }: { icon: React.ReactNode; label: string; undo: string; onClick: () => void }) {
   return (
     <motion.button
       layout
       type="button"
       onClick={onClick}
+      aria-label={`${undo} ${label}`}
+      title={label}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.12 } }}
       transition={spring}
-      className="group/chip flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-surface-2 pl-3 pr-2.5 text-[13px] tracking-[-0.01em] text-fg ring-1 ring-inset ring-line-strong active:scale-[0.97]"
+      className="group/chip flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-surface-2 pl-3 pr-2.5 text-[13px] tracking-[-0.01em] text-fg ring-1 ring-inset ring-line-strong active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg sm:h-9"
     >
       {icon}
       <span className="max-w-[10rem] truncate">{label}</span>
-      <span className="sr-only">, {undo}</span>
       <X className="size-3 text-muted transition-colors duration-150 group-hover/chip:text-fg" />
     </motion.button>
   );
@@ -79,6 +84,7 @@ export function Composer({
   onClearQuote,
   onPaste,
   autoFocus,
+  skills,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -97,14 +103,17 @@ export function Composer({
   onRemoveAttachment?: (id: string) => void;
   webSearch?: { on: boolean; onToggle: () => void };
   memory?: { on: boolean; onToggle: () => void };
+  /** `onClear` only for a choice not saved yet (new chat): it shows the project chip. */
   project?: { name: string | null; onPick: () => void; onClear?: () => void };
   model?: React.ComponentProps<typeof ModelPicker>;
   quote?: string | null;
   onClearQuote?: () => void;
-  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLElement>) => void;
   autoFocus?: boolean;
-}) {
+  skills?: ComposerSkills;
+}): React.JSX.Element {
   const textRef = React.useRef<HTMLTextAreaElement>(null);
+  const richTextRef = React.useRef<SkillComposerInputHandle>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const photosRef = React.useRef<HTMLInputElement>(null);
@@ -112,6 +121,73 @@ export function Composer({
   const mobile = useMediaQuery("(max-width: 639px)");
   const [addOpen, setAddOpen] = React.useState(false);
   const [previewed, setPreviewed] = React.useState<number | null>(null);
+  const commandListId = React.useId();
+  const [caret, setCaret] = React.useState(value.length);
+  const [commandDismissed, setCommandDismissed] = React.useState(false);
+  const [fieldFocused, setFieldFocused] = React.useState(false);
+  const [commandNav, setCommandNav] = React.useState({ query: "", index: 0 });
+  const pendingCaret = React.useRef<number | null>(null);
+  const focusInput = React.useCallback((at?: number) => {
+    if (richTextRef.current) richTextRef.current.focus(at);
+    else {
+      textRef.current?.focus();
+      if (at !== undefined) textRef.current?.setSelectionRange(at, at);
+    }
+  }, []);
+  const command = value.slice(0, caret).match(/(?:^|\s)\/([^\n/]*)$/);
+  const rawQuery = command?.[1] ?? "";
+  const skillsOnly = /^skill(?:[ \t]|$)/i.test(rawQuery);
+  const commandQuery = skillsOnly ? rawQuery.replace(/^skill[ \t]*/i, "") : rawQuery;
+  const pendingCommand = !!(skills || onAttach) && !!command && !commandDismissed;
+  const commandOpen = pendingCommand && fieldFocused && !sending;
+  const moveCommand = (index: number) => setCommandNav({ query: rawQuery, index });
+  const openSkills = () => {
+    richTextRef.current?.replaceText(value.length, value.length, value || skills?.selected ? "\n/skill " : "/skill ");
+    setCommandDismissed(false);
+    setAddOpen(false);
+  };
+  const consumeCommand = () => {
+    if (!command) return;
+    const start = caret - command[0].length + (command[0].startsWith("/") ? 0 : 1);
+    if (skills) {
+      richTextRef.current?.replaceText(start, caret, "");
+      return;
+    }
+    pendingCaret.current = start;
+    setCaret(start);
+    onChange(value.slice(0, start) + value.slice(caret));
+  };
+  const selectSkill = (skill: ComposerSkill) => {
+    if (!command) return;
+    const start = caret - command[0].length + (command[0].startsWith("/") ? 0 : 1);
+    richTextRef.current?.insertSkill(skill, start, caret);
+  };
+  const retrySkills = () => {
+    if (skills?.catalog.status !== "error") return;
+    skills.catalog.onRetry();
+    focusInput();
+  };
+  const commands: ComposerCommand[] = [];
+  if (onAttach && !skillsOnly) commands.push({
+    id: "files",
+    name: "Add files",
+    description: "Attach files to this message.",
+    icon: <Paperclip />,
+    onSelect: () => {
+      consumeCommand();
+      fileRef.current?.click();
+    },
+  });
+  if (skills?.catalog.status === "ready") commands.push(...skills.catalog.items.map((skill) => ({
+    id: `skill:${skill.id}`,
+    name: skill.name,
+    description: skill.description,
+    icon: <BookOpen />,
+    selected: skills.selected?.skill.id === skill.id,
+    onSelect: () => selectSkill(skill),
+  })));
+  const matchingCommands = commands.filter((command) => command.name.toLowerCase().includes(commandQuery.trim().toLowerCase()) || skillCommandName(command.name).slice(1).includes(commandQuery.trim().toLowerCase()));
+  const activeCommand = matchingCommands.length ? Math.min(commandNav.query === rawQuery ? commandNav.index : 0, matchingCommands.length - 1) : -1;
 
   const projectLabel = project?.name && !project.onClear ? "Move to project" : "Add to project";
   const adds: MenuItem[] = [];
@@ -122,6 +198,7 @@ export function Composer({
       onSelect: () => fileRef.current?.click(),
     });
   if (project) adds.push({ label: projectLabel, icon: <FolderInput />, onSelect: project.onPick });
+  if (skills) adds.push({ label: "Use a skill", icon: <BookOpen />, onSelect: openSkills });
   const toggles: MenuItem[] = [];
   if (webSearch) toggles.push({ label: "Web search", icon: <Globe />, checked: webSearch.on, onSelect: webSearch.onToggle });
   if (memory) toggles.push({ label: "Use memory", icon: <Layers />, checked: memory.on, onSelect: memory.onToggle });
@@ -133,17 +210,42 @@ export function Composer({
     e.target.value = "";
     setAddOpen(false);
   };
-  const canSend = !sending && (value.trim().length > 0 || attachments.length > 0);
+  const canSend = !sending && !pendingCommand && !skills?.error && (value.trim().length > 0 || !!skills?.selected || attachments.length > 0);
 
   React.useLayoutEffect(() => {
     const el = textRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
-  }, [value]);
+    if (el) {
+      if (document.activeElement === el) setFieldFocused(true);
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
+    }
+    if (pendingCaret.current !== null) {
+      focusInput(pendingCaret.current);
+      pendingCaret.current = null;
+    }
+  }, [value, focusInput]);
 
   const submit = () => {
     if (canSend) onSubmit();
+  };
+  const inputKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (commandOpen) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (matchingCommands.length) moveCommand((activeCommand + (event.key === "ArrowDown" ? 1 : -1) + matchingCommands.length) % matchingCommands.length);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        matchingCommands[activeCommand]?.onSelect();
+        return;
+      }
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit();
+    }
   };
 
   return (
@@ -153,10 +255,10 @@ export function Composer({
         submit();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) textRef.current?.focus();
+        if (e.target === e.currentTarget) focusInput();
       }}
       // A container: the model picker shortens with the field, which a project panel can narrow on a wide screen.
-      className="@container rounded-[22px] border border-line-strong bg-elevated shadow-soft transition-[border-color] duration-200 focus-within:border-fg/30"
+      className="@container relative rounded-[22px] border border-line-strong bg-elevated shadow-soft transition-[border-color] duration-200 focus-within:border-fg"
     >
       <AnimatePresence initial={false}>
         {quote && (
@@ -215,7 +317,7 @@ export function Composer({
                       className="block cursor-pointer rounded-xl transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
                     >
                       {a.kind === "image" ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- a blob or data URL of the user's own file, which next/image cannot optimize
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img src={a.src} alt="" className="size-16 rounded-xl border border-line object-cover" />
                       ) : (
                         <FileTile name={a.name} content={a.content} small />
@@ -239,27 +341,85 @@ export function Composer({
         )}
       </AnimatePresence>
 
-      <label htmlFor="composer-input" className="sr-only">
-        Message
-      </label>
-      <textarea
-        data-focus="within"
-        id="composer-input"
-        ref={textRef}
-        rows={1}
-        value={value}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        onPaste={onPaste}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            submit();
+      {skills?.error && <p id={`${commandListId}-error`} role="alert" className="px-5 pt-3 text-[14px] leading-relaxed text-danger">{skills.error}</p>}
+
+      <div
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setFieldFocused(false);
+        }}
+        onKeyDown={(event) => {
+          if (commandOpen && event.key === "Escape" && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            setCommandDismissed(true);
+            focusInput();
           }
         }}
-        className="block max-h-[40vh] min-h-[3.5rem] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none placeholder:text-subtle focus-visible:outline-none"
-      />
+      >
+        {commandOpen && (
+          <ComposerCommands
+            id={commandListId}
+            catalog={skills?.catalog}
+            items={matchingCommands}
+            query={commandQuery}
+            active={activeCommand}
+            onActive={moveCommand}
+            onRetry={retrySkills}
+          />
+        )}
+        <label htmlFor="composer-input" className="sr-only">
+          Message
+        </label>
+        {skills ? (
+          <SkillComposerInput
+            ref={richTextRef}
+            value={value}
+            selected={skills.selected}
+            onChange={(text, selected) => {
+              setCommandDismissed(false);
+              onChange(text);
+              skills.onSelect(selected);
+            }}
+            onCaretChange={setCaret}
+            onFocus={() => setFieldFocused(true)}
+            onKeyDown={inputKeyDown}
+            onPaste={onPaste}
+            autoFocus={autoFocus}
+            placeholder={placeholder}
+            aria-label="Message"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-controls={commandOpen ? commandListId : undefined}
+            aria-activedescendant={commandOpen && activeCommand >= 0 ? `${commandListId}-${activeCommand}` : undefined}
+            aria-describedby={skills.error ? `${commandListId}-error` : undefined}
+          />
+        ) : (
+        <textarea
+          data-focus="within"
+          id="composer-input"
+          ref={textRef}
+          rows={1}
+          value={value}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          aria-autocomplete={onAttach ? "list" : undefined}
+          aria-haspopup={onAttach ? "listbox" : undefined}
+          aria-controls={commandOpen ? commandListId : undefined}
+          aria-activedescendant={commandOpen && activeCommand >= 0 ? `${commandListId}-${activeCommand}` : undefined}
+          onFocus={() => setFieldFocused(true)}
+          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+          onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
+          onChange={(event) => {
+            setCaret(event.target.selectionStart);
+            setCommandDismissed(false);
+            onChange(event.target.value);
+          }}
+          onPaste={onPaste}
+          onKeyDown={inputKeyDown}
+          className="block max-h-[40vh] min-h-[3.5rem] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none placeholder:text-muted focus-visible:outline-none"
+        />
+        )}
+      </div>
 
       <div className="flex items-center gap-1 px-2.5 pb-2.5">
         {onAttach && (
@@ -315,8 +475,19 @@ export function Composer({
             </div>
           )}
           {onAttach && attachNote && <p className="px-5 pt-3 text-center font-mono text-[11px] text-muted">{attachNote}</p>}
-          {(webSearch || memory || project) && (
+          {(webSearch || memory || project || skills) && (
             <div className="mx-4 mt-4 divide-y divide-line overflow-hidden rounded-2xl bg-surface">
+              {skills && (
+                <button
+                  type="button"
+                  onClick={openSkills}
+                  className="flex h-14 w-full cursor-pointer items-center gap-3 pl-4 pr-3 text-left transition-colors duration-150 active:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
+                >
+                  <SheetRow icon={<BookOpen className="size-5" />} label="Use a skill">
+                    <ChevronRight className="size-4 text-muted" />
+                  </SheetRow>
+                </button>
+              )}
               {webSearch && (
                 <label className="flex h-14 cursor-pointer items-center gap-3 pl-4 pr-3">
                   <SheetRow icon={<Globe className="size-5" />} label="Web search">
@@ -357,7 +528,7 @@ export function Composer({
                 key="project"
                 icon={<Folder className="size-[15px]" />}
                 label={project.name}
-                undo="remove project"
+                undo="Remove project"
                 onClick={project.onClear}
               />
             )}
@@ -373,7 +544,7 @@ export function Composer({
               type="button"
               onClick={onStop}
               aria-label="Stop"
-              className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-inverse text-on-inverse transition-[background-color,color,transform] duration-200 active:scale-[0.92]"
+              className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-inverse text-on-inverse transition-[background-color,color,transform] duration-200 active:scale-[0.92] sm:size-9"
             >
               <X className="size-4" />
             </button>
@@ -384,7 +555,7 @@ export function Composer({
               disabled={!canSend && !sending}
               aria-label={sending ? "Sending" : "Send message"}
               className={cx(
-                "grid size-9 shrink-0 cursor-pointer place-items-center rounded-full transition-[background-color,color,transform] duration-200 active:scale-[0.92] disabled:cursor-default",
+                "grid size-11 shrink-0 cursor-pointer place-items-center rounded-full transition-[background-color,color,transform] duration-200 active:scale-[0.92] disabled:cursor-default sm:size-9",
                 canSend || sending ? "bg-inverse text-on-inverse" : "bg-surface-2 text-subtle",
               )}
             >

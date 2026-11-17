@@ -15,6 +15,7 @@ import { applyChatTitle, fallbackTitleChat, getChatTitleMode } from "./chatTitle
 import { throwIfStopped } from "@/lib/core/errors";
 import { thinkingSince } from "@/lib/messages/streamTags";
 import { type AnswerActivity } from "./answerTools";
+import type { SkillReference } from "@/lib/messages/skillInvocation";
 
 export type StreamPhase = "streaming" | "saving" | "done" | "error";
 
@@ -22,7 +23,7 @@ export interface ChatStreamState {
   phase: StreamPhase;
   kind: "send" | "retry";
   userMessage: Message | null;
-  request: { content: string; model: ModelType; images: ChatImage[]; files: ChatTextFile[] };
+  request: { content: string; model: ModelType; images: ChatImage[]; files: ChatTextFile[]; skill?: SkillReference };
   content: string;
   activity: AnswerActivity | null;
   thinkingSince: number | null;
@@ -82,6 +83,7 @@ export function startSendStream(opts: {
   userMessage: Message;
   images?: ChatImage[];
   files?: ChatTextFile[];
+  skill?: SkillReference;
   discard?: string[];
   ready?: Promise<void>;
 }): boolean {
@@ -91,7 +93,7 @@ export function startSendStream(opts: {
     phase: "streaming",
     kind: "send",
     userMessage: opts.userMessage,
-    request: { content: opts.content, model: opts.model, images: opts.images ?? [], files: opts.files ?? [] },
+    request: { content: opts.content, model: opts.model, images: opts.images ?? [], files: opts.files ?? [], ...(opts.skill ? { skill: opts.skill } : {}) },
     content: "",
     activity: null,
     thinkingSince: null,
@@ -140,7 +142,8 @@ export function startSendStream(opts: {
             }
           : undefined,
         signal,
-        opts.discard ?? []
+        opts.discard ?? [],
+        opts.skill,
       );
       if (wantAiTitle && !titleCaptured) {
         void fallbackTitleChat(chatId, opts.content, imageNames);

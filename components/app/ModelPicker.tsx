@@ -6,6 +6,7 @@ import { Check, ChevronDown, Lock } from "@/components/kit/icons";
 import { Sheet } from "@/components/kit/Sheet";
 import { useMediaQuery } from "@/components/kit/useMounted";
 import { Segmented } from "@/components/kit/Segmented";
+import { menuStyles } from "@/components/kit/menuStyles";
 import { cx } from "@/lib/ui/cx";
 
 export type ModelOption = {
@@ -106,12 +107,13 @@ export function ModelPicker({
             if (!o.efforts?.length) setOpen(false);
           }}
           className={cx(
-            "relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left focus-visible:outline-offset-0 max-sm:py-3",
+            menuStyles.row,
+            "items-center py-2.5 focus-visible:outline-offset-0 max-sm:py-3",
             locked ? "cursor-default" : "cursor-pointer",
           )}
         >
           {lit && !locked && (
-            <motion.span layoutId="model-picker-highlight" transition={spring} className="absolute inset-0 rounded-xl bg-surface" />
+            <motion.span layoutId="model-picker-highlight" transition={spring} className={cx("absolute inset-0 [border-radius:inherit]", menuStyles.selected)} />
           )}
           <span className={cx("relative min-w-0 flex-1", locked && "opacity-50")}>
             <span className="flex items-center gap-2">
@@ -164,7 +166,7 @@ export function ModelPicker({
                 className="relative mt-1 flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-muted transition-colors duration-150 hover:text-fg focus-visible:outline-offset-0"
               >
                 {!mobile && hover === "__more" && (
-                  <motion.span layoutId="model-picker-highlight" transition={spring} className="absolute inset-0 rounded-xl bg-surface" />
+                  <motion.span layoutId="model-picker-highlight" transition={spring} className={cx("absolute inset-0 [border-radius:inherit]", menuStyles.selected)} />
                 )}
                 <span className="relative flex-1 tracking-[-0.01em]">More models</span>
                 <span className="relative">
@@ -294,7 +296,7 @@ export function ModelPicker({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.98, transition: { duration: 0.14 } }}
             transition={spring}
-            className="absolute bottom-full right-0 z-50 mb-2 w-[min(340px,calc(100vw-2rem))] origin-bottom-right overflow-hidden rounded-2xl border border-line bg-elevated shadow-soft"
+            className={cx(menuStyles.panel, "absolute bottom-full right-0 z-50 mb-2 w-[min(340px,calc(100vw-2rem))] origin-bottom-right overflow-hidden")}
           >
             {body}
           </motion.div>

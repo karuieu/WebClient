@@ -17,6 +17,7 @@
   --ok: #1f9d55;
   --halloween: #c2410c;
   --danger: #d70015;
+  --link: #1d4ed8;
   --on-danger: #ffffff;
   --code-keyword: #ad3da4;
   --code-string: #b4471d;
@@ -45,6 +46,7 @@
   --ok: #34c759;
   --halloween: #ff9a3c;
   --danger: #ff6961;
+  --link: #8ab4f8;
   --on-danger: #000000;
   --code-keyword: #f18fb5;
   --code-string: #efa27d;
@@ -60,6 +62,7 @@
 
 @theme inline {
   --color-bg: var(--bg);
+  --color-link: var(--link);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-elevated: var(--elevated);
@@ -154,7 +157,6 @@ body {
 :focus-visible {
   outline: 2px solid var(--fg);
   outline-offset: 3px;
-  border-radius: 6px;
 }
 
 /* Overrides the legacy globals.css focus rule (same selector, !important). Drop once globals.css is gone. */
@@ -181,8 +183,6 @@ body {
 
 :is(input, textarea, button, [tabindex])[data-focus="within"]:focus-visible {
   outline-style: none !important;
-  /* Keep the control's radius instead of the generic focus rule's 6px. */
-  border-radius: revert-layer;
 }
 
 .code-mono {

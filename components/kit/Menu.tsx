@@ -7,6 +7,7 @@ import { cx } from "@/lib/ui/cx";
 import { Check } from "./icons";
 import { Sheet } from "./Sheet";
 import { useMediaQuery, useMounted } from "./useMounted";
+import { menuStyles } from "./menuStyles";
 
 export type MenuItem =
   | {
@@ -223,7 +224,8 @@ export function Menu({
                 exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98, transition: { duration: 0.12 } }}
                 transition={{ type: "spring", bounce: 0, duration: 0.28 }}
                 className={cx(
-                  "fixed z-[90] max-h-[calc(100dvh-1rem)] min-w-[200px] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-line bg-elevated p-1.5 font-sans text-fg shadow-soft",
+                  menuStyles.panel,
+                  "fixed z-[90] max-h-[calc(100dvh-1rem)] min-w-[200px] max-w-[calc(100vw-1rem)] overflow-y-auto p-1.5",
                   panelClassName,
                 )}
               >
@@ -244,16 +246,18 @@ export function Menu({
                       aria-checked={item.checked}
                       tabIndex={-1}
                       data-focus="within"
+                      onPointerMove={(event) => event.currentTarget.focus({ preventScroll: true })}
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpen(false);
                         item.onSelect();
                       }}
                       className={cx(
-                        "flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 text-left text-[13.5px] tracking-[-0.01em] outline-none transition-colors duration-100",
+                        menuStyles.row,
+                        "cursor-pointer items-center",
                         item.danger
-                          ? "text-danger hover:bg-danger/10 focus:bg-danger/10"
-                          : "text-fg hover:bg-surface focus:bg-surface",
+                          ? "text-danger focus:bg-danger/10 active:bg-danger/10"
+                          : cx("text-fg", menuStyles.interactive),
                       )}
                     >
                       {item.icon && (

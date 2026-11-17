@@ -40,10 +40,12 @@ import {
   type ChatImage,
   type ChatTextFile,
   packMessageContent,
+  parseMessageContent,
   turnContentForAI,
   modelSupportsImages,
   IMAGES_UNSUPPORTED_NOTE,
 } from "@/lib/messages/vision";
+import type { SkillReference } from "@/lib/messages/skillInvocation";
 import { API_URL, JSON_HEADERS, SESSION_EXPIRED_MESSAGE, apiFetch } from "@/lib/core/api";
 
 function requireProvider(modelId: string): ProviderId {
@@ -542,15 +544,15 @@ async function memoryFilesFor(chat: Chat | null): ReturnType<typeof getMemoryFil
 }
 
 // Fetched at once: one after another they added ~0.3 s before every answer.
-async function loadTurnContext(key: CryptoKey, chatId: string, history: HistoryMessage[]) {
+async function loadTurnContext(key: CryptoKey, chatId: string, history: HistoryMessage[], forcedSkill?: SkillReference) {
   const customInstructions = getCustomInstructionsContext();
-  const chatMeta = await getChat(chatId).catch(() => null);
+  const chatMeta = await (forcedSkill ? getChat(chatId) : getChat(chatId).catch(() => null));
   const inProject = projectTurn(chatMeta);
   const [since, project, memoryFiles, skills, instructions] = await Promise.all([
     sinceSummary(key, chatId, chatMeta, history),
     inProject,
     memoryFilesFor(chatMeta),
-    inProject.then((p) => getSkillsForChat(p?.skillIds)),
+    inProject.then((p) => getSkillsForChat(p?.skillIds, forcedSkill ? "required" : "optional")),
     customInstructions,
   ]);
   return { since, inProject: project, memoryFiles: project ? project.memoryFiles : memoryFiles, skills, customInstructions: instructions };
@@ -563,6 +565,7 @@ type TurnContext = Pick<
   | "conversationSummary"
   | "memoryFiles"
   | "skills"
+  | "forcedSkill"
   | "customInstructions"
   | "memoryWrites"
   | "connectors"
@@ -587,7 +590,7 @@ async function streamTurn(
 ) {
   const readsImages = modelSupportsImages(model);
   if (images.length > 0 && !readsImages) throw new Error(IMAGES_UNSUPPORTED_NOTE);
-  const storedContent = packMessageContent(content, images, files);
+  const storedContent = packMessageContent(content, images, files, ctx.forcedSkill);
 
   // The <chat_title> block is extracted from the stream and never shown. Filter order matters: the title filter runs before the project-brief filter.
   // Both are applied only once the answer is verified.
@@ -648,16 +651,18 @@ export async function sendMessage(
   files: ChatTextFile[] = [],
   onTitle?: (title: string) => void,
   signal?: AbortSignal,
-  discard: string[] = []
+  discard: string[] = [],
+  forcedSkill?: SkillReference,
 ): Promise<Message[]> {
   const key = await requireAesKey();
-  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history);
+  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history, forcedSkill);
   const ctx: TurnContext = {
     displayName: getUser()?.display_name ?? "",
     projectContext: inProject?.context ?? "",
     conversationSummary: since.summary,
     memoryFiles,
     skills,
+    ...(forcedSkill ? { forcedSkill } : {}),
     customInstructions,
     memoryWrites: inProject ? inProject.memoryWrites : getMemorySettings().liveWrites,
     applyMemoryEdit: inProject?.applyMemoryEdit,
@@ -822,7 +827,8 @@ export async function retryMessage(
   // otherwise this turn would still go out with the old one.
   await invalidateSummaryIfCovered(key, chatId, origAssistantId);
 
-  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history);
+  const forcedSkill = parseMessageContent(history.findLast((message) => message.role === "user")?.content ?? "").skill;
+  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history, forcedSkill);
   const projectContext = inProject?.context ?? "";
   const reasoningEffort = resolveReasoningEffort(model);
   const variantGroup = origVariantGroup || crypto.randomUUID();
@@ -837,6 +843,7 @@ export async function retryMessage(
       conversationSummary: since.summary,
       memoryFiles,
       skills,
+      ...(forcedSkill ? { forcedSkill } : {}),
       customInstructions,
       generateTitle: false,
       webSearch: false,

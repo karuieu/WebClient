@@ -46,8 +46,8 @@ function NewChat() {
   const [costume] = useState(pickCostume);
   const halloween = now && isHalloweenSeason(now) ? costume : undefined;
 
-  const composer = useComposer({ onSubmit: () => handleSend() });
-  textRef.current = composer.text;
+  const composer = useComposer({ onSubmit: () => handleSend(), skillsEnabled: !incognito, projectId });
+  textRef.current = composer.message;
   useEffect(() => prewarmProvider(composer.model), [composer.model]);
 
   useEffect(() => {
@@ -67,11 +67,12 @@ function NewChat() {
   }, [setComposerText]);
 
   const firstMessage = (): FirstMessage => ({
-    content: composer.text.trim(),
+    content: composer.message,
     model: composer.model as ModelType,
     webSearch: composer.webSearch,
     images: composer.images,
     files: composer.files,
+    ...(!incognito && composer.skill ? { skill: composer.skill } : {}),
   });
 
   const handleSend = async () => {

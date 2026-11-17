@@ -1,5 +1,6 @@
 import type { ChatImage, ChatTextFile } from "@/lib/messages/vision";
 import type { ModelType } from "@/lib/chat/chat";
+import type { SkillReference } from "@/lib/messages/skillInvocation";
 
 /**
  * Hold the first message in module memory across /new → /chat navigation so plaintext never touches browser
@@ -11,6 +12,7 @@ export interface FirstMessage {
   webSearch: boolean;
   images: ChatImage[];
   files: ChatTextFile[];
+  skill?: SkillReference;
 }
 
 const pending = new Map<string, FirstMessage>();

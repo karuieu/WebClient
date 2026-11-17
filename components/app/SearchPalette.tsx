@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Folder, MessageSquare, Search, X } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
+import { menuStyles } from "@/components/kit/menuStyles";
 import { useMounted, useNow } from "@/components/kit/useMounted";
 import { cx } from "@/lib/ui/cx";
 import { standaloneStamp } from "./ChatsView";
@@ -79,8 +80,9 @@ function Option({
       onPointerMove={onHover}
       onClick={onPick}
       className={cx(
-        "flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 transition-colors duration-100",
-        active ? "bg-surface-2" : "hover:bg-surface",
+        menuStyles.row,
+        "cursor-pointer items-start py-2.5",
+        active && menuStyles.selected,
       )}
     >
       {children}

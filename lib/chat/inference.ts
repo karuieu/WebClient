@@ -36,7 +36,8 @@ import {
 import { buildReasoningParams, type ReasoningEffort } from "@/lib/models/reasoning";
 import { HttpError, StoppedError, throwIfStopped } from "@/lib/core/errors";
 import { REPETITION_NOTICE } from "@/lib/messages/repetition";
-import { contextBudget, trimTurns } from "@/lib/messages/context";
+import { contextBudget, estimateTokens, estimateTurnTokens, trimTurns, type TrimmableTurn } from "@/lib/messages/context";
+import type { SkillReference } from "@/lib/messages/skillInvocation";
 import { libraryBlock, type LibraryIndexEntry } from "@/lib/projects/projectFiles";
 import { skillsPromptBlock, type SkillForChat } from "./skills";
 import { isNearAIVerified, prewarmNearAI, streamNearAIChat } from "@/lib/enclave/nearaiClient";
@@ -334,6 +335,7 @@ export interface E2EStreamOptions {
   memoryFiles: MemoryFileForChat[];
   // Already narrowed to what this chat may use (a project's picks, none in incognito).
   skills?: SkillForChat[];
+  forcedSkill?: SkillReference;
   customInstructions: string;
 
   conversationSummary: string;
@@ -411,7 +413,7 @@ const MAX_ANSWER_ROUNDS = 6;
 interface AnswerTurn {
   model: HelperModel;
   call: Omit<AnswerCallContext, "emit">;
-  buildMessages: (round: AnswerRound, emit: (block: string) => void) => Promise<ModelMessage[]>;
+  buildMessages: (round: AnswerRound, emit: (block: string) => void, followUpTokens: number) => Promise<ModelMessage[]>;
 }
 
 // No fallback to another provider: a failure, including a failed attestation, is shown as itself. A fallback would let the server steer plaintext to a key of its choosing.
@@ -429,6 +431,8 @@ export async function streamE2EChat(
   const budget = contextBudget(tier, modelInfo.contextWindow, "");
   const library = opts.project?.files ?? [];
   const skills = opts.skills ?? [];
+  const forced = opts.forcedSkill ? skills.find((skill) => skill.id === opts.forcedSkill?.id && skill.source === opts.forcedSkill.source) : undefined;
+  if (opts.forcedSkill && !forced) throw new Error("The selected skill is no longer available in this chat. Select it again.");
   const sendWholeLibrary = library.reduce((n, f) => n + f.size, 0) / 4 <= budget * LIBRARY_WHOLE_SHARE;
   const chatFiles = opts.chatFiles ?? { files: [], contents: new Map<string, string>() };
   const index: ContextIndex = { memory: opts.memoryFiles, library: sendWholeLibrary ? [] : library, skills, chat: chatFiles.files };
@@ -458,16 +462,18 @@ export async function streamE2EChat(
   };
 
   const skillsBlock = (round: AnswerRound, emit: (block: string) => void): string => {
-    const used = skillsPromptBlock(skills.filter((s) => round.selection.skillIds.includes(s.id)), budget * SKILLS_PROMPT_SHARE);
+    const required = forced ? skillsPromptBlock([forced], Number.POSITIVE_INFINITY) : { block: "", names: [] };
+    const optional = skillsPromptBlock(skills.filter((s) => s !== forced && round.selection.skillIds.includes(s.id)), Math.max(0, budget * SKILLS_PROMPT_SHARE - estimateTokens(required.block)));
+    const used = { block: [required.block, optional.block].filter(Boolean).join("\n"), names: [...required.names, ...optional.names] };
     const newNames = used.names.filter((name) => !emittedSkills.has(name));
     if (newNames.length > 0) {
       newNames.forEach((name) => emittedSkills.add(name));
       emit(`<skills_used>${blockJSON({ names: newNames })}</skills_used>`);
     }
-    return used.block;
+    return forced ? `The user explicitly selected ${JSON.stringify(forced.name)} for the latest message. Follow this skill for this response.\n${used.block}` : used.block;
   };
 
-  const buildMessages = async (round: AnswerRound, emit: (block: string) => void): Promise<ModelMessage[]> => {
+  const buildMessages = async (round: AnswerRound, emit: (block: string) => void, followUpTokens: number): Promise<ModelMessage[]> => {
     throwIfStopped(opts.signal);
     const systemPrompt = await buildSystemPrompt({
       displayName: opts.displayName,
@@ -493,7 +499,11 @@ export async function streamE2EChat(
       providerModelID: modelInfo.providerModelID,
     });
     throwIfStopped(opts.signal);
-    const turns = trimTurns(opts.turns, contextBudget(tier, modelInfo.contextWindow, systemPrompt)).map((turn): ModelMessage => ({
+    const history = trimTurns(opts.turns, contextBudget(tier, modelInfo.contextWindow, systemPrompt) - followUpTokens);
+    if (forced && estimateTurnTokens({ role: "system", content: systemPrompt }) + history.reduce((sum, turn) => sum + estimateTurnTokens(turn), followUpTokens) > budget) {
+      throw new Error("The selected skill and message exceed the available context. Shorten the message or start a new chat.");
+    }
+    const turns = history.map((turn): ModelMessage => ({
       role: turn.role,
       content: turn.images?.length ? [
         { type: "text", text: turn.content },
@@ -522,8 +532,13 @@ export async function streamE2EChat(
 async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (token: string) => void): Promise<E2EStreamResult> {
   const stream = opts.provider === "nearai" ? streamNearAIChat : streamPhalaChat;
   const round = startAnswerRound(opts.webSearch);
+  if (opts.forcedSkill) {
+    round.selection.skillIds.push(opts.forcedSkill.id);
+    const alias = [...turn.call.aliases].find(([, entry]) => entry.kind === "skill" && entry.id === opts.forcedSkill?.id)?.[0];
+    if (alias) round.loaded.push(alias);
+  }
   round.untrusted = opts.turns.some((turn) => turn.role === "assistant" && turn.content.includes(UNVERIFIED_ANSWER_CONTEXT));
-  const followUps: ModelMessage[] = [];
+  const followUps: TrimmableTurn[] = [];
   const total = { text: "", provider: opts.provider as string, inputTokens: 0, outputTokens: 0 };
   const memory: { note?: MemoryWriteRequest } = {};
   let answerComplete = false;
@@ -553,7 +568,7 @@ async function streamAnswer(opts: E2EStreamOptions, turn: AnswerTurn, onToken: (
       const tags = callTags(round, ctx);
       const filteredTags = tags.includes("connector_call") ? tags : [...tags, "connector_call" as const];
       const callFilter = createCallFilter(filteredTags, noteFilter.push, (call) => (found.call = call));
-      const turns = [...await turn.buildMessages(round, emit), ...followUps];
+      const turns = [...await turn.buildMessages(round, emit, followUps.reduce((sum, message) => sum + estimateTurnTokens(message), 0)), ...followUps];
       throwIfStopped(opts.signal);
       const result = await stream(
         {

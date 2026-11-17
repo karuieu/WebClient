@@ -1,5 +1,7 @@
 // Images and text attachments in chat. Images are encrypted with the message (a JSON envelope in encrypted_content); models that cannot read images are never sent them.
 
+import { parseSkillReference, type SkillReference } from "@/lib/messages/skillInvocation";
+
 export interface ChatImage {
 
   name: string;
@@ -72,15 +74,16 @@ export const IMAGES_UNSUPPORTED_NOTE = "This model can't read images. Change the
 
 const ATTACHMENT_MARK = '{"karui_att":1';
 
-export function packMessageContent(text: string, images: ChatImage[], files: ChatTextFile[] = []): string {
-  if (images.length === 0 && files.length === 0) return text;
-  return JSON.stringify({ karui_att: 1, text, images, files });
+export function packMessageContent(text: string, images: ChatImage[], files: ChatTextFile[] = [], skill?: SkillReference): string {
+  if (images.length === 0 && files.length === 0 && !skill) return text;
+  return JSON.stringify({ karui_att: 1, text, images, files, ...(skill ? { skill } : {}) });
 }
 
 export interface ParsedMessageContent {
   text: string;
   images: ChatImage[];
   files: ChatTextFile[];
+  skill?: SkillReference;
 }
 
 export function parseMessageContent(content: string): ParsedMessageContent {
@@ -91,12 +94,15 @@ export function parseMessageContent(content: string): ParsedMessageContent {
       text?: string;
       images?: ChatImage[];
       files?: ChatTextFile[];
+      skill?: unknown;
     };
     if (parsed.karui_att !== 1) return { text: content, images: [], files: [] };
+    const skill = parseSkillReference(parsed.skill);
     return {
       text: typeof parsed.text === "string" ? parsed.text : "",
       images: Array.isArray(parsed.images) ? parsed.images.filter((i) => i && typeof i.data === "string") : [],
       files: Array.isArray(parsed.files) ? parsed.files.filter((f) => f && typeof f.content === "string") : [],
+      ...(skill ? { skill } : {}),
     };
   } catch {
     return { text: content, images: [], files: [] };

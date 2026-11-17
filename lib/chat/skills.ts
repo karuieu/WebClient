@@ -184,10 +184,14 @@ async function karuiSkillsForChat(): Promise<SkillForChat[]> {
 
 /**
  * The skills a chat may use: the user's enabled ones (in a project only those its settings allow) and the Karui skills
- * they have. A failed load gives none of that kind, so the answer never waits on skills.
+ * they have. Explicit selections require a successful load so a failure cannot silently omit their instructions.
  */
-export async function getSkillsForChat(allowedIds?: string[]): Promise<SkillForChat[]> {
-  const [user, karui] = await Promise.all([userSkillsForChat(allowedIds).catch(() => []), karuiSkillsForChat().catch(() => [])]);
+export async function getSkillsForChat(allowedIds?: string[], mode: "optional" | "required" = "optional"): Promise<SkillForChat[]> {
+  const onFailure = (error: unknown): SkillForChat[] => {
+    if (mode === "required") throw error;
+    return [];
+  };
+  const [user, karui] = await Promise.all([userSkillsForChat(allowedIds).catch(onFailure), karuiSkillsForChat().catch(onFailure)]);
   return [...user, ...karui];
 }
 

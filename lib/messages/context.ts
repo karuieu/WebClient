@@ -48,7 +48,7 @@ export interface TrimmableTurn {
   images?: string[];
 }
 
-function turnTokens(turn: TrimmableTurn): number {
+export function estimateTurnTokens(turn: TrimmableTurn): number {
   return (
     estimateTokens(turn.content) +
     estimateTokens(turn.role) +
@@ -61,11 +61,11 @@ export function trimTurns<T extends TrimmableTurn>(turns: T[], tokenBudget: numb
   if (turns.length <= 1) return turns;
 
   let total = 0;
-  for (const turn of turns) total += turnTokens(turn);
+  for (const turn of turns) total += estimateTurnTokens(turn);
 
   let dropIndex = 0;
   while (total > tokenBudget && dropIndex < turns.length - 1) {
-    total -= turnTokens(turns[dropIndex]);
+    total -= estimateTurnTokens(turns[dropIndex]);
     dropIndex++;
   }
 

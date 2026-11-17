@@ -17,6 +17,10 @@ import { TEXT_FILE_ACCEPT, useFileDrop, useImageAttachments, useTextFileAttachme
 import { useToast } from "@/components/Toast";
 import type { Composer, ComposerAttachment } from "@/components/app/Composer";
 import type { ModelOption } from "@/components/app/ModelPicker";
+import type { ComposerSkills, SelectedSkill, SkillCatalog } from "@/components/app/ComposerCommands";
+import { getSkillsForChat, SKILLS_UPDATED_EVENT } from "@/lib/chat/skills";
+import { getProject } from "@/lib/projects/projects";
+import { insertSkillCommand, skillCommandName, type SkillReference } from "@/lib/messages/skillInvocation";
 
 const MAIN = ["fast", "smart"] as const;
 const EXTRA: { id: string; name: string; description: string }[] = [
@@ -46,9 +50,55 @@ export function buildModelOptions(): ModelOption[] {
   ];
 }
 
-export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fixedModel?: boolean }) {
+export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, projectId }: { onSubmit: () => void; fixedModel?: boolean; skillsEnabled?: boolean; projectId?: string | null }) {
   const { showError } = useToast();
-  const [text, setText] = React.useState("");
+  const [text, setTextValue] = React.useState("");
+  const scope = skillsEnabled ? projectId ?? "" : null;
+  const [skillState, setSkillState] = React.useState<{ scope: string | null; catalog: SkillCatalog; selected: SelectedSkill | null }>({ scope: null, catalog: { status: "loading" }, selected: null });
+  const [skillVersion, setSkillVersion] = React.useState(0);
+  const reloadSkills = React.useCallback(() => setSkillVersion((version) => version + 1), []);
+  const activeSkills = skillState.scope === scope ? skillState : null;
+  const skillStateRef = React.useRef(activeSkills);
+  skillStateRef.current = activeSkills;
+  const selectedSkill = activeSkills?.selected ?? null;
+  const setText = React.useCallback((value: string) => {
+    setTextValue(value);
+    setSkillState((state) => ({ ...state, selected: null }));
+  }, []);
+  const restore = React.useCallback((content: string, reference?: SkillReference) => {
+    const catalog = skillStateRef.current?.catalog;
+    const skill = reference && catalog?.status === "ready" ? catalog.items.find((item) => item.id === reference.id && item.source === reference.source) : undefined;
+    const command = skill ? skillCommandName(skill.name) : "";
+    const at = skill ? content.indexOf(command) : -1;
+    setTextValue(at >= 0 ? content.slice(0, at) + content.slice(at + command.length) : content);
+    setSkillState((state) => ({ ...state, selected: skill && at >= 0 ? { skill, at } : null }));
+  }, []);
+
+  React.useEffect(() => {
+    if (scope === null) return;
+    let cancelled = false;
+    setSkillState((state) => ({ scope, catalog: { status: "loading" }, selected: state.scope === scope ? state.selected : null }));
+    void (async () => {
+      try {
+        const allowed = projectId ? (await getProject(projectId)).settings.skillIds : undefined;
+        const items = await getSkillsForChat(allowed, "required");
+        if (!cancelled) setSkillState((state) => ({ ...state, scope, catalog: { status: "ready", items } }));
+      } catch {
+        if (!cancelled) setSkillState((state) => ({ ...state, scope, catalog: { status: "error", onRetry: reloadSkills } }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [scope, projectId, skillVersion, reloadSkills]);
+
+  React.useEffect(() => {
+    if (!skillsEnabled) return;
+    window.addEventListener(SKILLS_UPDATED_EVENT, reloadSkills);
+    window.addEventListener("karui-reload-projects", reloadSkills);
+    return () => {
+      window.removeEventListener(SKILLS_UPDATED_EVENT, reloadSkills);
+      window.removeEventListener("karui-reload-projects", reloadSkills);
+    };
+  }, [skillsEnabled, reloadSkills]);
   const [model, setModel] = React.useState<string>(MAIN[0]);
   const pickModel = React.useCallback((id: string) => {
     if (ALL.includes(id)) setModel(id);
@@ -103,6 +153,14 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
       }
       onSubmit();
     },
+    skills: scope === null ? undefined : {
+      catalog: activeSkills?.catalog ?? { status: "loading" },
+      selected: selectedSkill,
+      onSelect: (selected) => setSkillState((state) => ({ ...state, selected })),
+      error: selectedSkill && activeSkills?.catalog.status === "ready" && !activeSkills.catalog.items.some((item) => item.id === selectedSkill.skill.id && item.source === selectedSkill.skill.source)
+        ? "This skill is no longer available in this chat. Remove it or choose another."
+        : undefined,
+    } satisfies ComposerSkills,
     attachments,
     accept: imagesOn ? `image/*,${TEXT_FILE_ACCEPT}` : TEXT_FILE_ACCEPT,
     fileAccept: TEXT_FILE_ACCEPT,
@@ -142,7 +200,10 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
   return {
     props,
     text,
+    message: selectedSkill ? insertSkillCommand(text, selectedSkill.skill.name, selectedSkill.at) : text.trim(),
+    skill: selectedSkill ? { id: selectedSkill.skill.id, source: selectedSkill.skill.source } : undefined,
     setText,
+    restore,
     model: activeModel,
     setModel: pickModel,
     webSearch,
@@ -152,7 +213,7 @@ export function useComposer({ onSubmit, fixedModel }: { onSubmit: () => void; fi
     images: imgs.images,
     files: docs.files,
     busy,
-    isEmpty: !text.trim() && imgs.images.length === 0 && docs.files.length === 0,
+    isEmpty: !text.trim() && !selectedSkill && imgs.images.length === 0 && docs.files.length === 0,
     reset: () => {
       setText("");
       imgs.clearImages();

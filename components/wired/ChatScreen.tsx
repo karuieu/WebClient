@@ -25,6 +25,7 @@ import { clearQuoted, markQuoted } from "@/lib/messages/quotedHighlight";
 import { clearPendingFocus, peekPendingFocus, subscribePendingFocus } from "@/lib/search/searchFocus";
 import { clearSearchTerms, markSearchTerms } from "@/lib/search/searchHighlight";
 import { packMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
+import type { SkillReference } from "@/lib/messages/skillInvocation";
 import { downloadArtifact } from "@/lib/artifacts/artifacts";
 import { saveArtifactToLibrary } from "@/lib/projects/projectFiles";
 import { toBlockquote } from "@/lib/messages/messageBlocks";
@@ -91,11 +92,11 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const pendingRef = React.useRef<FirstMessage | null>(null);
   const textRef = React.useRef("");
 
-  const composer = useComposer({ onSubmit: () => submit(), fixedModel: true });
+  const composer = useComposer({ onSubmit: () => submit(), fixedModel: true, skillsEnabled: !loading, projectId: project?.routeProjectId ?? loadedProjectId });
   const setComposerModel = composer.setModel;
-  const setComposerText = composer.setText;
+  const restoreComposer = composer.restore;
   const setComposerWebSearch = composer.setWebSearch;
-  textRef.current = composer.text;
+  textRef.current = composer.message;
   const streaming = stream !== null && stream.phase !== "error";
   const model = composer.model as ModelType;
 
@@ -125,7 +126,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   React.useEffect(() => clearSearchTerms, [chatId]);
 
   const send = React.useCallback(
-    (content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean): boolean => {
+    (content: string, model: ModelType, images: ChatImage[], files: ChatTextFile[], webSearch: boolean, skill?: SkillReference): boolean => {
       if (getChatStream(chatId)?.error instanceof MessageSaveError) {
         showError("Save this reply before sending another message.");
         return false;
@@ -139,12 +140,12 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
         chat_id: chatId,
         tokens: 0,
         role: "user",
-        content: packMessageContent(content, images, files),
+        content: packMessageContent(content, images, files, skill),
         model,
         created_at: new Date().toISOString(),
         pinned: false,
       };
-      if (!startSendStream({ chatId, content, model, history, webSearch, userMessage, images, files, discard, ready: memorySave.current })) return false;
+      if (!startSendStream({ chatId, content, model, history, webSearch, userMessage, images, files, skill, discard, ready: memorySave.current })) return false;
       setQuote(null);
       clearQuoted();
       clearSearchTerms();
@@ -157,10 +158,10 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
 
   function submit() {
     if (composer.isEmpty || streaming || loading || getChatStream(chatId)?.phase === "streaming") return;
-    const typed = composer.text.trim();
+    const typed = composer.message;
     const content = quote ? `${toBlockquote(quote)}\n\n${typed}`.trim() : typed;
     const { images, files, webSearch } = composer;
-    if (send(content, model, images, files, webSearch)) composer.reset();
+    if (send(content, model, images, files, webSearch, composer.skill)) composer.reset();
   }
 
   React.useEffect(() => {
@@ -202,7 +203,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
       const um = st.userMessage;
       if (um) {
         setMessages((prev) => prev.filter((m) => m.id !== um.id));
-        if (st.kind === "send") setComposerText(st.request.content);
+        if (st.kind === "send") restoreComposer(st.request.content, st.request.skill);
       }
       if (!(st.error instanceof StoppedError)) {
         showError(errorText(st.error, st.kind === "send" ? "Failed to send message" : "Failed to retry"));
@@ -210,7 +211,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     };
     sync();
     return subscribeChatStream(chatId, sync);
-  }, [chatId, showError, setComposerText]);
+  }, [chatId, showError, restoreComposer]);
 
   React.useEffect(() => {
     const pending = takeFirstMessage(chatId);
@@ -252,7 +253,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     pendingRef.current = null;
     if (p.webSearch) setComposerWebSearch(true);
     setComposerModel(p.model);
-    send(p.content, p.model, p.images ?? [], p.files ?? [], !!p.webSearch);
+    send(p.content, p.model, p.images ?? [], p.files ?? [], !!p.webSearch, p.skill);
   }, [loading, send, setComposerModel, setComposerWebSearch]);
 
   const refreshGate = React.useCallback(async () => {
