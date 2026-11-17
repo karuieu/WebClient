@@ -13,6 +13,7 @@ import { type SkillSource } from "./skills";
 import { type MemoryWriteRequest } from "./helperPhases";
 import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND, toolCallFailedNotice, type ToolCallFailure } from "@/lib/messages/messageBlocks";
 import { API_URL, apiFetch } from "@/lib/core/api";
+import { parsePageCard } from "@/lib/messages/pageCard";
 import { throwIfStopped } from "@/lib/core/errors";
 import type { AnswerCall, CallProblem, CallTag } from "@/lib/messages/streamTags";
 
@@ -408,6 +409,8 @@ interface FetchedPage {
   title: string;
   text: string;
   truncated?: boolean;
+  /** The server's card, kept as sent once parsePageCard accepts it. */
+  card?: unknown;
 }
 
 // The server answers a failed page with a short reason meant for the model; 429 means the per-minute limit is spent.
@@ -420,7 +423,8 @@ async function fetchPage(url: string): Promise<{ page: FetchedPage } | { error: 
     });
     const data = (await response.json().catch(() => ({}))) as Partial<FetchedPage> & { error?: unknown };
     if (response.ok && typeof data.text === "string") {
-      return { page: { url: data.url || url, title: data.title ?? "", text: data.text, truncated: data.truncated } };
+      const card = parsePageCard(data.card) ? data.card : undefined;
+      return { page: { url: data.url || url, title: data.title ?? "", text: data.text, truncated: data.truncated, card } };
     }
     if (response.status === 429) return { error: "too many pages in a short time", limited: true };
     return { error: typeof data.error === "string" ? data.error : "the page didn't respond", limited: false };
@@ -444,7 +448,7 @@ async function runFetchCall(url: string, round: AnswerRound, ctx: AnswerCallCont
     return `Couldn't read ${url}: ${result.error}. Don't guess what the page says.`;
   }
   const { page } = result;
-  ctx.emit(`<fetched_page>${blockJSON({ url: page.url, title: page.title, status: "ok" })}</fetched_page>`);
+  ctx.emit(`<fetched_page>${blockJSON({ url: page.url, title: page.title, status: "ok", card: page.card })}</fetched_page>`);
   if (!page.text.trim()) return `${page.url} has no readable text; it may need JavaScript. Don't guess what the page says.`;
   round.untrusted = true;
   // A page that closes the tag itself could pass off the rest as our text.

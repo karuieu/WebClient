@@ -13,7 +13,8 @@ import { ChatView } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import type { Costume } from "@/components/kit/icons";
 import { useComposer } from "./useComposer";
-import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, toViewData, useFollowNewVersions, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, toViewData, useFollowNewVersions, type CardImages, type Streaming } from "./messageView";
+import { useCardImageLoader } from "./useCardImages";
 
 // Every version lives only in this tab's memory, so the panel lists the latest one and three before it.
 const INCOGNITO_VERSIONS_BACK = 3;
@@ -92,7 +93,12 @@ export function IncognitoChat({ first, halloween }: { first: FirstMessage; hallo
     composer.reset();
   }
 
-  const { data, artifacts } = React.useMemo(() => toViewData(messages, stream), [messages, stream]);
+  const [cardImages, setCardImages] = React.useState<CardImages>(new Map());
+  const { data, artifacts, imageAddresses } = React.useMemo(
+    () => toViewData(messages, stream, undefined, undefined, cardImages),
+    [messages, stream, cardImages],
+  );
+  useCardImageLoader(imageAddresses, setCardImages);
   const current = openArtifact ? artifacts.get(openArtifact) : undefined;
   useFollowNewVersions(current, setOpenArtifact);
   const [dismissedQuestions, setDismissedQuestions] = React.useState<string | null>(null);

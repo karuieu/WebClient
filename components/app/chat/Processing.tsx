@@ -20,7 +20,7 @@ export type ProcessingStep =
 
 const spring = { type: "spring", bounce: 0, duration: 0.4 } as const;
 
-function domainOf(url: string) {
+export function domainOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {

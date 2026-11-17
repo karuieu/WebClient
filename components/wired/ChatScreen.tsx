@@ -46,7 +46,8 @@ import { ChatView, type HeaderProject } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import { useComposer } from "./useComposer";
 import { LibraryContext } from "./useLibrary";
-import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, useFollowNewVersions, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, useFollowNewVersions, type CardImages, type Streaming } from "./messageView";
+import { useCardImageLoader } from "./useCardImages";
 import type { ProjectLibrary } from "./ProjectScreen";
 import { useGoogleDocsExport } from "./useGoogleDocsExport";
 
@@ -289,16 +290,19 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const [savedHere, setSavedHere] = React.useState<ReadonlyMap<string, string>>(new Map());
   const [savingArtifact, setSavingArtifact] = React.useState<string | null>(null);
   const libraryPaths = project?.library.paths;
-  const { data, artifacts } = React.useMemo(
+  const [cardImages, setCardImages] = React.useState<CardImages>(new Map());
+  const { data, artifacts, imageAddresses } = React.useMemo(
     () =>
       toViewData(
         visibleMessages(messages, selection),
         stream,
         { saved: savedSkills, saving: savingSkill },
         libraryPaths ? { paths: libraryPaths, savedHere, saving: savingArtifact } : undefined,
+        cardImages,
       ),
-    [messages, selection, stream, savedSkills, savingSkill, libraryPaths, savedHere, savingArtifact],
+    [messages, selection, stream, savedSkills, savingSkill, libraryPaths, savedHere, savingArtifact, cardImages],
   );
+  useCardImageLoader(imageAddresses, setCardImages);
 
   // Saved skills are only needed to label drafted ones, so a chat without drafts never loads them.
   const hasSkillDrafts = data.some((m) => m.role === "assistant" && !!m.skills?.length);

@@ -11,6 +11,8 @@ import { downloadArtifactPptx } from "@/lib/artifacts/slidesPptx";
 import { chatFiles } from "@/lib/artifacts/chatFiles";
 import type { ArtifactPanel, ArtifactVersion } from "@/components/app/chat/ArtifactPanel";
 import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/lib/messages/messageBlocks";
+import type { PageCard } from "@/lib/messages/pageCard";
+import type { PageCardData } from "@/components/app/chat/PageCard";
 import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/chat/skills";
 import { parseQuestions } from "@/lib/messages/questions";
 import type { AnswerActivity } from "@/lib/chat/answerTools";
@@ -186,6 +188,48 @@ function visibleReplyText(text: string): string {
   return parseQuestions(parseSkillDrafts(text).text).text;
 }
 
+/** A card image's state, by the address the server gave; fetched by useCardImages. */
+export type CardImage = { state: "loading" } | { state: "shown"; src: string } | { state: "failed" };
+export type CardImages = ReadonlyMap<string, CardImage>;
+
+const dayLabel = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" });
+const dateLabel = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+// A day (2026-11-16) names the day the data holds for; a moment is when the source last updated it.
+function asOfLabel(asOf: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return dateLabel.format(new Date(`${asOf}T00:00:00Z`));
+  const at = new Date(asOf);
+  return Number.isNaN(at.getTime()) ? "" : `updated ${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function cardImageView(address: string | undefined, images: CardImages): PageCardData["image"] {
+  const image = address ? (images.get(address) ?? { state: "loading" as const }) : undefined;
+  return image?.state === "failed" ? undefined : image;
+}
+
+export function pageCardView(card: PageCard, images: CardImages): PageCardData {
+  const { weather, exchange } = card;
+  return {
+    title: card.title,
+    description: card.description,
+    image: cardImageView(card.image, images),
+    source: card.source,
+    asOf: card.asOf && (asOfLabel(card.asOf) || undefined),
+    exchange,
+    weather: weather && {
+      icon: weather.icon,
+      temperature: `${weather.temperature}°`,
+      condition: weather.condition.charAt(0).toUpperCase() + weather.condition.slice(1),
+      days: weather.days.map((day) => ({
+        label: dayLabel.format(new Date(`${day.date}T12:00:00Z`)),
+        icon: day.icon,
+        high: `${day.high}°`,
+        low: `${day.low}°`,
+      })),
+    },
+  };
+}
+
 export function toAssistant(
   id: string,
   content: string,
@@ -193,7 +237,8 @@ export function toAssistant(
   skills: SkillContext = NO_SKILLS,
   library?: ChatLibrary,
   files?: ReadonlyMap<string, ChatFileView>,
-): { message: AssistantData; artifacts: ShownArtifact[] } {
+  images: CardImages = new Map(),
+): { message: AssistantData; artifacts: ShownArtifact[]; cardImages: string[] } {
   const { artifacts: parsed, text } = parseArtifacts(content);
   const artifacts = parsed.map((a, i) => ({ ...a, file: files?.get(`${id}:${i}`) }));
   const stopped = text.includes(STOPPED_NOTICE);
@@ -215,6 +260,7 @@ export function toAssistant(
       copyText: prose || thoughts,
       stopped,
       steps,
+      pages: steps.flatMap((step) => (step.kind === "page" && step.card ? [{ url: step.url, card: pageCardView(step.card, images) }] : [])),
       preparation: chronological ?? preparation,
       artifacts: artifactsOf(id, artifacts, library),
       skills: skillsOf(id, drafts, skills),
@@ -222,6 +268,7 @@ export function toAssistant(
       ...extra,
     },
     artifacts,
+    cardImages: steps.flatMap((step) => (step.kind === "page" && step.card?.image ? [step.card.image] : [])),
   };
 }
 
@@ -251,31 +298,35 @@ export function toViewData(
   stream: Streaming,
   skills: SkillContext = NO_SKILLS,
   library?: ChatLibrary,
-): { data: MessageData[]; artifacts: Map<string, ShownArtifact> } {
+  images: CardImages = new Map(),
+): { data: MessageData[]; artifacts: Map<string, ShownArtifact>; imageAddresses: string[] } {
   const byId = new Map<string, ShownArtifact>();
+  const imageAddresses: string[] = [];
   const files = library ? undefined : chatFileViews(messages);
   const data: MessageData[] = messages.map((m) => {
     if (m.role === "user") return toUser(m);
-    const { message, artifacts } = toAssistant(m.id, m.content, {
+    const { message, artifacts, cardImages } = toAssistant(m.id, m.content, {
       model: modelLabel(m.model, m.provider),
       variant: m.variant,
       decryptionFailed: m.decryptionFailed,
-    }, skills, library, files);
+    }, skills, library, files, images);
     artifacts.forEach((a, i) => byId.set(`${m.id}:${i}`, a));
+    imageAddresses.push(...cardImages);
     return message;
   });
   if (stream) {
     // No Library state while streaming: the note is saved only after the answer ends.
-    const { message, artifacts } = toAssistant("streaming", stream.content, {
+    const { message, artifacts, cardImages } = toAssistant("streaming", stream.content, {
       streaming: stream.phase !== "error",
       status: streamStatus(stream),
       error: stream.error,
       retryLabel: stream.error ? "Retry save" : undefined,
-    }, skills);
+    }, skills, undefined, undefined, images);
     artifacts.forEach((a, i) => byId.set(`streaming:${i}`, a));
+    imageAddresses.push(...cardImages);
     data.push(message);
   }
-  return { data, artifacts: byId };
+  return { data, artifacts: byId, imageAddresses };
 }
 
 /** The questions Karui is waiting on: those of the latest message, once it has finished and unless the user skipped them. */

@@ -1,4 +1,5 @@
 import { parseMemoryWriteBlock } from "./memoryWrite";
+import { parsePageCard, type PageCard } from "./pageCard";
 import { PROVIDERS, type ProviderId } from "@/lib/models/providers";
 import { REPETITION_NOTICE_KIND } from "./repetition";
 
@@ -58,7 +59,7 @@ export const SEARCH_UNAVAILABLE_NOTICE_KIND = "search_unavailable";
 export type MessageStep =
   | { kind: "thought"; text: string }
   | { kind: "search"; query: string; sources: { title: string; url: string }[] }
-  | { kind: "page"; url: string; title: string; status: "ok" | "error" }
+  | { kind: "page"; url: string; title: string; status: "ok" | "error"; card?: PageCard }
   | { kind: "vision"; name: string; description: string }
   | { kind: "memory"; action: "edit" | "proposal"; file?: string | null; text: string }
   | { kind: "memoryRead"; files: string[] }
@@ -203,7 +204,8 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
         const d = JSON.parse(page);
         // The address becomes a link, and the model could write this block itself.
         if (d && typeof d.url === "string" && /^https?:\/\//i.test(d.url)) {
-          steps.push({ kind: "page", url: d.url, title: typeof d.title === "string" ? d.title : "", status: d.status === "error" ? "error" : "ok" });
+          const card = d.status === "error" ? undefined : parsePageCard(d.card);
+          steps.push({ kind: "page", url: d.url, title: typeof d.title === "string" ? d.title : "", status: d.status === "error" ? "error" : "ok", ...(card && { card }) });
         }
       } else if (kept !== undefined) {
         const d = JSON.parse(kept);
