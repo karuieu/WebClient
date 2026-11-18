@@ -74,8 +74,3 @@ export const ACCEPTED_MEASUREMENTS: string[] = [
   // Enclave repo commit 46718d6 on a Milan processor.
   "cdb185d5e8fd79c9d2e62c71719c504e8e48bba0b33f27a58e08d160a69d874ee90f56ff91bc09c116048bcdf667180c",
 ];
-
-// Whether connectors on Karui's route go through the enclave. Until a build is accepted they keep going through our
-// server, so the app can be released at any time; the first accepted measurement moves them to the enclave for good,
-// with no way back when the enclave is down. NEXT_PUBLIC_ENCLAVE_DEV=1 does the same for a local enclave run with -dev.
-export const ENCLAVE_IN_USE = ACCEPTED_MEASUREMENTS.length > 0 || process.env.NEXT_PUBLIC_ENCLAVE_DEV === "1";
