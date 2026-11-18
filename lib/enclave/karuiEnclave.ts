@@ -1,6 +1,7 @@
 // Calls Karui's own enclave. Before anything is sent the browser verifies the enclave's attestation (karuiAttestation.ts)
 // and from then on encrypts every call to the attested key (karuiChannel.ts). Our server passes the calls on and signs
-// which account is asking; it cannot read a call or its answer, and the enclave answers each one once.
+// which account is asking and what kind of call it allowed; it cannot read a call or its answer, and the enclave answers
+// each one once.
 
 import { onSessionCleared } from "@/lib/account/session";
 import { API_URL, IS_PRODUCTION_BUILD, JSON_HEADERS, apiFetch, apiJSON } from "@/lib/core/api";
@@ -16,11 +17,28 @@ const SESSION_EXPIRED = "session expired";
 // The enclave's answer to a request it cannot open: it restarted and holds a new key.
 const NOT_OPENED_STATUS = 400;
 
-type Call = { method: string; session?: string; params?: unknown };
+// Each kind of call has its own route, where our server applies that kind's plan and limits.
+const ROUTES = { session: "session", relay: "channel", token: "channel", search: "search", fetch: "fetch" } as const;
+
+export type EnclaveMethod = keyof typeof ROUTES;
+
+type Call = { method: EnclaveMethod; session?: string; params?: unknown };
 type Result = { value?: unknown; error?: string };
 type Enclave = { key: Uint8Array; staleAfter: number; session: Promise<string> | null };
 
 class EnclaveRestarted extends Error {}
+
+// Our server answered instead of the enclave, for example because a limit is spent.
+export class EnclaveRefused extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly resetAt?: string
+  ) {
+    super(message);
+  }
+}
 
 let enclave: Enclave | null = null;
 let verifying: Promise<Enclave> | null = null;
@@ -72,11 +90,11 @@ function verifiedEnclave(): Promise<Enclave> {
 
 async function send(to: Enclave, call: Call): Promise<Result> {
   const { request, replyKey } = await seal(to.key, new TextEncoder().encode(JSON.stringify(call)));
-  const response = await apiFetch(`${API_URL}/api/enclave/channel`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(request) });
+  const response = await apiFetch(`${API_URL}/api/enclave/${ROUTES[call.method]}`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(request) });
   if (response.status === NOT_OPENED_STATUS) throw new EnclaveRestarted();
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "Karui's enclave isn't available.");
+    const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string; reset_at?: string };
+    throw new EnclaveRefused(data.error || "Karui's enclave isn't available.", response.status, data.code, data.reset_at);
   }
   try {
     const answer = await openReply(replyKey, (await response.json()) as SealedReply);
@@ -104,7 +122,7 @@ function sessionOf(to: Enclave): Promise<string> {
   return to.session;
 }
 
-async function attempt(method: string, params: unknown): Promise<Result | "again"> {
+async function attempt(method: EnclaveMethod, params: unknown): Promise<Result | "again"> {
   const to = await verifiedEnclave();
   try {
     const session = sessionOf(to);
@@ -121,7 +139,7 @@ async function attempt(method: string, params: unknown): Promise<Result | "again
 
 // enclaveCall runs one call in the enclave and returns its value. An ended session or a restarted enclave gets one
 // more try, on a new session or a newly verified key.
-export async function enclaveCall<T>(method: string, params: unknown): Promise<T> {
+export async function enclaveCall<T>(method: EnclaveMethod, params: unknown): Promise<T> {
   let result = await attempt(method, params);
   if (result === "again") result = await attempt(method, params);
   if (result === "again") throw new Error("Karui's enclave isn't available.");

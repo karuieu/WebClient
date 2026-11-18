@@ -12,7 +12,7 @@ import { type MemoryFileForChat } from "./memory";
 import { type SkillSource } from "./skills";
 import { type MemoryWriteRequest } from "./helperPhases";
 import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND, toolCallFailedNotice, type ToolCallFailure } from "@/lib/messages/messageBlocks";
-import { API_URL, apiFetch } from "@/lib/core/api";
+import { enclaveCall, EnclaveRefused } from "@/lib/enclave/karuiEnclave";
 import { throwIfStopped } from "@/lib/core/errors";
 import type { AnswerCall, CallProblem, CallTag } from "@/lib/messages/streamTags";
 
@@ -355,22 +355,17 @@ interface SearchResult {
 
 type SearchUnavailable = { reason: "limit"; resetAt?: string } | { reason: "exhausted" | "error" };
 
+const SEARCH_EXHAUSTED_CODE = "search_exhausted";
+
+// The query is sealed to Karui's enclave, which asks the search provider. There is no route around it: when the enclave
+// can't be reached or verified, the answer goes on without search.
 async function runSearch(query: string): Promise<{ results: SearchResult[]; unavailable?: SearchUnavailable }> {
   try {
-    const response = await apiFetch(`${API_URL}/api/ai/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-    });
-    if (response.status === 429) {
-      const data = (await response.json().catch(() => ({}))) as { reset_at?: string };
-      return { results: [], unavailable: { reason: "limit", resetAt: data.reset_at } };
-    }
-    if (!response.ok) return { results: [], unavailable: { reason: "error" } };
-    const data = (await response.json()) as { results?: SearchResult[]; exhausted?: boolean };
-    if (data.exhausted) return { results: [], unavailable: { reason: "exhausted" } };
-    return { results: data.results ?? [] };
-  } catch {
+    const { results } = await enclaveCall<{ results: SearchResult[] }>("search", { query });
+    return { results };
+  } catch (error) {
+    if (error instanceof EnclaveRefused && error.status === 429) return { results: [], unavailable: { reason: "limit", resetAt: error.resetAt } };
+    if (error instanceof EnclaveRefused && error.code === SEARCH_EXHAUSTED_CODE) return { results: [], unavailable: { reason: "exhausted" } };
     return { results: [], unavailable: { reason: "error" } };
   }
 }
@@ -410,22 +405,15 @@ interface FetchedPage {
   truncated?: boolean;
 }
 
-// The server answers a failed page with a short reason meant for the model; 429 means the per-minute limit is spent.
+// The enclave reads the page, so our server sees neither its address nor its text. A failed page comes back as a short
+// reason meant for the model; 429 means the per-minute limit is spent.
 async function fetchPage(url: string): Promise<{ page: FetchedPage } | { error: string; limited: boolean }> {
   try {
-    const response = await apiFetch(`${API_URL}/api/ai/fetch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
-    });
-    const data = (await response.json().catch(() => ({}))) as Partial<FetchedPage> & { error?: unknown };
-    if (response.ok && typeof data.text === "string") {
-      return { page: { url: data.url || url, title: data.title ?? "", text: data.text, truncated: data.truncated } };
-    }
-    if (response.status === 429) return { error: "too many pages in a short time", limited: true };
-    return { error: typeof data.error === "string" ? data.error : "the page didn't respond", limited: false };
-  } catch {
-    return { error: "the page didn't respond", limited: false };
+    const page = await enclaveCall<FetchedPage>("fetch", { url });
+    return { page: { ...page, url: page.url || url } };
+  } catch (error) {
+    if (error instanceof EnclaveRefused && error.status === 429) return { error: "too many pages in a short time", limited: true };
+    return { error: error instanceof Error ? error.message : "the page didn't respond", limited: false };
   }
 }
 
