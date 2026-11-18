@@ -370,7 +370,7 @@ export function SkillComposerInput({
           }
           onKeyDown(event);
         }}
-        className="max-h-[40vh] min-h-[3.5rem] overflow-y-auto whitespace-pre-wrap break-words px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none [overflow-wrap:anywhere] data-[empty=true]:before:pointer-events-none data-[empty=true]:before:text-muted data-[empty=true]:before:content-[attr(data-placeholder)]"
+        className="max-h-[40vh] min-h-[3.5rem] overflow-y-auto whitespace-pre-wrap break-words px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none [overflow-wrap:anywhere] data-[empty=true]:not-focus-within:before:pointer-events-none data-[empty=true]:not-focus-within:before:text-muted data-[empty=true]:not-focus-within:before:content-[attr(data-placeholder)]"
       />
       {selected && <span id={descriptionId} hidden>{selected.skill.description} Press Backspace to remove.</span>}
       {card && selected && createPortal(

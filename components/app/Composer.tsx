@@ -454,7 +454,7 @@ export function Composer({
           }}
           onPaste={onPaste}
           onKeyDown={inputKeyDown}
-          className="block max-h-[40vh] min-h-[3.5rem] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none placeholder:text-muted focus-visible:outline-none"
+          className="block max-h-[40vh] min-h-[3.5rem] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none placeholder:text-muted focus:placeholder:text-transparent focus-visible:outline-none"
         />
         )}
       </div>
