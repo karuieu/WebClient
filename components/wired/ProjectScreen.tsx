@@ -1,5 +1,6 @@
 "use client";
 
+import { PLAN_NAMES, isPaidTier, planOf } from "@/lib/account/plan";
 import * as React from "react";
 import { PRICING_URL } from "@/app/siteUrl";
 import { usePathname, useRouter } from "next/navigation";
@@ -162,7 +163,7 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
 
   const libraryPaths = React.useMemo(() => listing && new Set(listing.files.map((f) => f.path)), [listing]);
 
-  const tier = (user?.tier ?? "free") === "pro" ? "pro" : "free";
+  const tier = isPaidTier(user?.tier) ? "pro" : "free";
   const usage = listing
     ? { used: listing.project.used, limit: listing.project.limit, files: listing.files.length, maxFiles: listing.maxFiles }
     : { used: 0, limit: LIBRARY_LIMITS[tier].bytes, files: 0, maxFiles: LIBRARY_LIMITS[tier].files };
@@ -407,7 +408,7 @@ export function ProjectScreen({ projectId, children }: { projectId: string; chil
         progress={selection ? progress : null}
         selection={selection ?? emptySelection}
         usage={usage}
-        plan={tier === "pro" ? "Pro" : "Free"}
+        plan={PLAN_NAMES[planOf(user?.tier)]}
         onAddFiles={(files) => void choose(fromInput(files, false))}
         onAddFolder={(files) => void choose(fromInput(files, true))}
         onDropData={(data) => void fromDataTransfer(data).then(choose)}

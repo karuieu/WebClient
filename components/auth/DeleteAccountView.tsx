@@ -47,7 +47,7 @@ export function DeleteAccountView({
       </Rise>
       <Rise delay={0.12}>
         <p className="mt-4 text-pretty text-[1.0625rem] leading-relaxed text-muted">
-          Every chat, project and memory file goes with it, and a Pro plan ends right away. This can&apos;t be undone.
+          Every chat, project and memory file goes with it, and a paid plan ends right away. This can&apos;t be undone.
         </p>
       </Rise>
       <Rise delay={0.18}>

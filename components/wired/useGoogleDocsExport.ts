@@ -1,5 +1,6 @@
 "use client";
 
+import { isPaidTier } from "@/lib/account/plan";
 import * as React from "react";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
@@ -21,7 +22,7 @@ export function useGoogleDocsExport(id: string | null, artifact: Artifact | unde
     setConnected(false);
     const refresh = () => {
       const attempt = ++generation;
-      if (user?.tier !== "pro") { setConnected(false); return; }
+      if (!isPaidTier(user?.tier)) { setConnected(false); return; }
       loadConnectors({ fresh: true }).then((list) => {
         if (attempt === generation) setConnected(list.some((c) => c.api === "docs" && !!c.oauth && !c.signedOut));
       }).catch(() => { if (attempt === generation) setConnected(false); });

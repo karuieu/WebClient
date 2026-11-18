@@ -1,5 +1,6 @@
 "use client";
 
+import { PLAN_NAMES, isPaidTier, planOf } from "@/lib/account/plan";
 import { useContext, useMemo, useRef, useState } from "react";
 import { PRICING_URL } from "@/app/siteUrl";
 import { useRouter } from "next/navigation";
@@ -27,7 +28,7 @@ export default function ProjectsPage() {
   const prepared = useRef(new Map<string, PreparedFile[]>());
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const tier = (user?.tier ?? "free") === "pro" ? "pro" : "free";
+  const tier = isPaidTier(user?.tier) ? "pro" : "free";
   const cards = useMemo(
     () =>
       [...raw.projects]
@@ -107,7 +108,7 @@ export default function ProjectsPage() {
         context={{
           selection,
           usage: { used: 0, files: 0, limit: LIBRARY_LIMITS[tier].bytes, maxFiles: LIBRARY_LIMITS[tier].files },
-          plan: tier === "pro" ? "Pro" : "Free",
+          plan: PLAN_NAMES[planOf(user?.tier)],
           onAddFiles: (files) => void choose(fromInput(files, false)),
           onAddFolder: (files) => void choose(fromInput(files, true)),
           onDropData: (data) => void fromDataTransfer(data).then(choose),

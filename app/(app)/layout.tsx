@@ -1,5 +1,6 @@
 "use client";
 
+import { PLAN_NAMES, planOf } from "@/lib/account/plan";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { PRICING_URL } from "@/app/siteUrl";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,7 +26,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const library = useLibrary();
   const { announcement, open: announcementOpen, dismiss: dismissAnnouncement } = useAnnouncement();
   const [searchOpen, setSearchOpen] = useState(false);
-  const isFree = (user?.tier ?? "free") === "free";
+  const plan = planOf(user?.tier);
+  const isFree = plan === "free";
 
   return (
     <>
@@ -42,7 +44,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           user: {
             name: user?.display_name || null,
             email: user?.email ?? "",
-            plan: isFree ? "Free plan" : "Pro plan",
+            plan: `${PLAN_NAMES[plan]} plan`,
             isFree,
           },
           ...library.actions,
