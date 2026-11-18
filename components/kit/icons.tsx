@@ -62,6 +62,64 @@ export const Moon = (p: IconProps) => (
   </Icon>
 );
 
+const cloudTop = "M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.24";
+
+export const Cloud = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+  </Icon>
+);
+
+export const CloudSun = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 2v2m-7.07.93 1.41 1.41M20 12h2m-2.93-7.07-1.41 1.41" />
+    <path d="M15.95 12.65a4 4 0 0 0-5.93-4.13" />
+    <path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z" />
+  </Icon>
+);
+
+export const CloudFog = (p: IconProps) => (
+  <Icon {...p}>
+    <path d={cloudTop} />
+    <path d="M16 17H7m10 4H9" />
+  </Icon>
+);
+
+export const CloudRain = (p: IconProps) => (
+  <Icon {...p}>
+    <path d={cloudTop} />
+    <path d="M16 14v6M8 14v6m4-4v6" />
+  </Icon>
+);
+
+export const CloudShowers = (p: IconProps) => (
+  <Icon {...p}>
+    <path d={cloudTop} />
+    <path d="M8 14v1m0 4v1m8-6v1m0 4v1m-4-4v1m0 4v1" />
+  </Icon>
+);
+
+export const CloudSleet = (p: IconProps) => (
+  <Icon {...p}>
+    <path d={cloudTop} />
+    <path d="M8 14v4m8-4v4m-4 0h.01M12 22h.01" />
+  </Icon>
+);
+
+export const CloudSnow = (p: IconProps) => (
+  <Icon {...p}>
+    <path d={cloudTop} />
+    <path d="M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01" />
+  </Icon>
+);
+
+export const CloudLightning = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 16.33A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 .5 8.97" />
+    <path d="m13 12-3 5h4l-3 5" />
+  </Icon>
+);
+
 export const Check = (p: IconProps) => (
   <Icon {...p}>
     <path d="M20 6 9 17l-5-5" />

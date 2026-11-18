@@ -20,6 +20,7 @@ import { codeLanguageOf, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./AttachmentViewer";
 import { Markdown } from "./Markdown";
+import { PageCard, type PageCardData } from "./PageCard";
 import { Processing, type ProcessingStep } from "./Processing";
 import { Preparation, type PreparationSegment } from "./Preparation";
 import type { QuestionData } from "./Questions";
@@ -70,6 +71,8 @@ export type AssistantMessageData = {
   text: string;
   copyText?: string;
   steps?: ProcessingStep[];
+  /** Cards of the pages read for this answer, shown under it. */
+  pages?: { url: string; card: PageCardData }[];
   preparation?: PreparationSegment[];
   artifacts?: ArtifactData[];
   skills?: SkillDraftData[];
@@ -430,6 +433,7 @@ export function AssistantMessage({
   const reduce = useReducedMotion();
   const busy = message.streaming;
   const v = message.variant;
+  const pages = message.pages ?? [];
 
   return (
     <motion.div
@@ -455,6 +459,14 @@ export function AssistantMessage({
             className={cx("text-[0.9375rem] leading-[1.75] [overflow-wrap:anywhere]", busy && message.text && "stream-caret")}
           >
             {message.text ? <Markdown>{message.text}</Markdown> : busy && !message.status && <Caret />}
+          </div>
+        )}
+
+        {pages.length > 0 && (
+          <div className="my-5 flex flex-col gap-2">
+            {pages.map((p) => (
+              <PageCard key={p.url} url={p.url} card={p.card} />
+            ))}
           </div>
         )}
 

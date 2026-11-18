@@ -18,7 +18,7 @@ const SESSION_EXPIRED = "session expired";
 const NOT_OPENED_STATUS = 400;
 
 // Each kind of call has its own route, where our server applies that kind's plan and limits.
-const ROUTES = { session: "session", relay: "channel", token: "channel", search: "search", fetch: "fetch" } as const;
+const ROUTES = { session: "session", relay: "channel", token: "channel", search: "search", fetch: "fetch", image: "image" } as const;
 
 export type EnclaveMethod = keyof typeof ROUTES;
 

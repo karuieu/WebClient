@@ -71,8 +71,8 @@ export const AMD_ROOTS: Record<string, AmdRoots> = {
 // the old and the new one before the image changes, and drop the old one in the release after. While the list is
 // empty the app refuses every enclave.
 export const ACCEPTED_MEASUREMENTS: string[] = [
-  // Enclave repo commit 6f2b82b on a Milan processor.
-  "138eea81164d731045f63193559f03a3501e32197d98e3af2695ff31d8dcfd8e69100d7bc0299d7db0e799ee09458503",
+  // Enclave repo commit ec56aee on a Milan processor.
+  "ac4faae6d95f1b67b90f590a1b9ab140978c2143a07689760d3f26e7558889d5f79f58d2a3790407787f3a7e524d8393",
 ];
 
 // Whether connectors on Karui's route go through the enclave. Until a build is accepted they keep going through our

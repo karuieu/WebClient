@@ -13,6 +13,7 @@ import { type SkillSource } from "./skills";
 import { type MemoryWriteRequest } from "./helperPhases";
 import { blockJSON, SEARCH_UNAVAILABLE_NOTICE_KIND, toolCallFailedNotice, type ToolCallFailure } from "@/lib/messages/messageBlocks";
 import { enclaveCall, EnclaveRefused } from "@/lib/enclave/karuiEnclave";
+import { parsePageCard } from "@/lib/messages/pageCard";
 import { throwIfStopped } from "@/lib/core/errors";
 import type { AnswerCall, CallProblem, CallTag } from "@/lib/messages/streamTags";
 
@@ -403,6 +404,8 @@ interface FetchedPage {
   title: string;
   text: string;
   truncated?: boolean;
+  /** The enclave's card, kept as sent once parsePageCard accepts it. */
+  card?: unknown;
 }
 
 // The enclave reads the page, so our server sees neither its address nor its text. A failed page comes back as a short
@@ -410,7 +413,7 @@ interface FetchedPage {
 async function fetchPage(url: string): Promise<{ page: FetchedPage } | { error: string; limited: boolean }> {
   try {
     const page = await enclaveCall<FetchedPage>("fetch", { url });
-    return { page: { ...page, url: page.url || url } };
+    return { page: { ...page, url: page.url || url, card: parsePageCard(page.card) ? page.card : undefined } };
   } catch (error) {
     if (error instanceof EnclaveRefused && error.status === 429) return { error: "too many pages in a short time", limited: true };
     return { error: error instanceof Error ? error.message : "the page didn't respond", limited: false };
@@ -432,7 +435,7 @@ async function runFetchCall(url: string, round: AnswerRound, ctx: AnswerCallCont
     return `Couldn't read ${url}: ${result.error}. Don't guess what the page says.`;
   }
   const { page } = result;
-  ctx.emit(`<fetched_page>${blockJSON({ url: page.url, title: page.title, status: "ok" })}</fetched_page>`);
+  ctx.emit(`<fetched_page>${blockJSON({ url: page.url, title: page.title, status: "ok", card: page.card })}</fetched_page>`);
   if (!page.text.trim()) return `${page.url} has no readable text; it may need JavaScript. Don't guess what the page says.`;
   round.untrusted = true;
   // A page that closes the tag itself could pass off the rest as our text.
