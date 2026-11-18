@@ -1,5 +1,6 @@
 "use client";
 
+import { isPaidTier } from "@/lib/account/plan";
 import * as React from "react";
 import { PRICING_URL } from "@/app/siteUrl";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -123,7 +124,7 @@ function SkillsSection({ onCreateWithKarui }: { onCreateWithKarui: () => void })
     <SkillsSettings
       skills={skills}
       karuiSkills={karuiSkills}
-      limits={{ ...SKILL_LIMITS, skills: SKILL_COUNT_LIMIT[user?.tier === "pro" ? "pro" : "free"] }}
+      limits={{ ...SKILL_LIMITS, skills: SKILL_COUNT_LIMIT[isPaidTier(user?.tier) ? "pro" : "free"] }}
       onCreate={async (fields) => {
         try {
           put(await createSkill(fields));
@@ -207,7 +208,7 @@ function ConnectorsSection({ onUpgrade }: { onUpgrade: () => void }) {
   const [connectors, setConnectors] = React.useState<UserConnector[] | null>(null);
   const [clientIds, setClientIds] = React.useState<Record<string, string>>({});
   const [approval, setApproval] = React.useState<ToolApprovalMode>(() => getToolApprovalMode());
-  const locked = (user?.tier ?? "free") !== "pro";
+  const locked = !isPaidTier(user?.tier);
 
   React.useEffect(() => {
     loadConnectors()

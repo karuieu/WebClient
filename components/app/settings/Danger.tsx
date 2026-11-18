@@ -75,7 +75,7 @@ export function DangerSettings(p: DangerSettingsProps) {
 
       <Card title="Delete account" className="mt-4">
         <p className="mt-1.5 max-w-[34rem] text-pretty text-[13.5px] leading-relaxed text-muted">
-          Deletes your account and everything in it, and ends a Pro plan right away. We&apos;ll email you a link; nothing happens until you confirm on the page it opens.
+          Deletes your account and everything in it, and ends a paid plan right away. We&apos;ll email you a link; nothing happens until you confirm on the page it opens.
         </p>
         {p.accountRequested ? (
           <p className="mt-5 flex items-center gap-2.5 rounded-xl bg-surface px-4 py-3 text-[13.5px]">

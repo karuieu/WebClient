@@ -2,6 +2,7 @@
 // read a web page (<fetch_url>), call the user's connectors (<connector_call>) and leave a memory note. The browser runs each call and the model
 // continues with the result.
 
+import { isPaidTier } from "@/lib/account/plan";
 import { getUser } from "@/lib/account/session";
 import { loadConnectors, serverFor, type UserConnector, type UserConnectorTool } from "@/lib/connectors/userConnectors";
 import { callTool, readResource, SignInRequired } from "@/lib/connectors/mcpClient";
@@ -118,10 +119,10 @@ const READ_RESOURCE: UserConnectorTool = {
   readOnly: true,
 };
 
-// Pro only; a connector that was signed out waits until the user signs in again. A project limits them to its own picks.
+// Paid plans only; a connector that was signed out waits until the user signs in again. A project limits them to its own picks.
 export async function loadConnectorTools(allowedIds?: string[]): Promise<Map<string, ConnectorTool>> {
   const tools = new Map<string, ConnectorTool>();
-  if ((getUser()?.tier ?? "free") !== "pro") return tools;
+  if (!isPaidTier(getUser()?.tier)) return tools;
   const connectors = (await loadConnectors().catch(() => [] as UserConnector[])).filter(
     (c) => !c.signedOut && (!allowedIds || allowedIds.includes(c.id))
   );

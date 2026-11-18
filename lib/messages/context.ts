@@ -1,5 +1,7 @@
 // Trims history in the browser before encryption, since the backend cannot read it. Billing uses only provider-reported usage.
 
+import { isPaidTier } from "@/lib/account/plan";
+
 const FREE_CONTEXT_TOKEN_LIMIT = 16_000;
 
 const PRO_CONTEXT_TOKEN_LIMIT = 150_000;
@@ -25,7 +27,7 @@ export function estimateTokens(text: string): number {
 }
 
 export function tokenLimitForTier(tier: string): number {
-  return tier.trim().toLowerCase() === "pro"
+  return isPaidTier(tier.trim().toLowerCase())
     ? PRO_CONTEXT_TOKEN_LIMIT
     : FREE_CONTEXT_TOKEN_LIMIT;
 }

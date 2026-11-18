@@ -12,9 +12,11 @@ import { Logo } from "@/components/kit/Logo";
 import { Spinner } from "@/components/kit/Spinner";
 
 export type UpgradeViewProps = {
+  /** The plan on the card. An account on Max always sees Max. */
+  plan: "pro" | "max";
   price: string;
   period: string;
-  current: "free" | "pro";
+  current: "free" | "pro" | "max";
   loading?: boolean;
   checkout?: "confirming" | "pending" | "done" | null;
   plansHref: string;
@@ -22,7 +24,7 @@ export type UpgradeViewProps = {
   settingsHref: string;
   homeHref: string;
   onContinue: () => void;
-  /** Buying Pro asks for it to start at once, so a withdrawal costs the days used (Terms 7.3). */
+  /** Buying a plan asks for it to start at once, so a withdrawal costs the days used (Terms 7.3). */
   startNow: boolean;
   startNowError?: string | null;
   onStartNow: (checked: boolean) => void;
@@ -37,6 +39,7 @@ const CONTINUE_SWEEP =
 const external = { target: "_blank", rel: "noopener noreferrer" };
 
 export function UpgradeView({
+  plan,
   price,
   period,
   current,
@@ -51,7 +54,9 @@ export function UpgradeView({
   startNowError,
   onStartNow,
 }: UpgradeViewProps) {
-  const pro = current === "pro";
+  const owned = current === plan;
+  const upgrading = current === "pro" && plan === "max";
+  const name = plan === "max" ? "Max" : "Pro";
   return (
     <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-bg px-4 py-14 text-fg sm:px-6">
       <CipherField className="absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_at_center,transparent_45%,black_100%)]" />
@@ -60,7 +65,7 @@ export function UpgradeView({
           <div>
             <div className="flex min-h-11 items-center justify-between px-1">
               <Logo />
-              {!pro && (
+              {!owned && (
                 <Link href={homeHref} className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-[14px] text-muted transition-colors duration-150 hover:text-fg">
                   <ArrowLeft className="size-4" />
                   Back to chat
@@ -70,16 +75,16 @@ export function UpgradeView({
             <Tilt maxTilt={8} transition={{ stiffness: 170, damping: 16, mass: 0.7 }} className="mt-4">
               <section className="cursor-default select-none rounded-3xl bg-inverse p-7 text-on-inverse shadow-soft [transform-style:preserve-3d]">
                 <div className="flex items-center justify-between gap-3">
-                  <h1 className="text-heading">Karui Pro</h1>
-                  {pro && (
+                  <h1 className="text-heading">Karui {name}</h1>
+                  {owned && (
                     <span className="grid size-6 place-items-center rounded-full bg-on-inverse text-inverse">
                       <Check className="size-3.5" />
                     </span>
                   )}
                 </div>
-                {pro ? (
+                {owned ? (
                   <div role="status" className="mt-8 [transform:translateZ(28px)]">
-                    <p className="text-balance text-[2.5rem] font-medium leading-[1.05] tracking-[-0.04em]">{checkout === "done" ? "Welcome to Pro." : "You're on Pro."}</p>
+                    <p className="text-balance text-[2.5rem] font-medium leading-[1.05] tracking-[-0.04em]">{checkout === "done" ? `Welcome to ${name}.` : `You're on ${name}.`}</p>
                     {checkout !== "done" && (
                       <p className="mt-3 font-mono text-[12px] opacity-70">
                         {price} {period}
@@ -94,11 +99,11 @@ export function UpgradeView({
                 )}
                 <div className="mt-8 border-t border-on-inverse/15 pt-3">
                   <Link
-                    href={pro ? settingsHref : plansHref}
-                    {...(pro ? {} : external)}
+                    href={owned ? settingsHref : plansHref}
+                    {...(owned ? {} : external)}
                     className="group -mx-3 flex h-11 items-center justify-between rounded-xl px-3 text-[14px] transition-colors duration-150 hover:bg-on-inverse/10 focus-visible:bg-on-inverse/10"
                   >
-                    {pro ? "Manage billing" : "See the full plan"}
+                    {owned ? "Manage billing" : "See the full plan"}
                     <ArrowRight className="size-4 transition-transform duration-200 ease-out-soft group-hover:translate-x-0.5" />
                   </Link>
                 </div>
@@ -116,9 +121,9 @@ export function UpgradeView({
               </p>
             ) : checkout === "pending" ? (
               <p role="status" className="text-[14px] leading-relaxed text-muted">
-                <span className="font-medium text-fg">Payment received.</span> Your plan switches to Pro as soon as Polar confirms it. This usually takes a minute.
+                <span className="font-medium text-fg">Payment received.</span> Your plan switches to {name} as soon as Polar confirms it. This usually takes a minute.
               </p>
-            ) : pro ? (
+            ) : owned ? (
               <ButtonLink href={homeHref} size="lg" arrow className="w-full">
                 Start a chat
               </ButtonLink>
@@ -132,14 +137,14 @@ export function UpgradeView({
                     aria-describedby={startNowError ? "start-now-error" : undefined}
                     onChange={(e) => onStartNow(e.target.checked)}
                   >
-                    Start Pro right away. If I withdraw within 14 days, I pay only for the days I had it.{" "}
+                    {upgrading ? "Start Max right away and charge the difference for this billing period now." : `Start ${name} right away.`} If I withdraw within 14 days, I pay only for the days I had it.{" "}
                     <Link href={termsHref} {...external} className="text-fg underline underline-offset-4">
                       Terms
                     </Link>
                   </Checkbox>
                 </div>
                 <Button size="lg" arrow loading={loading} onClick={onContinue} className={CONTINUE_SWEEP}>
-                  Continue to payment
+                  {upgrading ? "Upgrade to Max" : "Continue to payment"}
                 </Button>
                 {startNowError && (
                   <p id="start-now-error" role="alert" className="-mt-2 text-center text-[0.8125rem] text-danger">

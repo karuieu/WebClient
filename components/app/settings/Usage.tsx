@@ -12,8 +12,12 @@ export type UsageWindow = {
   resetAt?: string | null;
 };
 
+type Plan = "free" | "pro" | "max";
+
+const PLAN_NAMES: Record<Plan, string> = { free: "Free", pro: "Pro", max: "Max" };
+
 export type UsageSettingsProps = {
-  plan: "free" | "pro";
+  plan: Plan;
   window: UsageWindow;
   week?: UsageWindow;
   loading?: boolean;
@@ -33,7 +37,7 @@ function countdown(to: string, now: number) {
 
 const fmt = new Intl.NumberFormat("en-US");
 
-function UsageCard({ plan, window: w, loading }: { plan: "free" | "pro"; window: UsageWindow; loading?: boolean }) {
+function UsageCard({ plan, window: w, loading }: { plan: Plan; window: UsageWindow; loading?: boolean }) {
   const reduce = useReducedMotion();
   const [now, setNow] = React.useState<number | null>(null);
   const pct = w.limit > 0 ? Math.min(100, Math.round((w.used / w.limit) * 100)) : 0;
@@ -50,7 +54,7 @@ function UsageCard({ plan, window: w, loading }: { plan: "free" | "pro"; window:
     <section className="rounded-2xl border border-line bg-elevated p-6">
       <div className="flex items-baseline justify-between gap-4">
         <p className="text-label text-muted">{w.label}</p>
-        <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted">{plan === "pro" ? "Pro" : "Free"}</p>
+        <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-muted">{PLAN_NAMES[plan]}</p>
       </div>
       <p className="mt-5 flex items-baseline gap-2">
         <span className="text-[2.75rem] font-medium leading-none tracking-[-0.04em] tabular-nums">{loading ? "—" : `${pct}%`}</span>

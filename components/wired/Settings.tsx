@@ -1,5 +1,7 @@
 "use client";
 
+import { planOf } from "@/lib/account/plan";
+import { MAX_UPGRADE_PATH } from "@/lib/account/afterLogin";
 import * as React from "react";
 import { PRICING_URL } from "@/app/siteUrl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -137,22 +139,23 @@ function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const pro = (user?.tier ?? billing?.tier ?? "free") === "pro";
+  const plan = planOf(user?.tier ?? billing?.tier);
+  const paid = plan !== "free";
   return (
     <UsageSettings
-      plan={pro ? "pro" : "free"}
+      plan={plan}
       window={{
-        label: pro ? "This 5-hour window" : "Today",
+        label: paid ? "This 5-hour window" : "Today",
         used: billing?.tokens_used ?? 0,
-        limit: billing?.tokens_limit ?? (pro ? 800_000 : 10_000),
+        limit: billing?.tokens_limit ?? (plan === "max" ? 2_400_000 : paid ? 800_000 : 10_000),
         resetAt: billing?.window_reset_at ?? null,
       }}
       week={
-        pro
+        paid
           ? {
               label: "This week",
               used: billing?.week_tokens_used ?? 0,
-              limit: billing?.week_tokens_limit ?? 3_200_000,
+              limit: billing?.week_tokens_limit ?? (plan === "max" ? 9_600_000 : 3_200_000),
               resetAt: billing?.week_reset_at ?? null,
             }
           : undefined
@@ -239,7 +242,8 @@ function BillingSection() {
   const [subscription, setSubscription] = React.useState<Subscription | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState<"portal" | "cancel" | "reactivate" | null>(null);
-  const pro = (user?.tier ?? "free") === "pro";
+  const plan = planOf(user?.tier);
+  const paid = plan !== "free";
 
   React.useEffect(() => {
     billingCall<Subscription>("/api/billing/subscription")
@@ -252,7 +256,7 @@ function BillingSection() {
     setBusy(kind);
     try {
       await billingCall(`/api/billing/${kind}`, "POST");
-      showSuccess(kind === "cancel" ? "Plan cancelled. You keep Pro until the end of this billing period." : "Welcome back. Your plan will renew as usual.");
+      showSuccess(kind === "cancel" ? "Plan cancelled. You keep it until the end of this billing period." : "Welcome back. Your plan will renew as usual.");
       await refreshUser().catch(() => {});
     } catch (error) {
       showError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
@@ -263,10 +267,11 @@ function BillingSection() {
 
   return (
     <BillingSettings
-      plan={pro ? "pro" : "free"}
-      price={pro ? "€18 / month" : "€0 / month"}
-      startedAt={pro ? subscription?.started_at : null}
-      renewsAt={pro ? subscription?.expires_at : null}
+      plan={plan}
+      price={plan === "max" ? "€50 / month" : plan === "pro" ? "€18 / month" : "€0 / month"}
+      maxHref={MAX_UPGRADE_PATH}
+      startedAt={paid ? subscription?.started_at : null}
+      renewsAt={paid ? subscription?.expires_at : null}
       cancelAtPeriodEnd={user?.cancel_at_period_end ?? false}
       loading={loading}
       openingPortal={busy === "portal"}

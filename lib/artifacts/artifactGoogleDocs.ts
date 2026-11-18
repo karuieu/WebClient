@@ -1,3 +1,4 @@
+import { isPaidTier } from "@/lib/account/plan";
 import type { Artifact } from "@/lib/artifacts/artifacts";
 import { googleDocContent, googleDocRequests } from "@/lib/artifacts/googleDocContent";
 import { GOOGLE_DOCS_URL, GoogleApiError, googleId, googleRequest } from "@/lib/connectors/googleWorkspace";
@@ -23,7 +24,7 @@ function endOfDocument(state: DocumentState): number {
 }
 
 async function saveArtifact(id: string, artifact: Pick<Artifact, "title" | "type" | "content">): Promise<GoogleDocSave> {
-  if (getUser()?.tier !== "pro") throw new Error("Google Docs export comes with Pro.");
+  if (!isPaidTier(getUser()?.tier)) throw new Error("Google Docs export comes with Pro.");
   const content = googleDocContent(artifact);
   const connector = (await loadConnectors({ fresh: true })).find((c) => c.api === "docs");
   if (!connector) throw new Error("Connect Google Docs in Workspace, under Connectors, before saving.");

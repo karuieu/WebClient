@@ -8,8 +8,9 @@ import { ArrowUpRight } from "@/components/kit/icons";
 import { Group, Row } from "./Layout";
 
 export type BillingSettingsProps = {
-  plan: "free" | "pro";
+  plan: "free" | "pro" | "max";
   price: string;
+  maxHref: string;
   startedAt?: string | null;
   renewsAt?: string | null;
   cancelAtPeriodEnd?: boolean;
@@ -27,7 +28,8 @@ const date = (iso?: string | null) =>
 
 export function BillingSettings(p: BillingSettingsProps) {
   const [confirm, setConfirm] = React.useState<"cancel" | "reactivate" | null>(null);
-  const pro = p.plan === "pro";
+  const paid = p.plan !== "free";
+  const name = p.plan === "max" ? "Max" : "Pro";
 
   React.useEffect(() => {
     if (!p.cancelling && !p.reactivating) setConfirm(null);
@@ -39,17 +41,22 @@ export function BillingSettings(p: BillingSettingsProps) {
         <p className="text-label text-muted">Current plan</p>
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[2rem] font-medium leading-none tracking-[-0.035em]">{pro ? "Pro" : "Free"}</p>
+            <p className="text-[2rem] font-medium leading-none tracking-[-0.035em]">{paid ? name : "Free"}</p>
             <p className="mt-2 font-mono text-[12px] text-muted">{p.price}</p>
           </div>
-          {!pro && (
+          {!paid && (
             <ButtonLink href={PRICING_URL} arrow>
               See Pro
             </ButtonLink>
           )}
+          {p.plan === "pro" && !p.cancelAtPeriodEnd && (
+            <ButtonLink href={p.maxHref} arrow>
+              See Max
+            </ButtonLink>
+          )}
         </div>
 
-        {pro && (
+        {paid && (
           <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line">
             <div className="bg-elevated px-4 py-3">
               <dt className="text-label text-muted">Member since</dt>
@@ -63,13 +70,13 @@ export function BillingSettings(p: BillingSettingsProps) {
         )}
       </section>
 
-      {pro && p.cancelAtPeriodEnd && (
+      {paid && p.cancelAtPeriodEnd && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-surface px-5 py-4">
           <p className="max-w-[26rem] text-pretty text-[13.5px] leading-relaxed text-muted">
-            Your plan won&apos;t renew. You keep Pro until {date(p.renewsAt)}, then switch to Free.
+            Your plan won&apos;t renew. You keep {name} until {date(p.renewsAt)}, then switch to Free.
           </p>
           <Button variant="secondary" onClick={() => setConfirm("reactivate")}>
-            Keep Pro
+            Keep {name}
           </Button>
         </div>
       )}
@@ -84,7 +91,7 @@ export function BillingSettings(p: BillingSettingsProps) {
             </Button>
           }
         />
-        {pro && !p.cancelAtPeriodEnd && (
+        {paid && !p.cancelAtPeriodEnd && (
           <Row
             label="Cancel plan"
             control={
@@ -103,12 +110,12 @@ export function BillingSettings(p: BillingSettingsProps) {
       <Dialog
         open={confirm === "cancel"}
         onClose={() => setConfirm(null)}
-        title="Cancel Pro?"
-        description={`You'll keep Pro until ${date(p.renewsAt)}. After that your account switches to Free, and nothing in it is deleted.`}
+        title={`Cancel ${name}?`}
+        description={`You'll keep ${name} until ${date(p.renewsAt)}. After that your account switches to Free, and nothing in it is deleted.`}
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirm(null)} data-autofocus>
-              Keep Pro
+              Keep {name}
             </Button>
             <Button variant="danger" loading={p.cancelling} onClick={p.onCancel}>
               Cancel plan
@@ -119,7 +126,7 @@ export function BillingSettings(p: BillingSettingsProps) {
       <Dialog
         open={confirm === "reactivate"}
         onClose={() => setConfirm(null)}
-        title="Keep Pro?"
+        title={`Keep ${name}?`}
         description="Your plan will renew automatically at the end of this period."
         footer={
           <>
@@ -127,7 +134,7 @@ export function BillingSettings(p: BillingSettingsProps) {
               Not now
             </Button>
             <Button loading={p.reactivating} onClick={p.onReactivate}>
-              Keep Pro
+              Keep {name}
             </Button>
           </>
         }

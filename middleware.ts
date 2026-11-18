@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { LANDING_URL, PRICING_URL } from "@/app/siteUrl";
-import { LOGIN_FOR_UPGRADE_PATH } from "@/lib/account/afterLogin";
+import { LOGIN_FOR_MAX_PATH, LOGIN_FOR_UPGRADE_PATH, MAX_UPGRADE_PATH, asksForMax } from "@/lib/account/afterLogin";
 import { API_URL } from "@/lib/core/api";
 
 /**
@@ -90,6 +90,11 @@ function withContentSecurityPolicy(request: NextRequest): NextResponse {
   return response;
 }
 
+function loginPathFor(request: NextRequest): string {
+  if (request.nextUrl.pathname !== "/upgrade") return "/login";
+  return asksForMax(request.nextUrl.searchParams) ? LOGIN_FOR_MAX_PATH : LOGIN_FOR_UPGRADE_PATH;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -105,8 +110,10 @@ export function middleware(request: NextRequest) {
 
   // The plans live on the landing page now; Polar still returns buyers to /plans?success=true.
   if (pathname === "/plans") {
-    const paid = request.nextUrl.searchParams.get("success") === "true";
-    return NextResponse.redirect(paid ? new URL("/upgrade?success=true", REDIRECT_BASE || request.url) : PRICING_URL, 307);
+    if (request.nextUrl.searchParams.get("success") !== "true") return NextResponse.redirect(PRICING_URL, 307);
+    const purchase = new URL(asksForMax(request.nextUrl.searchParams) ? MAX_UPGRADE_PATH : "/upgrade", REDIRECT_BASE || request.url);
+    purchase.searchParams.set("success", "true");
+    return NextResponse.redirect(purchase, 307);
   }
 
   // Reject legacy query tokens before Next.js can serialize them into HTML or RSC payloads.
@@ -128,7 +135,7 @@ export function middleware(request: NextRequest) {
     // Someone without a session, search engines included, lands on the landing page rather than a sign-in form.
     response = NextResponse.redirect(isLoggedIn ? new URL("/new", REDIRECT_BASE || request.url) : LANDING_URL);
   } else if (!isLoggedIn && isProtectedRoute(pathname)) {
-    response = NextResponse.redirect(new URL(pathname === "/upgrade" ? LOGIN_FOR_UPGRADE_PATH : "/login", REDIRECT_BASE || request.url));
+    response = NextResponse.redirect(new URL(loginPathFor(request), REDIRECT_BASE || request.url));
   } else {
     response = withContentSecurityPolicy(request);
   }

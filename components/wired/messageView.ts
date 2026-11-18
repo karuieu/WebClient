@@ -35,6 +35,7 @@ export function errorText(error: unknown, fallback: string): string {
   const reset = at ? ` It resets at ${at}.` : "";
   if (limit.code === "free_token_limit") return `You've used today's free allowance.${reset}`;
   if (limit.code === "pro_token_limit") return `You've reached the Pro limit for now.${reset}`;
+  if (limit.code === "max_token_limit") return `You've reached the Max limit for now.${reset}`;
   const status = statusOf(error);
   if (status === 400) return "That request didn't go through. Please try again.";
   if (status === 401 || msg.includes("unauthorized")) return SESSION_EXPIRED_MESSAGE;

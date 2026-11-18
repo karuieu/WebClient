@@ -254,7 +254,7 @@ export function ContextPicker({
 }: {
   selection: ContextSelection;
   usage: LibraryUsage;
-  plan: "Free" | "Pro";
+  plan: "Free" | "Pro" | "Max";
   onAddFiles: (files: File[]) => void;
   onAddFolder: (files: File[]) => void;
   onDropData?: (data: DataTransfer) => void;
