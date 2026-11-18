@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Switch } from "@/components/kit/Controls";
-import { ArrowUp, BookOpen, Camera, ChevronRight, FileText, Folder, FolderInput, Globe, ImageIcon, Layers, Paperclip, Plus, X } from "@/components/kit/icons";
+import { ArrowUp, BookOpen, Camera, ChevronRight, FileBraces, FileText, Folder, FolderInput, Globe, ImageIcon, Layers, Paperclip, Plus, Presentation, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Sheet } from "@/components/kit/Sheet";
 import { Spinner } from "@/components/kit/Spinner";
@@ -11,13 +11,20 @@ import { useMediaQuery } from "@/components/kit/useMounted";
 import { cx } from "@/lib/ui/cx";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./chat/AttachmentViewer";
 import { ModelPicker } from "./ModelPicker";
-import { ComposerCommands, type ComposerCommand, type ComposerSkill, type ComposerSkills } from "./ComposerCommands";
+import { artifactMentionKey, ComposerCommands, type ComposerArtifacts, type ComposerCommand, type ComposerSkill, type ComposerSkills } from "./ComposerCommands";
 import { skillCommandName } from "@/lib/messages/skillInvocation";
 import { SkillComposerInput, type SkillComposerInputHandle } from "./SkillComposerInput";
 
 export type ComposerAttachment = { id: string } & ViewerAttachment;
 
 const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
+
+const artifactKinds = {
+  markdown: { label: "Doc", icon: FileText, color: "text-link" },
+  html: { label: "Site", icon: Globe, color: undefined },
+  code: { label: "Code", icon: FileBraces, color: "text-artifact-code" },
+  slides: { label: "Slides", icon: Presentation, color: "text-artifact-slides" },
+};
 
 const addButtonClass = (open: boolean): string =>
   cx(
@@ -85,6 +92,7 @@ export function Composer({
   onPaste,
   autoFocus,
   skills,
+  artifacts,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -111,6 +119,7 @@ export function Composer({
   onPaste?: (e: React.ClipboardEvent<HTMLElement>) => void;
   autoFocus?: boolean;
   skills?: ComposerSkills;
+  artifacts?: ComposerArtifacts;
 }): React.JSX.Element {
   const textRef = React.useRef<HTMLTextAreaElement>(null);
   const richTextRef = React.useRef<SkillComposerInputHandle>(null);
@@ -125,7 +134,7 @@ export function Composer({
   const [caret, setCaret] = React.useState(value.length);
   const [commandDismissed, setCommandDismissed] = React.useState(false);
   const [fieldFocused, setFieldFocused] = React.useState(false);
-  const [commandNav, setCommandNav] = React.useState({ query: "", index: 0 });
+  const [commandNav, setCommandNav] = React.useState({ key: "", index: 0 });
   const pendingCaret = React.useRef<number | null>(null);
   const focusInput = React.useCallback((at?: number) => {
     if (richTextRef.current) richTextRef.current.focus(at);
@@ -134,13 +143,24 @@ export function Composer({
       if (at !== undefined) textRef.current?.setSelectionRange(at, at);
     }
   }, []);
-  const command = value.slice(0, caret).match(/(?:^|\s)\/([^\n/]*)$/);
-  const rawQuery = command?.[1] ?? "";
+  const beforeCaret = value.slice(0, caret);
+  const triggers = [...beforeCaret.matchAll(/(?:^|\s)([\/@])/g)];
+  const trigger = triggers.findLast((match) => match[1] === "@" ? !!artifacts : !!(skills || onAttach));
+  const start = trigger ? trigger.index + trigger[0].length - 1 : caret;
+  const rawQuery = beforeCaret.slice(start + 1);
+  const isArtifact = trigger?.[1] === "@";
+  const command = trigger && !rawQuery.includes("\n") && (isArtifact || !rawQuery.includes("/"));
+  const commandKey = `${start}:${trigger?.[1] ?? ""}${rawQuery}`;
   const skillsOnly = /^skill(?:[ \t]|$)/i.test(rawQuery);
-  const commandQuery = skillsOnly ? rawQuery.replace(/^skill[ \t]*/i, "") : rawQuery;
-  const pendingCommand = !!(skills || onAttach) && !!command && !commandDismissed;
+  const commandQuery = !isArtifact && skillsOnly ? rawQuery.replace(/^skill[ \t]*/i, "") : rawQuery;
+  const pendingCommand = !!command && !commandDismissed;
   const commandOpen = pendingCommand && fieldFocused && !sending;
-  const moveCommand = (index: number) => setCommandNav({ query: rawQuery, index });
+  const catalog = isArtifact ? artifacts?.catalog : skills?.catalog;
+  const onOpenArtifacts = artifacts?.onOpen;
+  React.useEffect(() => {
+    if (commandOpen && isArtifact) onOpenArtifacts?.();
+  }, [commandOpen, isArtifact, onOpenArtifacts]);
+  const moveCommand = (index: number) => setCommandNav({ key: commandKey, index });
   const openSkills = () => {
     richTextRef.current?.replaceText(value.length, value.length, value || skills?.selected ? "\n/skill " : "/skill ");
     setCommandDismissed(false);
@@ -148,7 +168,6 @@ export function Composer({
   };
   const consumeCommand = () => {
     if (!command) return;
-    const start = caret - command[0].length + (command[0].startsWith("/") ? 0 : 1);
     if (skills) {
       richTextRef.current?.replaceText(start, caret, "");
       return;
@@ -159,16 +178,33 @@ export function Composer({
   };
   const selectSkill = (skill: ComposerSkill) => {
     if (!command) return;
-    const start = caret - command[0].length + (command[0].startsWith("/") ? 0 : 1);
     richTextRef.current?.insertSkill(skill, start, caret);
   };
-  const retrySkills = () => {
-    if (skills?.catalog.status !== "error") return;
-    skills.catalog.onRetry();
+  const retryCommands = () => {
+    if (catalog?.status !== "error") return;
+    catalog.onRetry();
     focusInput();
   };
   const commands: ComposerCommand[] = [];
-  if (onAttach && !skillsOnly) commands.push({
+  if (isArtifact && artifacts?.catalog.status === "ready") {
+    const selected = new Set(artifacts.selected.map(artifactMentionKey));
+    for (const artifact of artifacts.catalog.items) {
+      const id = artifactMentionKey(artifact);
+      const { icon: Icon, label, color } = artifactKinds[artifact.type];
+      commands.push({
+        id,
+        name: artifact.title,
+        description: [label, artifact.detail].filter(Boolean).join(" · "),
+        icon: <Icon className={color} />,
+        selected: selected.has(id),
+        onSelect: () => {
+          consumeCommand();
+          if (!selected.has(id)) artifacts.onChange([...artifacts.selected, artifact]);
+        },
+      });
+    }
+  }
+  if (!isArtifact && onAttach && !skillsOnly) commands.push({
     id: "files",
     name: "Add files",
     description: "Attach files to this message.",
@@ -178,7 +214,7 @@ export function Composer({
       fileRef.current?.click();
     },
   });
-  if (skills?.catalog.status === "ready") commands.push(...skills.catalog.items.map((skill) => ({
+  if (!isArtifact && skills?.catalog.status === "ready") commands.push(...skills.catalog.items.map((skill) => ({
     id: `skill:${skill.id}`,
     name: skill.name,
     description: skill.description,
@@ -186,8 +222,9 @@ export function Composer({
     selected: skills.selected?.skill.id === skill.id,
     onSelect: () => selectSkill(skill),
   })));
-  const matchingCommands = commands.filter((command) => command.name.toLowerCase().includes(commandQuery.trim().toLowerCase()) || skillCommandName(command.name).slice(1).includes(commandQuery.trim().toLowerCase()));
-  const activeCommand = matchingCommands.length ? Math.min(commandNav.query === rawQuery ? commandNav.index : 0, matchingCommands.length - 1) : -1;
+  const query = commandQuery.trim().toLowerCase();
+  const matchingCommands = commands.filter((item) => item.name.toLowerCase().includes(query) || (!isArtifact && skillCommandName(item.name).slice(1).includes(query)));
+  const activeCommand = matchingCommands.length ? Math.min(commandNav.key === commandKey ? commandNav.index : 0, matchingCommands.length - 1) : -1;
 
   const projectLabel = project?.name && !project.onClear ? "Move to project" : "Add to project";
   const adds: MenuItem[] = [];
@@ -210,7 +247,7 @@ export function Composer({
     e.target.value = "";
     setAddOpen(false);
   };
-  const canSend = !sending && !pendingCommand && !skills?.error && (value.trim().length > 0 || !!skills?.selected || attachments.length > 0);
+  const canSend = !sending && !pendingCommand && !skills?.error && (value.trim().length > 0 || !!skills?.selected || attachments.length > 0 || !!artifacts?.selected.length);
 
   React.useLayoutEffect(() => {
     const el = textRef.current;
@@ -359,12 +396,13 @@ export function Composer({
         {commandOpen && (
           <ComposerCommands
             id={commandListId}
-            catalog={skills?.catalog}
+            catalog={catalog}
             items={matchingCommands}
             query={commandQuery}
             active={activeCommand}
             onActive={moveCommand}
-            onRetry={retrySkills}
+            onRetry={retryCommands}
+            artifacts={isArtifact}
           />
         )}
         <label htmlFor="composer-input" className="sr-only">
@@ -402,8 +440,8 @@ export function Composer({
           value={value}
           autoFocus={autoFocus}
           placeholder={placeholder}
-          aria-autocomplete={onAttach ? "list" : undefined}
-          aria-haspopup={onAttach ? "listbox" : undefined}
+          aria-autocomplete={onAttach || artifacts ? "list" : undefined}
+          aria-haspopup={onAttach || artifacts ? "listbox" : undefined}
           aria-controls={commandOpen ? commandListId : undefined}
           aria-activedescendant={commandOpen && activeCommand >= 0 ? `${commandListId}-${activeCommand}` : undefined}
           onFocus={() => setFieldFocused(true)}
@@ -523,6 +561,11 @@ export function Composer({
 
         <div className="-my-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none]">
           <AnimatePresence initial={false} mode="popLayout">
+            {artifacts?.selected.map((artifact) => {
+              const id = artifactMentionKey(artifact);
+              const { icon: Icon, color } = artifactKinds[artifact.type];
+              return <Chip key={id} icon={<Icon className={cx("size-[15px]", color)} />} label={artifact.title} undo="Remove artifact" onClick={() => artifacts.onChange(artifacts.selected.filter((item) => artifactMentionKey(item) !== id))} />;
+            })}
             {project?.name && project.onClear && (
               <Chip
                 key="project"

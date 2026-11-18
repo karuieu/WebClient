@@ -1,6 +1,7 @@
 // Images and text attachments in chat. Images are encrypted with the message (a JSON envelope in encrypted_content); models that cannot read images are never sent them.
 
 import { parseSkillReference, type SkillReference } from "@/lib/messages/skillInvocation";
+import { artifactMentionText, parseArtifactReferences, type ArtifactReference } from "@/lib/messages/artifactReference";
 
 export interface ChatImage {
 
@@ -74,9 +75,9 @@ export const IMAGES_UNSUPPORTED_NOTE = "This model can't read images. Change the
 
 const ATTACHMENT_MARK = '{"karui_att":1';
 
-export function packMessageContent(text: string, images: ChatImage[], files: ChatTextFile[] = [], skill?: SkillReference): string {
-  if (images.length === 0 && files.length === 0 && !skill) return text;
-  return JSON.stringify({ karui_att: 1, text, images, files, ...(skill ? { skill } : {}) });
+export function packMessageContent(text: string, images: ChatImage[], files: ChatTextFile[] = [], skill?: SkillReference, artifacts?: ArtifactReference[]): string {
+  if (images.length === 0 && files.length === 0 && !skill && !artifacts?.length) return text;
+  return JSON.stringify({ karui_att: 1, text, images, files, ...(skill ? { skill } : {}), ...(artifacts?.length ? { artifacts } : {}) });
 }
 
 export interface ParsedMessageContent {
@@ -84,6 +85,7 @@ export interface ParsedMessageContent {
   images: ChatImage[];
   files: ChatTextFile[];
   skill?: SkillReference;
+  artifacts?: ArtifactReference[];
 }
 
 export function parseMessageContent(content: string): ParsedMessageContent {
@@ -95,14 +97,17 @@ export function parseMessageContent(content: string): ParsedMessageContent {
       images?: ChatImage[];
       files?: ChatTextFile[];
       skill?: unknown;
+      artifacts?: unknown;
     };
     if (parsed.karui_att !== 1) return { text: content, images: [], files: [] };
     const skill = parseSkillReference(parsed.skill);
+    const artifacts = parseArtifactReferences(parsed.artifacts);
     return {
       text: typeof parsed.text === "string" ? parsed.text : "",
       images: Array.isArray(parsed.images) ? parsed.images.filter((i) => i && typeof i.data === "string") : [],
       files: Array.isArray(parsed.files) ? parsed.files.filter((f) => f && typeof f.content === "string") : [],
       ...(skill ? { skill } : {}),
+      ...(artifacts ? { artifacts } : {}),
     };
   } catch {
     return { text: content, images: [], files: [] };
@@ -113,9 +118,9 @@ export function turnContentForAI(
   content: string,
   readsImages: boolean
 ): { content: string; images?: string[] } {
-  const { text, images, files } = parseMessageContent(content);
+  const { text, images, files, artifacts } = parseMessageContent(content);
 
-  let out = text;
+  let out = [artifactMentionText(artifacts), text].filter(Boolean).join("\n\n");
   for (const file of files) {
     out += `\n\n<attached_file name="${file.name || "file"}">\n${file.content}\n</attached_file>`;
   }

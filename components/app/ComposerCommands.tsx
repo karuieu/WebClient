@@ -4,6 +4,7 @@ import * as React from "react";
 import { Check } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
 import { menuStyles } from "@/components/kit/menuStyles";
+import type { ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 
 export type ComposerSkill = {
@@ -13,10 +14,25 @@ export type ComposerSkill = {
   source: "user" | "karui";
 };
 
-export type SkillCatalog =
-  | { status: "ready"; items: ComposerSkill[] }
+type Catalog<T> =
+  | { status: "ready"; items: T[] }
   | { status: "loading" }
   | { status: "error"; onRetry: () => void };
+
+export type SkillCatalog = Catalog<ComposerSkill>;
+
+export type ComposerArtifact = { chatId: string; path: string; title: string; type: ArtifactType; detail?: string };
+
+export type ComposerArtifacts = {
+  catalog: Catalog<ComposerArtifact>;
+  selected: ComposerArtifact[];
+  onChange: (artifacts: ComposerArtifact[]) => void;
+  onOpen?: () => void;
+};
+
+export function artifactMentionKey({ chatId, path }: ComposerArtifact): string {
+  return JSON.stringify([chatId, path]);
+}
 
 export type ComposerSkills = {
   catalog: SkillCatalog;
@@ -26,6 +42,10 @@ export type ComposerSkills = {
 };
 
 export type SelectedSkill = { skill: ComposerSkill; at: number };
+
+export function skillCommandName(name: string): string {
+  return `/${name.trim().toLowerCase().replace(/\s+/g, "-")}`;
+}
 
 export type ComposerCommand = {
   id: string;
@@ -44,14 +64,16 @@ export function ComposerCommands({
   active,
   onActive,
   onRetry,
+  artifacts = false,
 }: {
   id: string;
-  catalog?: SkillCatalog;
+  catalog?: SkillCatalog | ComposerArtifacts["catalog"];
   items: ComposerCommand[];
   query: string;
   active: number;
   onActive: (index: number) => void;
   onRetry: () => void;
+  artifacts?: boolean;
 }): React.JSX.Element {
   React.useEffect(() => {
     document.getElementById(`${id}-${active}`)?.scrollIntoView({ block: "nearest" });
@@ -60,7 +82,7 @@ export function ComposerCommands({
   return (
     <div className={cx(menuStyles.panel, "absolute bottom-full left-0 z-30 mb-1.5 w-60 max-w-full overflow-hidden")}>
       <div className="max-h-[min(22rem,40dvh)] overflow-y-auto overscroll-contain p-1.5">
-        <div id={id} role="listbox" aria-label="Commands" aria-busy={catalog?.status === "loading"}>
+        <div id={id} role="listbox" aria-label={artifacts ? "Artifacts" : "Commands"} aria-busy={catalog?.status === "loading"}>
           {items.map((command, index) => (
             <button
               key={command.id}
@@ -87,12 +109,12 @@ export function ComposerCommands({
         </div>
         {catalog?.status === "loading" && (
           <p role="status" className="flex items-center gap-2 px-2 py-3 text-[13px] text-muted">
-            <Spinner className="size-4" /> Loading skills…
+            <Spinner className="size-4" /> {artifacts ? "Loading artifacts…" : "Loading skills…"}
           </p>
         )}
         {catalog?.status === "error" && (
           <div className="px-2 py-3">
-            <p role="alert" className="text-[14px] text-fg">{"Couldn't load your skills."}</p>
+            <p role="alert" className="text-[14px] text-fg">{artifacts ? "Couldn't load your artifacts." : "Couldn't load your skills."}</p>
             <button
               type="button"
               onClick={onRetry}
@@ -102,7 +124,9 @@ export function ComposerCommands({
         )}
         {(!catalog || catalog.status === "ready") && items.length === 0 && (
           <p role="status" className="break-words px-2 py-3 text-[13px] leading-relaxed text-muted [overflow-wrap:anywhere]">
-            {query.trim() ? `No commands match “${query.trim()}”.` : "No skills are available in this chat."}
+            {query.trim()
+              ? `No ${artifacts ? "artifacts" : "commands"} match “${query.trim()}”.`
+              : artifacts ? "No artifacts yet." : "No skills are available in this chat."}
           </p>
         )}
       </div>

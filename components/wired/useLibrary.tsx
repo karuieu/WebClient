@@ -6,6 +6,7 @@ import { SESSION_EXPIRED_MESSAGE, deletionErrorText } from "@/lib/core/api";
 import { statusOf } from "@/lib/core/errors";
 import { getChats, deleteChat, renameChat, starChat, getMessages, type Chat, type Message } from "@/lib/chat/chat";
 import { parseMessageContent } from "@/lib/messages/vision";
+import { artifactMentionText } from "@/lib/messages/artifactReference";
 import {
   getProjects,
   starProject,
@@ -46,7 +47,7 @@ async function firstUserMessage(chatId: string): Promise<string> {
     const userMsg = messages.find((m: Message) => m.role === "user");
     if (!userMsg) return "";
     const parsed = parseMessageContent(userMsg.content);
-    return parsed.text || (parsed.images.length ? "(image attachment)" : parsed.files.length ? "(file attachment)" : "");
+    return parsed.text || artifactMentionText(parsed.artifacts) || (parsed.images.length ? "(image attachment)" : parsed.files.length ? "(file attachment)" : "");
   } catch {
     return "";
   }

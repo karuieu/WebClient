@@ -6,6 +6,7 @@ import { isProviderVerified } from "@/lib/chat/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
+import { artifactMentionText } from "@/lib/messages/artifactReference";
 import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, downloadSiteFile, parseArtifacts, siteFiles, slideCount, type Artifact } from "@/lib/artifacts/artifacts";
 import { downloadArtifactPptx } from "@/lib/artifacts/slidesPptx";
 import { chatFiles } from "@/lib/artifacts/chatFiles";
@@ -161,7 +162,7 @@ export function toUser(m: Message): MessageData {
   return {
     id: m.id,
     role: "user",
-    text,
+    text: [artifactMentionText(parsed.artifacts), text].filter(Boolean).join("\n\n"),
     quote,
     images: parsed.images.map((img: ChatImage) => ({ src: img.data, name: img.name })),
     files: parsed.files.map((f: ChatTextFile) => ({ name: f.name, content: f.content, meta: `${Math.max(1, Math.round(f.content.length / 1024))} KB` })),

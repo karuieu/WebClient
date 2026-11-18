@@ -19,7 +19,7 @@ export function ProjectNewChat({ projectId }: { projectId: string }) {
   const { showError } = useToast();
   const frame = React.useContext(ProjectFrameContext);
   const [starting, setStarting] = React.useState(false);
-  const composer = useComposer({ onSubmit: () => void start() });
+  const composer = useComposer({ onSubmit: () => void start(), artifactsEnabled: true });
 
   async function start() {
     if (composer.isEmpty || starting) return;
@@ -39,6 +39,7 @@ export function ProjectNewChat({ projectId }: { projectId: string }) {
         webSearch: composer.webSearch,
         images: composer.images,
         files: composer.files,
+        artifacts: composer.artifacts,
       });
       window.dispatchEvent(new CustomEvent("karui-reload-chats"));
       router.push(`/projects/${projectId}/${chat.id}`);

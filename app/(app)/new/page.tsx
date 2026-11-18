@@ -73,6 +73,7 @@ function NewChat() {
     images: composer.images,
     files: composer.files,
     ...(!incognito && composer.skill ? { skill: composer.skill } : {}),
+    ...(composer.artifacts ? { artifacts: composer.artifacts } : {}),
   });
 
   const handleSend = async () => {

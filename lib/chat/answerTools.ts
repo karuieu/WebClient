@@ -37,12 +37,13 @@ export interface ContextIndex {
   skills: SkillIndexEntry[];
   // Notes and documents written earlier in a normal chat, by path.
   chat: LibraryIndexEntry[];
+  artifactVersions?: { id: string; artifact: number; title: string; version: number }[];
 }
 
-type ContextKind = "memory" | "library" | "skill" | "chat";
+type ContextKind = "memory" | "library" | "skill" | "chat" | "artifactVersion";
 
 // "c" is taken by connector tool names.
-const ALIAS_PREFIX: Record<ContextKind, string> = { memory: "m", library: "f", skill: "s", chat: "a" };
+const ALIAS_PREFIX: Record<ContextKind, string> = { memory: "m", library: "f", skill: "s", chat: "a", artifactVersion: "h" };
 
 const aliasOf = (kind: ContextKind, i: number): string => `${ALIAS_PREFIX[kind]}${i + 1}`;
 
@@ -50,7 +51,7 @@ const aliasOf = (kind: ContextKind, i: number): string => `${ALIAS_PREFIX[kind]}
 export type ContextAliases = Map<string, { kind: ContextKind; id: string; label?: string }>;
 
 export function contextAliases(index: ContextIndex): ContextAliases {
-  const lists: Array<[ContextKind, { id: string }[]]> = [["memory", index.memory], ["library", index.library], ["skill", index.skills], ["chat", index.chat]];
+  const lists: Array<[ContextKind, { id: string }[]]> = [["memory", index.memory], ["library", index.library], ["skill", index.skills], ["chat", index.chat], ["artifactVersion", index.artifactVersions ?? []]];
   return new Map(lists.flatMap(([kind, items]) => items.map((item, i) => {
     const label = kind === "memory" ? [index.memory[i].category, index.memory[i].name].filter(Boolean).join(" / ") : undefined;
     return [aliasOf(kind, i), { kind, id: item.id, label }] as const;
@@ -62,6 +63,7 @@ export interface ContextSelection {
   libraryIds: string[];
   skillIds: string[];
   chatIds: string[];
+  artifactVersionIds?: string[];
 }
 
 // Unknown aliases are dropped: the model may invent or misspell them.
@@ -71,6 +73,7 @@ export function readContext(value: string, aliases: ContextAliases, selection: C
     library: [...selection.libraryIds],
     skill: [...selection.skillIds],
     chat: [...selection.chatIds],
+    artifactVersion: [...(selection.artifactVersionIds ?? [])],
   };
   const loaded: string[] = [];
   for (const alias of new Set(value.split(/[\s,]+/))) {
@@ -80,7 +83,13 @@ export function readContext(value: string, aliases: ContextAliases, selection: C
     ids[entry.kind].push(entry.id);
     loaded.push(alias);
   }
-  return { selection: { memoryIds: ids.memory, libraryIds: ids.library, skillIds: ids.skill, chatIds: ids.chat }, loaded };
+  return {
+    selection: {
+      memoryIds: ids.memory, libraryIds: ids.library, skillIds: ids.skill, chatIds: ids.chat,
+      ...(ids.artifactVersion.length ? { artifactVersionIds: ids.artifactVersion } : {}),
+    },
+    loaded,
+  };
 }
 
 export function memoryBlock(files: MemoryFileForChat[], ids: string[]): string {
@@ -168,6 +177,10 @@ const CHAT_FILE_RULES =
   "<chat_files_index> lists the notes, documents and code files written earlier in this chat (id, path, size, title). The latest version of each is usually in the conversation above; " +
   "load one only when you need it and its latest version isn't there.";
 
+const ARTIFACT_VERSION_RULES =
+  "<artifact_version_index> lists older versions of artifacts the user referenced. The current versions are already in <referenced_artifacts>. " +
+  "Use <read> with a version entry's id when the user asks about an earlier version or wants to compare versions.";
+
 const CALL_FORMAT = '<connector_call>{"name":"<tool name>","arguments":{...}}</connector_call>';
 
 const CONNECTOR_RULES =
@@ -190,18 +203,22 @@ function indexBlocks(index: ContextIndex): string[] {
     index.library.length > 0 ? `<library_index>\n${index.library.map((f, i) => `<file id="${aliasOf("library", i)}" path=${JSON.stringify(f.path)} size="${f.size}">${f.preview}</file>`).join("\n")}\n</library_index>` : "",
     index.skills.length > 0 ? `<skill_index>\n${index.skills.map((s, i) => `<skill id="${aliasOf("skill", i)}" name=${JSON.stringify(s.name)}${s.source === "karui" ? ' from="Karui"' : ""}>${s.description}</skill>`).join("\n")}\n</skill_index>` : "",
     index.chat.length > 0 ? `<chat_files_index>\n${index.chat.map((f, i) => `<file id="${aliasOf("chat", i)}" path=${JSON.stringify(f.path)} size="${f.size}">${f.preview}</file>`).join("\n")}\n</chat_files_index>` : "",
+    index.artifactVersions?.length ? `<artifact_version_index>\n${index.artifactVersions.map((entry, i) => JSON.stringify({
+      id: aliasOf("artifactVersion", i), artifact: entry.artifact, title: entry.title, version: entry.version,
+    })).join("\n").replace(/</g, "\\u003c")}\n</artifact_version_index>` : "",
   ];
 }
 
 // Stable within a turn, so it sits above the loaded context in the prompt.
 export function answerToolsBlock(index: ContextIndex, connectorTools: Map<string, ConnectorTool>, memoryNotes: boolean): string {
-  const hasIndex = index.memory.length + index.library.length + index.skills.length + index.chat.length > 0;
+  const hasIndex = index.memory.length + index.library.length + index.skills.length + index.chat.length + (index.artifactVersions?.length ?? 0) > 0;
   const rules = [
     hasIndex ? READ_RULES : "",
     index.memory.length > 0 ? MEMORY_RULES : "",
     index.library.length > 0 ? LIBRARY_RULES : "",
     index.skills.length > 0 ? SKILL_RULES : "",
     index.chat.length > 0 ? CHAT_FILE_RULES : "",
+    index.artifactVersions?.length ? ARTIFACT_VERSION_RULES : "",
     connectorTools.size > 0 ? CONNECTOR_RULES : "",
     memoryNotes ? MEMORY_NOTE_RULES : "",
   ].filter(Boolean);

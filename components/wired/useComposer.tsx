@@ -21,6 +21,8 @@ import type { ComposerSkills, SelectedSkill, SkillCatalog } from "@/components/a
 import { getSkillsForChat, SKILLS_UPDATED_EVENT } from "@/lib/chat/skills";
 import { getProject } from "@/lib/projects/projects";
 import { insertSkillCommand, skillCommandName, type SkillReference } from "@/lib/messages/skillInvocation";
+import type { ArtifactReference } from "@/lib/messages/artifactReference";
+import { useArtifactMentions } from "./useArtifactMentions";
 
 const MAIN = ["fast", "smart"] as const;
 const EXTRA: { id: string; name: string; description: string }[] = [
@@ -50,8 +52,10 @@ export function buildModelOptions(): ModelOption[] {
   ];
 }
 
-export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, projectId }: { onSubmit: () => void; fixedModel?: boolean; skillsEnabled?: boolean; projectId?: string | null }) {
+export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, artifactsEnabled = skillsEnabled, projectId }: { onSubmit: () => void; fixedModel?: boolean; skillsEnabled?: boolean; artifactsEnabled?: boolean; projectId?: string | null }) {
   const { showError } = useToast();
+  const artifactMentions = useArtifactMentions(artifactsEnabled);
+  const setArtifacts = artifactMentions.setSelected;
   const [text, setTextValue] = React.useState("");
   const scope = skillsEnabled ? projectId ?? "" : null;
   const [skillState, setSkillState] = React.useState<{ scope: string | null; catalog: SkillCatalog; selected: SelectedSkill | null }>({ scope: null, catalog: { status: "loading" }, selected: null });
@@ -65,14 +69,15 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, proje
     setTextValue(value);
     setSkillState((state) => ({ ...state, selected: null }));
   }, []);
-  const restore = React.useCallback((content: string, reference?: SkillReference) => {
+  const restore = React.useCallback((content: string, reference?: SkillReference, artifacts?: ArtifactReference[]) => {
     const catalog = skillStateRef.current?.catalog;
     const skill = reference && catalog?.status === "ready" ? catalog.items.find((item) => item.id === reference.id && item.source === reference.source) : undefined;
     const command = skill ? skillCommandName(skill.name) : "";
     const at = skill ? content.indexOf(command) : -1;
     setTextValue(at >= 0 ? content.slice(0, at) + content.slice(at + command.length) : content);
     setSkillState((state) => ({ ...state, selected: skill && at >= 0 ? { skill, at } : null }));
-  }, []);
+    setArtifacts(artifacts ?? []);
+  }, [setArtifacts]);
 
   React.useEffect(() => {
     if (scope === null) return;
@@ -161,6 +166,7 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, proje
         ? "This skill is no longer available in this chat. Remove it or choose another."
         : undefined,
     } satisfies ComposerSkills,
+    artifacts: artifactMentions.props,
     attachments,
     accept: imagesOn ? `image/*,${TEXT_FILE_ACCEPT}` : TEXT_FILE_ACCEPT,
     fileAccept: TEXT_FILE_ACCEPT,
@@ -202,6 +208,7 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, proje
     text,
     message: selectedSkill ? insertSkillCommand(text, selectedSkill.skill.name, selectedSkill.at) : text.trim(),
     skill: selectedSkill ? { id: selectedSkill.skill.id, source: selectedSkill.skill.source } : undefined,
+    artifacts: artifactMentions.references,
     setText,
     restore,
     model: activeModel,
@@ -213,9 +220,10 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, proje
     images: imgs.images,
     files: docs.files,
     busy,
-    isEmpty: !text.trim() && !selectedSkill && imgs.images.length === 0 && docs.files.length === 0,
+    isEmpty: !text.trim() && !selectedSkill && !artifactMentions.references && imgs.images.length === 0 && docs.files.length === 0,
     reset: () => {
       setText("");
+      setArtifacts([]);
       imgs.clearImages();
       docs.clearFiles();
     },

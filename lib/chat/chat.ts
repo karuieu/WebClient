@@ -8,6 +8,7 @@ import { decryptField, encryptField, fieldAad, messageAad } from "@/lib/account/
 import { getProject, listProjectFiles, listProjectMemory, readProjectFiles } from "@/lib/projects/projects";
 import { saveArtifactsToLibrary } from "@/lib/projects/projectFiles";
 import { chatFileIndex, collapseOldVersions, resolveChatArtifacts } from "@/lib/artifacts/chatFiles";
+import { readReferencedArtifacts, type ReferencedArtifact } from "@/lib/artifacts/referencedArtifacts";
 import {
   applyLiveMemoryEdit,
   applyProjectMemoryEdit,
@@ -46,6 +47,7 @@ import {
   IMAGES_UNSUPPORTED_NOTE,
 } from "@/lib/messages/vision";
 import type { SkillReference } from "@/lib/messages/skillInvocation";
+import type { ArtifactReference } from "@/lib/messages/artifactReference";
 import { API_URL, JSON_HEADERS, SESSION_EXPIRED_MESSAGE, apiFetch } from "@/lib/core/api";
 
 function requireProvider(modelId: string): ProviderId {
@@ -544,18 +546,33 @@ async function memoryFilesFor(chat: Chat | null): ReturnType<typeof getMemoryFil
 }
 
 // Fetched at once: one after another they added ~0.3 s before every answer.
-async function loadTurnContext(key: CryptoKey, chatId: string, history: HistoryMessage[], forcedSkill?: SkillReference) {
+async function referencedArtifactsFor(history: HistoryMessage[], selected?: ArtifactReference[]): Promise<ReferencedArtifact[]> {
+  const earlier = selected ? undefined : history.findLast((message) => message.role === "user" && parseMessageContent(message.content).artifacts);
+  const artifacts = selected ?? (earlier && parseMessageContent(earlier.content).artifacts);
+  if (!artifacts?.length) return [];
+  const resolved = await readReferencedArtifacts(artifacts, {
+    messages: getMessages,
+    projectId: async (chatId) => (await getChat(chatId)).project_id,
+  });
+  const missing = selected && resolved.find((artifact) => !artifact.current);
+  if (missing) throw new Error(`Couldn't load “${missing.reference.title}”. Try again or remove the artifact from your message.`);
+  return resolved;
+}
+
+async function loadTurnContext(key: CryptoKey, chatId: string, history: HistoryMessage[], forcedSkill?: SkillReference, selectedArtifacts?: ArtifactReference[]) {
+  const referencedArtifacts = referencedArtifactsFor(history, selectedArtifacts);
   const customInstructions = getCustomInstructionsContext();
-  const chatMeta = await (forcedSkill ? getChat(chatId) : getChat(chatId).catch(() => null));
-  const inProject = projectTurn(chatMeta);
-  const [since, project, memoryFiles, skills, instructions] = await Promise.all([
-    sinceSummary(key, chatId, chatMeta, history),
+  const chatMeta = forcedSkill ? getChat(chatId) : getChat(chatId).catch(() => null);
+  const inProject = chatMeta.then(projectTurn);
+  const [since, project, memoryFiles, skills, instructions, artifacts] = await Promise.all([
+    chatMeta.then((chat) => sinceSummary(key, chatId, chat, history)),
     inProject,
-    memoryFilesFor(chatMeta),
+    chatMeta.then(memoryFilesFor),
     inProject.then((p) => getSkillsForChat(p?.skillIds, forcedSkill ? "required" : "optional")),
     customInstructions,
+    referencedArtifacts,
   ]);
-  return { since, inProject: project, memoryFiles: project ? project.memoryFiles : memoryFiles, skills, customInstructions: instructions };
+  return { since, inProject: project, memoryFiles: project ? project.memoryFiles : memoryFiles, skills, customInstructions: instructions, artifacts };
 }
 
 type TurnContext = Pick<
@@ -572,6 +589,7 @@ type TurnContext = Pick<
   | "signal"
   | "project"
   | "chatFiles"
+  | "referencedArtifacts"
   | "applyMemoryEdit"
 >;
 
@@ -583,14 +601,11 @@ async function streamTurn(
   ctx: TurnContext,
   webSearch: boolean,
   onActivity: ((activity: AnswerActivity) => void) | undefined,
-  images: ChatImage[],
-  files: ChatTextFile[],
   onTitle: ((title: string) => void) | undefined,
   onBrief?: (brief: string) => void
 ) {
   const readsImages = modelSupportsImages(model);
-  if (images.length > 0 && !readsImages) throw new Error(IMAGES_UNSUPPORTED_NOTE);
-  const storedContent = packMessageContent(content, images, files, ctx.forcedSkill);
+  if (!readsImages && parseMessageContent(content).images.length > 0) throw new Error(IMAGES_UNSUPPORTED_NOTE);
 
   // The <chat_title> block is extracted from the stream and never shown. Filter order matters: the title filter runs before the project-brief filter.
   // Both are applied only once the answer is verified.
@@ -600,7 +615,7 @@ async function streamTurn(
   const titleFilter = onTitle ? createTagFilter(TITLE_OPEN, TITLE_CLOSE, afterTitle, (title) => (written.title = title)) : null;
   const emitToken = titleFilter ? titleFilter.push : afterTitle;
 
-  const turns: ChatTurn[] = [...history, { role: "user", content: storedContent }];
+  const turns: ChatTurn[] = [...history, { role: "user", content }];
   const reasoningEffort = resolveReasoningEffort(model);
 
   // E2E path: the browser composes and encrypts the request; the backend only proxies it. The only plaintext the backend sees here is the finished search query and the address of a page the model reads.
@@ -630,7 +645,7 @@ async function streamTurn(
   }
 
   return {
-    userContent: storedContent,
+    userContent: content,
     // Exactly what was on screen, in order, or the Processing section vanishes when the streamed message is replaced by the saved one.
     assistantContent: cleanResponse,
     provider,
@@ -653,9 +668,10 @@ export async function sendMessage(
   signal?: AbortSignal,
   discard: string[] = [],
   forcedSkill?: SkillReference,
+  selectedArtifacts?: ArtifactReference[],
 ): Promise<Message[]> {
   const key = await requireAesKey();
-  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history, forcedSkill);
+  const { since, inProject, memoryFiles, skills, customInstructions, artifacts } = await loadTurnContext(key, chatId, history, forcedSkill, selectedArtifacts);
   const ctx: TurnContext = {
     displayName: getUser()?.display_name ?? "",
     projectContext: inProject?.context ?? "",
@@ -668,6 +684,7 @@ export async function sendMessage(
     applyMemoryEdit: inProject?.applyMemoryEdit,
     project: inProject?.project,
     chatFiles: inProject ? undefined : chatFileIndex(history),
+    ...(artifacts.length ? { referencedArtifacts: artifacts } : {}),
     connectors: true,
     signal,
   };
@@ -681,7 +698,8 @@ export async function sendMessage(
         }
       : undefined;
 
-  const turn = await streamTurn(content, model, since.history, onToken, ctx, webSearch, onActivity, images, files, onTitle, onBrief);
+  const packed = packMessageContent(content, images, files, forcedSkill, selectedArtifacts);
+  const turn = await streamTurn(packed, model, since.history, onToken, ctx, webSearch, onActivity, onTitle, onBrief);
   // A project saves the answer's notes to its Library, unless it is unverified; a normal chat keeps them in the message as file versions.
   const assistantContent = !inProject
     ? resolveChatArtifacts(turn.assistantContent, history)
@@ -725,7 +743,7 @@ export async function sendIncognitoMessage(
     chatFiles: chatFileIndex(history),
     connectors: false,
   };
-  const turn = await streamTurn(content, model, history, onToken, ctx, webSearch, onActivity, images, files, undefined);
+  const turn = await streamTurn(packMessageContent(content, images, files), model, history, onToken, ctx, webSearch, onActivity, undefined);
   const assistantContent = resolveChatArtifacts(turn.assistantContent, history);
   const base = { chat_id: INCOGNITO_CHAT_ID, model, pinned: false, created_at: new Date().toISOString() };
   return [
@@ -827,8 +845,8 @@ export async function retryMessage(
   // otherwise this turn would still go out with the old one.
   await invalidateSummaryIfCovered(key, chatId, origAssistantId);
 
-  const forcedSkill = parseMessageContent(history.findLast((message) => message.role === "user")?.content ?? "").skill;
-  const { since, inProject, memoryFiles, skills, customInstructions } = await loadTurnContext(key, chatId, history, forcedSkill);
+  const { skill: forcedSkill } = parseMessageContent(history.findLast((message) => message.role === "user")?.content ?? "");
+  const { since, inProject, memoryFiles, skills, customInstructions, artifacts } = await loadTurnContext(key, chatId, history, forcedSkill);
   const projectContext = inProject?.context ?? "";
   const reasoningEffort = resolveReasoningEffort(model);
   const variantGroup = origVariantGroup || crypto.randomUUID();
@@ -852,6 +870,7 @@ export async function retryMessage(
       connectors: false,
       project: inProject?.project,
       chatFiles: inProject ? undefined : chatFileIndex(history),
+      ...(artifacts.length ? { referencedArtifacts: artifacts } : {}),
       reasoningEffort,
       signal,
     },

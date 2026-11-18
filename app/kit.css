@@ -18,6 +18,8 @@
   --halloween: #c2410c;
   --danger: #d70015;
   --link: #1d4ed8;
+  --artifact-code: #176d89;
+  --artifact-slides: #9f4b16;
   --on-danger: #ffffff;
   --code-keyword: #ad3da4;
   --code-string: #b4471d;
@@ -47,6 +49,8 @@
   --halloween: #ff9a3c;
   --danger: #ff6961;
   --link: #8ab4f8;
+  --artifact-code: #77cbe5;
+  --artifact-slides: #ffad66;
   --on-danger: #000000;
   --code-keyword: #f18fb5;
   --code-string: #efa27d;
@@ -63,6 +67,8 @@
 @theme inline {
   --color-bg: var(--bg);
   --color-link: var(--link);
+  --color-artifact-code: var(--artifact-code);
+  --color-artifact-slides: var(--artifact-slides);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-elevated: var(--elevated);
