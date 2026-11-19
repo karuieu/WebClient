@@ -73,4 +73,6 @@ export const AMD_ROOTS: Record<string, AmdRoots> = {
 export const ACCEPTED_MEASUREMENTS: string[] = [
   // Enclave repo commit 46718d6 on a Milan processor.
   "cdb185d5e8fd79c9d2e62c71719c504e8e48bba0b33f27a58e08d160a69d874ee90f56ff91bc09c116048bcdf667180c",
+  // Enclave repo commit f163c06 on a Milan processor.
+  "c796842acbb269eae776cd39b79441407cccec489d620be316ba3fced985caf4b13bcbd9b85c1c2c7f77ff858ba07bb6",
 ];
