@@ -19,7 +19,7 @@ import { Spinner } from "@/components/kit/Spinner";
 import { codeLanguageOf, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./AttachmentViewer";
-import { Markdown } from "./Markdown";
+import { Markdown, MessageLink } from "./Markdown";
 import { Processing, type ProcessingStep } from "./Processing";
 import { Preparation, type PreparationSegment } from "./Preparation";
 import type { QuestionData } from "./Questions";
@@ -141,6 +141,51 @@ function Undecryptable() {
   );
 }
 
+const messageUrl = /(?<![\p{L}\p{N}_@./])(https?:\/\/|www\.)([^\s<>"“”‘’\x60\\]+)/giu;
+const urlPunctuation = /[.,!?;:'…)\]}]/;
+const closingDelimiters = [["(", ")"], ["[", "]"], ["{", "}"]];
+
+function trimUrlPunctuation(url: string): string {
+  let tail = url.length;
+  while (tail > 0 && urlPunctuation.test(url[tail - 1])) tail--;
+  if (tail === url.length) return url;
+  const body = url.slice(0, tail);
+  let end = tail;
+  for (const [open, close] of closingDelimiters) {
+    if (!url.includes(close, tail)) continue;
+    const unclosed = body.split(open).length - body.split(close).length;
+    let position = tail;
+    for (let count = 0; count < unclosed; count++) {
+      const index = url.indexOf(close, position);
+      if (index === -1) break;
+      position = index + 1;
+    }
+    end = Math.max(end, position);
+  }
+  return url.slice(0, end);
+}
+
+function linkMessageText(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let end = 0;
+  for (const { index, 1: prefix, 2: candidate } of text.matchAll(messageUrl)) {
+    const address = trimUrlPunctuation(candidate);
+    if (!address) continue;
+    const label = prefix + address;
+    const href = prefix.endsWith(".") ? "https://" + label : label;
+    try {
+      new URL(href);
+    } catch {
+      continue;
+    }
+    parts.push(text.slice(end, index), <MessageLink href={href} key={index}>{label}</MessageLink>);
+    end = index + label.length;
+  }
+  if (parts.length === 0) return text;
+  parts.push(text.slice(end));
+  return parts;
+}
+
 export function UserMessage({ message, enter = true }: { message: UserMessageData; enter?: boolean }) {
   const reduce = useReducedMotion();
   const [previewed, setPreviewed] = React.useState<number | null>(null);
@@ -190,7 +235,7 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
               {message.quote && (
                 <p className="mb-2 line-clamp-3 border-l-2 border-line-strong pl-3 text-[13.5px] text-muted">{message.quote}</p>
               )}
-              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{message.text}</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{linkMessageText(message.text)}</p>
             </>
           )}
         </div>

@@ -42,6 +42,19 @@ function ScrollableTable({ children }: { children: React.ReactNode }) {
   );
 }
 
+export function MessageLink({ href, children }: { href?: string; children?: React.ReactNode }): React.JSX.Element {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline decoration-line-strong underline-offset-[3px] transition-colors duration-150 hover:decoration-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+    >
+      {children}
+    </a>
+  );
+}
+
 const components: Components = {
   h1: ({ children }) => <h1 className="mb-3 mt-8 text-[1.5rem] font-medium leading-tight tracking-[-0.025em] first:mt-0">{children}</h1>,
   h2: ({ children }) => <h2 className="mb-3 mt-7 text-[1.25rem] font-medium leading-snug tracking-[-0.02em] first:mt-0">{children}</h2>,
@@ -51,16 +64,7 @@ const components: Components = {
   ul: ({ children }) => <ul className="my-3.5 list-disc space-y-1.5 pl-5 marker:text-subtle">{children}</ul>,
   ol: ({ children }) => <ol className="my-3.5 list-decimal space-y-1.5 pl-5 marker:font-mono marker:text-[0.85em] marker:text-muted">{children}</ol>,
   li: ({ children }) => <li className="pl-1">{children}</li>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="underline decoration-line-strong underline-offset-[3px] transition-colors duration-150 hover:decoration-fg"
-    >
-      {children}
-    </a>
-  ),
+  a: MessageLink,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   blockquote: ({ children }) => (
     <blockquote className="my-4 border-l-2 border-line-strong pl-4 text-muted">{children}</blockquote>
