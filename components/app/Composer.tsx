@@ -13,7 +13,8 @@ import { AttachmentViewer, FileTile, type ViewerAttachment } from "./chat/Attach
 import { ModelPicker } from "./ModelPicker";
 import { ComposerCommands, type ComposerCommand, type ComposerSkill, type ComposerSkills } from "./ComposerCommands";
 import { skillCommandName } from "@/lib/messages/skillInvocation";
-import { SkillComposerInput, type SkillComposerInputHandle } from "./SkillComposerInput";
+import { composerCodeBlocks, composerHasText } from "@/lib/ui/composerCode";
+import { ComposerInput, type ComposerInputHandle } from "./ComposerInput";
 
 export type ComposerAttachment = { id: string } & ViewerAttachment;
 
@@ -112,8 +113,7 @@ export function Composer({
   autoFocus?: boolean;
   skills?: ComposerSkills;
 }): React.JSX.Element {
-  const textRef = React.useRef<HTMLTextAreaElement>(null);
-  const richTextRef = React.useRef<SkillComposerInputHandle>(null);
+  const inputRef = React.useRef<ComposerInputHandle>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const photosRef = React.useRef<HTMLInputElement>(null);
@@ -126,15 +126,12 @@ export function Composer({
   const [commandDismissed, setCommandDismissed] = React.useState(false);
   const [fieldFocused, setFieldFocused] = React.useState(false);
   const [commandNav, setCommandNav] = React.useState({ query: "", index: 0 });
-  const pendingCaret = React.useRef<number | null>(null);
   const focusInput = React.useCallback((at?: number) => {
-    if (richTextRef.current) richTextRef.current.focus(at);
-    else {
-      textRef.current?.focus();
-      if (at !== undefined) textRef.current?.setSelectionRange(at, at);
-    }
+    inputRef.current?.focus(at);
   }, []);
-  const command = value.slice(0, caret).match(/(?:^|\s)\/([^\n/]*)$/);
+  const codeBlocks = composerCodeBlocks(value);
+  const caretInCode = codeBlocks.some(({ bodyStart, bodyEnd }) => caret >= bodyStart && caret <= bodyEnd);
+  const command = caretInCode ? null : value.slice(0, caret).match(/(?:^|\s)\/([^\n/]*)$/);
   const rawQuery = command?.[1] ?? "";
   const skillsOnly = /^skill(?:[ \t]|$)/i.test(rawQuery);
   const commandQuery = skillsOnly ? rawQuery.replace(/^skill[ \t]*/i, "") : rawQuery;
@@ -142,25 +139,19 @@ export function Composer({
   const commandOpen = pendingCommand && fieldFocused && !sending;
   const moveCommand = (index: number) => setCommandNav({ query: rawQuery, index });
   const openSkills = () => {
-    richTextRef.current?.replaceText(value.length, value.length, value || skills?.selected ? "\n/skill " : "/skill ");
+    inputRef.current?.replaceText(value.length, value.length, value || skills?.selected ? "\n/skill " : "/skill ");
     setCommandDismissed(false);
     setAddOpen(false);
   };
   const consumeCommand = () => {
     if (!command) return;
     const start = caret - command[0].length + (command[0].startsWith("/") ? 0 : 1);
-    if (skills) {
-      richTextRef.current?.replaceText(start, caret, "");
-      return;
-    }
-    pendingCaret.current = start;
-    setCaret(start);
-    onChange(value.slice(0, start) + value.slice(caret));
+    inputRef.current?.replaceText(start, caret, "");
   };
   const selectSkill = (skill: ComposerSkill) => {
     if (!command) return;
     const start = caret - command[0].length + (command[0].startsWith("/") ? 0 : 1);
-    richTextRef.current?.insertSkill(skill, start, caret);
+    inputRef.current?.insertSkill(skill, start, caret);
   };
   const retrySkills = () => {
     if (skills?.catalog.status !== "error") return;
@@ -210,20 +201,7 @@ export function Composer({
     e.target.value = "";
     setAddOpen(false);
   };
-  const canSend = !sending && !pendingCommand && !skills?.error && (value.trim().length > 0 || !!skills?.selected || attachments.length > 0);
-
-  React.useLayoutEffect(() => {
-    const el = textRef.current;
-    if (el) {
-      if (document.activeElement === el) setFieldFocused(true);
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
-    }
-    if (pendingCaret.current !== null) {
-      focusInput(pendingCaret.current);
-      pendingCaret.current = null;
-    }
-  }, [value, focusInput]);
+  const canSend = !sending && !pendingCommand && !skills?.error && (composerHasText(value, codeBlocks) || !!skills?.selected || attachments.length > 0);
 
   const submit = () => {
     if (canSend) onSubmit();
@@ -242,7 +220,7 @@ export function Composer({
         return;
       }
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !caretInCode) {
       event.preventDefault();
       submit();
     }
@@ -370,55 +348,28 @@ export function Composer({
         <label htmlFor="composer-input" className="sr-only">
           Message
         </label>
-        {skills ? (
-          <SkillComposerInput
-            ref={richTextRef}
-            value={value}
-            selected={skills.selected}
-            onChange={(text, selected) => {
-              setCommandDismissed(false);
-              onChange(text);
-              skills.onSelect(selected);
-            }}
-            onCaretChange={setCaret}
-            onFocus={() => setFieldFocused(true)}
-            onKeyDown={inputKeyDown}
-            onPaste={onPaste}
-            autoFocus={autoFocus}
-            placeholder={placeholder}
-            aria-label="Message"
-            aria-autocomplete="list"
-            aria-haspopup="listbox"
-            aria-controls={commandOpen ? commandListId : undefined}
-            aria-activedescendant={commandOpen && activeCommand >= 0 ? `${commandListId}-${activeCommand}` : undefined}
-            aria-describedby={skills.error ? `${commandListId}-error` : undefined}
-          />
-        ) : (
-        <textarea
-          data-focus="within"
-          id="composer-input"
-          ref={textRef}
-          rows={1}
+        <ComposerInput
+          ref={inputRef}
           value={value}
+          selected={skills?.selected ?? null}
+          onChange={(text, selected) => {
+            setCommandDismissed(false);
+            onChange(text);
+            skills?.onSelect(selected);
+          }}
+          onCaretChange={setCaret}
+          onFocus={() => setFieldFocused(true)}
+          onKeyDown={inputKeyDown}
+          onPaste={onPaste}
           autoFocus={autoFocus}
           placeholder={placeholder}
-          aria-autocomplete={onAttach ? "list" : undefined}
-          aria-haspopup={onAttach ? "listbox" : undefined}
+          aria-label="Message"
+          aria-autocomplete={onAttach || skills ? "list" : undefined}
+          aria-haspopup={onAttach || skills ? "listbox" : undefined}
           aria-controls={commandOpen ? commandListId : undefined}
           aria-activedescendant={commandOpen && activeCommand >= 0 ? `${commandListId}-${activeCommand}` : undefined}
-          onFocus={() => setFieldFocused(true)}
-          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-          onKeyUp={(event) => setCaret(event.currentTarget.selectionStart)}
-          onChange={(event) => {
-            setCaret(event.target.selectionStart);
-            setCommandDismissed(false);
-            onChange(event.target.value);
-          }}
-          onPaste={onPaste}
-          onKeyDown={inputKeyDown}
-          className="block max-h-[40vh] min-h-[3.5rem] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none placeholder:text-muted focus-visible:outline-none"
+          aria-describedby={skills?.error ? `${commandListId}-error` : undefined}
         />
-        )}
       </div>
 
       <div className="flex items-center gap-1 px-2.5 pb-2.5">

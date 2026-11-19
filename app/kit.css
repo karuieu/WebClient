@@ -181,6 +181,13 @@ body {
   color: inherit;
 }
 
+::highlight(karui-composer-keyword) { color: color-mix(in oklab, var(--code-keyword) 96%, var(--fg)); }
+::highlight(karui-composer-string) { color: var(--code-string); }
+::highlight(karui-composer-number) { color: var(--code-number); }
+::highlight(karui-composer-function) { color: var(--code-function); }
+::highlight(karui-composer-type) { color: var(--code-type); }
+::highlight(karui-composer-comment) { color: color-mix(in oklab, var(--muted) 93%, var(--fg)); }
+
 :is(input, textarea, button, [tabindex])[data-focus="within"]:focus-visible {
   outline-style: none !important;
 }

@@ -4,33 +4,7 @@ import * as React from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, Copy } from "@/components/kit/icons";
-
-const LANGUAGES: Record<string, string> = {
-  js: "JavaScript",
-  javascript: "JavaScript",
-  ts: "TypeScript",
-  typescript: "TypeScript",
-  tsx: "TSX",
-  jsx: "JSX",
-  py: "Python",
-  python: "Python",
-  go: "Go",
-  rust: "Rust",
-  java: "Java",
-  cpp: "C++",
-  c: "C",
-  cs: "C#",
-  csharp: "C#",
-  sh: "Shell",
-  bash: "Shell",
-  shell: "Shell",
-  json: "JSON",
-  html: "HTML",
-  css: "CSS",
-  sql: "SQL",
-  yaml: "YAML",
-  md: "Markdown",
-};
+import { knownCodeLanguage } from "@/lib/ui/codeLanguages";
 
 const quiet = { color: "var(--muted)" };
 const keyword = { color: "var(--code-keyword)", fontWeight: "var(--code-weight)" as React.CSSProperties["fontWeight"] };
@@ -75,7 +49,7 @@ export const codeTheme: Record<string, React.CSSProperties> = {
 
 export function CodeBlock({ language, code }: { language?: string; code: string }) {
   const [copied, setCopied] = React.useState(false);
-  const label = language ? (LANGUAGES[language.toLowerCase()] ?? language) : "Code";
+  const label = language ? (knownCodeLanguage(language) ?? language) : "Code";
 
   const copy = async () => {
     try {
