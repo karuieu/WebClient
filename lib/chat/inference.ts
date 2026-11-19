@@ -453,6 +453,9 @@ export async function streamE2EChat(
   const libraryContents = new Map<string, string>();
   const attemptedFiles = new Set<string>();
   const emittedSkills = new Set<string>();
+  const readArtifacts = (opts.referencedArtifacts ?? []).filter(({ current }) => current).map(({ reference }) => reference.title);
+  let emittedArtifacts = false;
+  const emittedVersions = new Set<string>();
 
   const projectFilesBlock = async (round: AnswerRound, emit: (block: string) => void): Promise<string> => {
     const picked = sendWholeLibrary ? library : library.filter((f) => round.selection.libraryIds.includes(f.id));
@@ -486,6 +489,10 @@ export async function streamE2EChat(
 
   const buildMessages = async (round: AnswerRound, emit: (block: string) => void, followUpTokens: number): Promise<ModelMessage[]> => {
     throwIfStopped(opts.signal);
+    if (!emittedArtifacts && readArtifacts.length > 0) {
+      emittedArtifacts = true;
+      emit(`<artifacts_read>${blockJSON({ titles: readArtifacts })}</artifacts_read>`);
+    }
     let systemPrompt = await buildSystemPrompt({
       displayName: opts.displayName,
       projectContext: opts.projectContext,
@@ -515,8 +522,12 @@ export async function streamE2EChat(
       const room = budget - estimateTurnTokens({ role: "system", content: systemPrompt }) - followUpTokens - (latest ? estimateTurnTokens(latest) : 0);
       const previous = await artifacts.readVersions(round.selection.artifactVersionIds, Math.max(0, Math.min(room, budget * LIBRARY_PROMPT_SHARE)));
       const block = `\n\n<artifact_versions>\n${previous}\n</artifact_versions>`;
-      if (previous && estimateTokens(block) <= room) systemPrompt += block;
-      else if (room >= 30) systemPrompt += "\n\nThe requested earlier artifact versions could not fit in this context.";
+      if (previous && estimateTokens(block) <= room) {
+        systemPrompt += block;
+        const versions = artifacts.versions.filter(({ id }) => round.selection.artifactVersionIds?.includes(id) && !emittedVersions.has(id));
+        versions.forEach(({ id }) => emittedVersions.add(id));
+        if (versions.length > 0) emit(`<artifacts_read>${blockJSON({ titles: versions.map(({ title, version }) => `${title} (version ${version})`) })}</artifacts_read>`);
+      } else if (room >= 30) systemPrompt += "\n\nThe requested earlier artifact versions could not fit in this context.";
     }
     throwIfStopped(opts.signal);
     const history = trimTurns(opts.turns, contextBudget(tier, modelInfo.contextWindow, systemPrompt) - followUpTokens);

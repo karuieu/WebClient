@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Check } from "@/components/kit/icons";
+import { Check, FileBraces, FileText, Globe, Presentation } from "@/components/kit/icons";
 import { Spinner } from "@/components/kit/Spinner";
 import { menuStyles } from "@/components/kit/menuStyles";
 import type { ArtifactType } from "@/lib/artifacts/artifacts";
@@ -23,10 +23,19 @@ export type SkillCatalog = Catalog<ComposerSkill>;
 
 export type ComposerArtifact = { chatId: string; path: string; title: string; type: ArtifactType; detail?: string };
 
+export const ARTIFACT_KINDS = {
+  markdown: { label: "Doc", icon: FileText, color: "text-link" },
+  html: { label: "Site", icon: Globe, color: undefined },
+  code: { label: "Code", icon: FileBraces, color: "text-artifact-code" },
+  slides: { label: "Slides", icon: Presentation, color: "text-artifact-slides" },
+};
+
+export type SelectedArtifact = { artifact: ComposerArtifact; at: number };
+
 export type ComposerArtifacts = {
   catalog: Catalog<ComposerArtifact>;
-  selected: ComposerArtifact[];
-  onChange: (artifacts: ComposerArtifact[]) => void;
+  selected: SelectedArtifact[];
+  onChange: (artifacts: SelectedArtifact[]) => void;
   onOpen?: () => void;
 };
 

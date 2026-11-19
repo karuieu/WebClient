@@ -20,6 +20,7 @@ import { codeLanguageOf, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./AttachmentViewer";
 import { Markdown } from "./Markdown";
+import { writeMentionClipboard, type CopiedPart } from "@/components/app/mentionClipboard";
 import { Processing, type ProcessingStep } from "./Processing";
 import { Preparation, type PreparationSegment } from "./Preparation";
 import type { QuestionData } from "./Questions";
@@ -31,8 +32,23 @@ export type UserMessageData = {
   quote?: string | null;
   images?: { src: string; name: string }[];
   files?: { name: string; content: string; meta?: string }[];
+  mentions?: MessageMention[];
   decryptionFailed?: boolean;
 };
+
+export type ArtifactMention = { at: number; label: string; kind: "artifact"; chatId: string; path: string; type: ArtifactType };
+export type MessageMention = { at: number; label: string; kind: "skill"; id: string; source: "user" | "karui" } | ArtifactMention;
+
+function splitMentions(text: string, mentions: MessageMention[] = []): (string | MessageMention)[] {
+  const parts: (string | MessageMention)[] = [];
+  let from = 0;
+  for (const mention of [...mentions].sort((a, b) => a.at - b.at)) {
+    parts.push(text.slice(from, mention.at), mention);
+    from = mention.at;
+  }
+  parts.push(text.slice(from));
+  return parts;
+}
 
 export type ArtifactData = {
   id: string;
@@ -103,14 +119,21 @@ function ActionButton({ label, onClick, children }: { label: string; onClick?: (
   );
 }
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, html }: { text: string; html?: string }) {
   const [done, setDone] = React.useState(false);
   return (
     <ActionButton
       label={done ? "Copied" : "Copy"}
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(text);
+          if (html) {
+            await navigator.clipboard.write([new ClipboardItem({
+              "text/plain": new Blob([text], { type: "text/plain" }),
+              "text/html": new Blob([html], { type: "text/html" }),
+            })]);
+          } else {
+            await navigator.clipboard.writeText(text);
+          }
           setDone(true);
           setTimeout(() => setDone(false), 1600);
         } catch {}
@@ -141,9 +164,15 @@ function Undecryptable() {
   );
 }
 
-export function UserMessage({ message, enter = true }: { message: UserMessageData; enter?: boolean }) {
+export function UserMessage({ message, enter = true, onOpenArtifact }: { message: UserMessageData; enter?: boolean; onOpenArtifact?: (mention: ArtifactMention) => void }) {
   const reduce = useReducedMotion();
   const [previewed, setPreviewed] = React.useState<number | null>(null);
+  const parts = splitMentions(message.text, message.mentions);
+  const copied = writeMentionClipboard(parts.map((part): CopiedPart => {
+    if (typeof part === "string") return part;
+    if (part.kind === "skill") return { kind: "skill", id: part.id, source: part.source, label: part.label };
+    return { kind: "artifact", chatId: part.chatId, path: part.path, title: part.label, type: part.type };
+  }));
   const attachments: ViewerAttachment[] = [
     ...(message.images ?? []).map((img) => ({ kind: "image" as const, ...img })),
     ...(message.files ?? []).map((f) => ({ kind: "file" as const, ...f })),
@@ -180,7 +209,7 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
 
       <div className="flex max-w-[85%] items-end gap-1">
         <div className="opacity-0 transition-opacity duration-150 group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
-          {!message.decryptionFailed && <CopyButton text={message.text} />}
+          {!message.decryptionFailed && <CopyButton text={copied.text} html={message.mentions?.length ? copied.html : undefined} />}
         </div>
         <div className="min-w-0 origin-bottom-right rounded-[20px] rounded-br-md bg-surface-2 px-4 py-2.5 text-[0.9375rem] leading-relaxed">
           {message.decryptionFailed ? (
@@ -190,7 +219,31 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
               {message.quote && (
                 <p className="mb-2 line-clamp-3 border-l-2 border-line-strong pl-3 text-[13.5px] text-muted">{message.quote}</p>
               )}
-              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{message.text}</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                {parts.map((part, i) => {
+                  if (typeof part === "string") return part;
+                  if (part.kind === "skill") return <span key={i} className="text-link">{part.label}</span>;
+                  if (!onOpenArtifact) return <span key={i} className="text-link underline decoration-link/40 underline-offset-[3px]">{part.label}</span>;
+                  return (
+                    // A span, not a button: a button wraps as one block and breaks the line around a long title.
+                    <span
+                      key={i}
+                      role="button"
+                      tabIndex={0}
+                      title={`Open ${part.label}`}
+                      onClick={() => onOpenArtifact(part)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        onOpenArtifact(part);
+                      }}
+                      className="cursor-pointer rounded-[3px] text-link underline decoration-link/40 underline-offset-[3px] transition-[text-decoration-color] duration-150 hover:decoration-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+                    >
+                      {part.label}
+                    </span>
+                  );
+                })}
+              </p>
             </>
           )}
         </div>

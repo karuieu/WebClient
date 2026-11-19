@@ -20,7 +20,9 @@ import type { ModelOption } from "@/components/app/ModelPicker";
 import type { ComposerSkills, SelectedSkill, SkillCatalog } from "@/components/app/ComposerCommands";
 import { getSkillsForChat, SKILLS_UPDATED_EVENT } from "@/lib/chat/skills";
 import { getProject } from "@/lib/projects/projects";
-import { insertSkillCommand, skillCommandName, type SkillReference } from "@/lib/messages/skillInvocation";
+import { skillCommandName, type SkillReference } from "@/lib/messages/skillInvocation";
+import { readMentions, writeMentions } from "@/lib/messages/mentions";
+import { splitQuote } from "@/lib/messages/messageBlocks";
 import type { ArtifactReference } from "@/lib/messages/artifactReference";
 import { useArtifactMentions } from "./useArtifactMentions";
 
@@ -68,15 +70,24 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, artif
   const setText = React.useCallback((value: string) => {
     setTextValue(value);
     setSkillState((state) => ({ ...state, selected: null }));
-  }, []);
-  const restore = React.useCallback((content: string, reference?: SkillReference, artifacts?: ArtifactReference[]) => {
+    setArtifacts([]);
+  }, [setArtifacts]);
+  const restore = React.useCallback((content: string, reference?: SkillReference, artifacts: ArtifactReference[] = []) => {
     const catalog = skillStateRef.current?.catalog;
     const skill = reference && catalog?.status === "ready" ? catalog.items.find((item) => item.id === reference.id && item.source === reference.source) : undefined;
-    const command = skill ? skillCommandName(skill.name) : "";
-    const at = skill ? content.indexOf(command) : -1;
-    setTextValue(at >= 0 ? content.slice(0, at) + content.slice(at + command.length) : content);
-    setSkillState((state) => ({ ...state, selected: skill && at >= 0 ? { skill, at } : null }));
-    setArtifacts(artifacts ?? []);
+    // Offsets count the typed text, which follows the quote.
+    const base = content.length - splitQuote(content).text.length;
+    const read = readMentions(content, [
+      { at: skill && reference?.at !== undefined ? base + reference.at : -1, label: skill ? skillCommandName(skill.name) : "" },
+      ...artifacts.map(({ at, title }) => ({ at: at === undefined ? -1 : base + at, label: `@${title}` })),
+    ]);
+    const [skillAt, ...artifactAts] = read.offsets;
+    setTextValue(read.text);
+    setSkillState((state) => ({ ...state, selected: skill && skillAt !== null ? { skill, at: skillAt } : null }));
+    setArtifacts(artifacts.flatMap(({ chatId, path, title, type }, i) => {
+      const at = artifactAts[i];
+      return at === null ? [] : [{ artifact: { chatId, path, title, type }, at }];
+    }));
   }, [setArtifacts]);
 
   React.useEffect(() => {
@@ -203,12 +214,21 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, artif
     },
   };
 
+  const selectedArtifacts = artifactMentions.selected;
+  const written = writeMentions(text, [
+    ...(selectedSkill ? [{ at: selectedSkill.at, label: skillCommandName(selectedSkill.skill.name) }] : []),
+    ...selectedArtifacts.map(({ artifact, at }) => ({ at, label: `@${artifact.title}` })),
+  ]);
+  const artifactOffsets = written.offsets.slice(selectedSkill ? 1 : 0);
+
   return {
     props,
     text,
-    message: selectedSkill ? insertSkillCommand(text, selectedSkill.skill.name, selectedSkill.at) : text.trim(),
-    skill: selectedSkill ? { id: selectedSkill.skill.id, source: selectedSkill.skill.source } : undefined,
-    artifacts: artifactMentions.references,
+    message: written.text,
+    skill: selectedSkill ? { id: selectedSkill.skill.id, source: selectedSkill.skill.source, at: written.offsets[0] } : undefined,
+    artifacts: selectedArtifacts.length
+      ? selectedArtifacts.map(({ artifact: { chatId, path, title, type } }, i) => ({ chatId, path, title, type, at: artifactOffsets[i] }))
+      : undefined,
     setText,
     restore,
     model: activeModel,
@@ -220,10 +240,9 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, artif
     images: imgs.images,
     files: docs.files,
     busy,
-    isEmpty: !text.trim() && !selectedSkill && !artifactMentions.references && imgs.images.length === 0 && docs.files.length === 0,
+    isEmpty: !text.trim() && !selectedSkill && !selectedArtifacts.length && imgs.images.length === 0 && docs.files.length === 0,
     reset: () => {
       setText("");
-      setArtifacts([]);
       imgs.clearImages();
       docs.clearFiles();
     },

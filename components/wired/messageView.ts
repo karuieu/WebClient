@@ -6,7 +6,9 @@ import { isProviderVerified } from "@/lib/chat/inference";
 import { getModelProvider, PROVIDERS } from "@/lib/models/providers";
 import type { EnclaveState } from "@/components/app/chat/ChatView";
 import { parseMessageContent, type ChatImage, type ChatTextFile } from "@/lib/messages/vision";
-import { artifactMentionText } from "@/lib/messages/artifactReference";
+import { readMentions } from "@/lib/messages/mentions";
+import type { SkillReference } from "@/lib/messages/skillInvocation";
+import type { ArtifactReference } from "@/lib/messages/artifactReference";
 import { downloadArtifactDoc, downloadArtifactHtml, downloadArtifactSource, downloadSiteFile, parseArtifacts, siteFiles, slideCount, type Artifact } from "@/lib/artifacts/artifacts";
 import { downloadArtifactPptx } from "@/lib/artifacts/slidesPptx";
 import { chatFiles } from "@/lib/artifacts/chatFiles";
@@ -15,7 +17,7 @@ import { modelLabel, parseMessageBlocks, splitQuote, STOPPED_NOTICE } from "@/li
 import { draftStatus, parseSkillDrafts, type Skill, type SkillDraft } from "@/lib/chat/skills";
 import { parseQuestions } from "@/lib/messages/questions";
 import type { AnswerActivity } from "@/lib/chat/answerTools";
-import type { ArtifactChange, ArtifactData, MessageData, SkillDraftData } from "@/components/app/chat/Messages";
+import type { ArtifactChange, ArtifactData, MessageData, MessageMention, SkillDraftData } from "@/components/app/chat/Messages";
 import type { QuestionData } from "@/components/app/chat/Questions";
 
 
@@ -156,13 +158,35 @@ export function artifactPanelOf(
   };
 }
 
+// Offsets count the typed text, which follows the quote.
+function userMentions(text: string, skill?: SkillReference, artifacts: ArtifactReference[] = []): { text: string; mentions: MessageMention[] } {
+  const skillLabel = skill?.at !== undefined ? /^\/\S+/.exec(text.slice(skill.at))?.[0] : undefined;
+  const labelled: { label: string; mention: MessageMention }[] = [
+    ...(skill?.at !== undefined && skillLabel ? [{ label: skillLabel, mention: { at: skill.at, label: skillLabel, kind: "skill" as const, id: skill.id, source: skill.source } }] : []),
+    ...artifacts.flatMap(({ at, chatId, path, title, type }) => (at === undefined ? [] : [{
+      label: `@${title}`,
+      mention: { at, label: title, kind: "artifact" as const, chatId, path, type },
+    }])),
+  ];
+  const read = readMentions(text, labelled.map(({ label, mention }) => ({ at: mention.at, label })));
+  return {
+    text: read.text,
+    mentions: labelled.flatMap(({ mention }, i) => {
+      const at = read.offsets[i];
+      return at === null ? [] : [{ ...mention, at }];
+    }),
+  };
+}
+
 export function toUser(m: Message): MessageData {
   const parsed = parseMessageContent(m.content);
-  const { quote, text } = splitQuote(parsed.text);
+  const { quote, text: typed } = splitQuote(parsed.text);
+  const { text, mentions } = userMentions(typed, parsed.skill, parsed.artifacts);
   return {
     id: m.id,
     role: "user",
-    text: [artifactMentionText(parsed.artifacts), text].filter(Boolean).join("\n\n"),
+    text,
+    mentions,
     quote,
     images: parsed.images.map((img: ChatImage) => ({ src: img.data, name: img.name })),
     files: parsed.files.map((f: ChatTextFile) => ({ name: f.name, content: f.content, meta: `${Math.max(1, Math.round(f.content.length / 1024))} KB` })),

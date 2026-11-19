@@ -1,17 +1,15 @@
 import type { SkillForChat } from "@/lib/chat/skills";
 
-export type SkillReference = Pick<SkillForChat, "id" | "source">;
+// `at` is where the skill command starts in the message text; older messages have none.
+export type SkillReference = Pick<SkillForChat, "id" | "source"> & { at?: number };
 
 export function parseSkillReference(value: unknown): SkillReference | undefined {
   if (!value || typeof value !== "object" || !("id" in value) || !("source" in value)) return undefined;
   if (typeof value.id !== "string" || !value.id || (value.source !== "user" && value.source !== "karui")) return undefined;
-  return { id: value.id, source: value.source };
+  const at = "at" in value && Number.isInteger(value.at) && Number(value.at) >= 0 ? Number(value.at) : undefined;
+  return { id: value.id, source: value.source, ...(at !== undefined ? { at } : {}) };
 }
 
 export function skillCommandName(name: string): string {
   return `/${name.trim().toLowerCase().replace(/\s+/g, "-")}`;
-}
-
-export function insertSkillCommand(text: string, name: string, at: number): string {
-  return (text.slice(0, at) + skillCommandName(name) + text.slice(at)).trim();
 }

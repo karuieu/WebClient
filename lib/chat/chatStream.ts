@@ -16,7 +16,7 @@ import { throwIfStopped } from "@/lib/core/errors";
 import { thinkingSince } from "@/lib/messages/streamTags";
 import { type AnswerActivity } from "./answerTools";
 import type { SkillReference } from "@/lib/messages/skillInvocation";
-import { artifactMentionText, type ArtifactReference } from "@/lib/messages/artifactReference";
+import type { ArtifactReference } from "@/lib/messages/artifactReference";
 
 export type StreamPhase = "streaming" | "saving" | "done" | "error";
 
@@ -107,7 +107,6 @@ export function startSendStream(opts: {
   streams.set(chatId, state);
 
   const isFirstMessage = opts.history.length === 0;
-  const titleFallback = opts.content || artifactMentionText(opts.artifacts);
   const imageNames = (opts.images ?? []).map((i) => i.name);
   const wantAiTitle = isFirstMessage && getChatTitleMode() === "ai";
   let titleCaptured = false;
@@ -118,7 +117,7 @@ export function startSendStream(opts: {
       await opts.ready;
       throwIfStopped(signal);
       if (isFirstMessage && !wantAiTitle) {
-        void fallbackTitleChat(chatId, titleFallback, imageNames);
+        void fallbackTitleChat(chatId, opts.content, imageNames);
       }
       const saved = await sendMessage(
         chatId,
@@ -150,7 +149,7 @@ export function startSendStream(opts: {
         opts.artifacts,
       );
       if (wantAiTitle && !titleCaptured) {
-        void fallbackTitleChat(chatId, titleFallback, imageNames);
+        void fallbackTitleChat(chatId, opts.content, imageNames);
       }
       state.phase = "done";
       state.saved = saved;

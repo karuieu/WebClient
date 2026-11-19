@@ -3,7 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Switch } from "@/components/kit/Controls";
-import { ArrowUp, BookOpen, Camera, ChevronRight, FileBraces, FileText, Folder, FolderInput, Globe, ImageIcon, Layers, Paperclip, Plus, Presentation, X } from "@/components/kit/icons";
+import { ArrowUp, BookOpen, Camera, ChevronRight, FileText, Folder, FolderInput, Globe, ImageIcon, Layers, Paperclip, Plus, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
 import { Sheet } from "@/components/kit/Sheet";
 import { Spinner } from "@/components/kit/Spinner";
@@ -11,20 +11,14 @@ import { useMediaQuery } from "@/components/kit/useMounted";
 import { cx } from "@/lib/ui/cx";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./chat/AttachmentViewer";
 import { ModelPicker } from "./ModelPicker";
-import { artifactMentionKey, ComposerCommands, type ComposerArtifacts, type ComposerCommand, type ComposerSkill, type ComposerSkills } from "./ComposerCommands";
+import { ARTIFACT_KINDS, artifactMentionKey, ComposerCommands, type ComposerArtifacts, type ComposerCommand, type ComposerSkill, type ComposerSkills } from "./ComposerCommands";
 import { skillCommandName } from "@/lib/messages/skillInvocation";
-import { SkillComposerInput, type SkillComposerInputHandle } from "./SkillComposerInput";
+import { ComposerInput, type ComposerInputHandle, type ComposerToken, type TokenItem } from "./ComposerInput";
+import type { CopiedMention } from "@/components/app/mentionClipboard";
 
 export type ComposerAttachment = { id: string } & ViewerAttachment;
 
 const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
-
-const artifactKinds = {
-  markdown: { label: "Doc", icon: FileText, color: "text-link" },
-  html: { label: "Site", icon: Globe, color: undefined },
-  code: { label: "Code", icon: FileBraces, color: "text-artifact-code" },
-  slides: { label: "Slides", icon: Presentation, color: "text-artifact-slides" },
-};
 
 const addButtonClass = (open: boolean): string =>
   cx(
@@ -122,7 +116,7 @@ export function Composer({
   artifacts?: ComposerArtifacts;
 }): React.JSX.Element {
   const textRef = React.useRef<HTMLTextAreaElement>(null);
-  const richTextRef = React.useRef<SkillComposerInputHandle>(null);
+  const richTextRef = React.useRef<ComposerInputHandle>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const photosRef = React.useRef<HTMLInputElement>(null);
@@ -136,6 +130,10 @@ export function Composer({
   const [fieldFocused, setFieldFocused] = React.useState(false);
   const [commandNav, setCommandNav] = React.useState({ key: "", index: 0 });
   const pendingCaret = React.useRef<number | null>(null);
+  const tokens: ComposerToken[] = [
+    ...(skills?.selected ? [{ kind: "skill" as const, ...skills.selected }] : []),
+    ...(artifacts?.selected.map((selected) => ({ kind: "artifact" as const, ...selected })) ?? []),
+  ].sort((a, b) => a.at - b.at);
   const focusInput = React.useCallback((at?: number) => {
     if (richTextRef.current) richTextRef.current.focus(at);
     else {
@@ -168,8 +166,8 @@ export function Composer({
   };
   const consumeCommand = () => {
     if (!command) return;
-    if (skills) {
-      richTextRef.current?.replaceText(start, caret, "");
+    if (richTextRef.current) {
+      richTextRef.current.replaceText(start, caret, "");
       return;
     }
     pendingCaret.current = start;
@@ -178,7 +176,15 @@ export function Composer({
   };
   const selectSkill = (skill: ComposerSkill) => {
     if (!command) return;
-    richTextRef.current?.insertSkill(skill, start, caret);
+    richTextRef.current?.insertToken({ kind: "skill", skill }, start, caret);
+  };
+  const resolveMention = (mention: CopiedMention): TokenItem | null => {
+    if (mention.kind === "artifact") {
+      const { chatId, path, title, type } = mention;
+      return artifacts ? { kind: "artifact", artifact: { chatId, path, title, type } } : null;
+    }
+    const skill = skills?.catalog.status === "ready" ? skills.catalog.items.find((item) => item.id === mention.id && item.source === mention.source) : undefined;
+    return skill ? { kind: "skill", skill } : null;
   };
   const retryCommands = () => {
     if (catalog?.status !== "error") return;
@@ -187,10 +193,10 @@ export function Composer({
   };
   const commands: ComposerCommand[] = [];
   if (isArtifact && artifacts?.catalog.status === "ready") {
-    const selected = new Set(artifacts.selected.map(artifactMentionKey));
+    const selected = new Set(artifacts.selected.map(({ artifact }) => artifactMentionKey(artifact)));
     for (const artifact of artifacts.catalog.items) {
       const id = artifactMentionKey(artifact);
-      const { icon: Icon, label, color } = artifactKinds[artifact.type];
+      const { icon: Icon, label, color } = ARTIFACT_KINDS[artifact.type];
       commands.push({
         id,
         name: artifact.title,
@@ -198,8 +204,8 @@ export function Composer({
         icon: <Icon className={color} />,
         selected: selected.has(id),
         onSelect: () => {
-          consumeCommand();
-          if (!selected.has(id)) artifacts.onChange([...artifacts.selected, artifact]);
+          if (selected.has(id)) consumeCommand();
+          else if (command) richTextRef.current?.insertToken({ kind: "artifact", artifact }, start, caret);
         },
       });
     }
@@ -278,6 +284,11 @@ export function Composer({
         matchingCommands[activeCommand]?.onSelect();
         return;
       }
+      if (event.key === "Tab" && !event.shiftKey && activeCommand >= 0) {
+        event.preventDefault();
+        matchingCommands[activeCommand].onSelect();
+        return;
+      }
     }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -354,7 +365,7 @@ export function Composer({
                       className="block cursor-pointer rounded-xl transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
                     >
                       {a.kind === "image" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
+                        // eslint-disable-next-line @next/next/no-img-element -- a blob or data URL of the user's own file, which next/image cannot optimize
                         <img src={a.src} alt="" className="size-16 rounded-xl border border-line object-cover" />
                       ) : (
                         <FileTile name={a.name} content={a.content} small />
@@ -408,20 +419,23 @@ export function Composer({
         <label htmlFor="composer-input" className="sr-only">
           Message
         </label>
-        {skills ? (
-          <SkillComposerInput
+        {skills || artifacts ? (
+          <ComposerInput
             ref={richTextRef}
             value={value}
-            selected={skills.selected}
-            onChange={(text, selected) => {
+            tokens={tokens}
+            onChange={(text, next) => {
               setCommandDismissed(false);
               onChange(text);
-              skills.onSelect(selected);
+              const skill = next.find((token) => token.kind === "skill");
+              skills?.onSelect(skill ? { skill: skill.skill, at: skill.at } : null);
+              artifacts?.onChange(next.flatMap((token) => (token.kind === "artifact" ? [{ artifact: token.artifact, at: token.at }] : [])));
             }}
             onCaretChange={setCaret}
             onFocus={() => setFieldFocused(true)}
             onKeyDown={inputKeyDown}
             onPaste={onPaste}
+            resolveMention={resolveMention}
             autoFocus={autoFocus}
             placeholder={placeholder}
             aria-label="Message"
@@ -429,7 +443,7 @@ export function Composer({
             aria-haspopup="listbox"
             aria-controls={commandOpen ? commandListId : undefined}
             aria-activedescendant={commandOpen && activeCommand >= 0 ? `${commandListId}-${activeCommand}` : undefined}
-            aria-describedby={skills.error ? `${commandListId}-error` : undefined}
+            aria-describedby={skills?.error ? `${commandListId}-error` : undefined}
           />
         ) : (
         <textarea
@@ -561,11 +575,6 @@ export function Composer({
 
         <div className="-my-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto py-1 [scrollbar-width:none]">
           <AnimatePresence initial={false} mode="popLayout">
-            {artifacts?.selected.map((artifact) => {
-              const id = artifactMentionKey(artifact);
-              const { icon: Icon, color } = artifactKinds[artifact.type];
-              return <Chip key={id} icon={<Icon className={cx("size-[15px]", color)} />} label={artifact.title} undo="Remove artifact" onClick={() => artifacts.onChange(artifacts.selected.filter((item) => artifactMentionKey(item) !== id))} />;
-            })}
             {project?.name && project.onClear && (
               <Chip
                 key="project"

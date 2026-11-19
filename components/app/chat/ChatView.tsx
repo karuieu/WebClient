@@ -11,7 +11,7 @@ import { cx } from "@/lib/ui/cx";
 import { Composer } from "../Composer";
 import { ShellContext } from "../AppShell";
 import { ArtifactPanel } from "./ArtifactPanel";
-import { AssistantMessage, UserMessage, type ArtifactData, type MessageData, type SkillDraftData } from "./Messages";
+import { AssistantMessage, UserMessage, type ArtifactData, type ArtifactMention, type MessageData, type SkillDraftData } from "./Messages";
 import { QuestionCard, type QuestionsData } from "./Questions";
 
 export type EnclaveState = { provider: string; state: "verifying" | "verified" | "unverified" };
@@ -307,6 +307,7 @@ export function ChatView({
   onRetry,
   onVariant,
   onOpenArtifact,
+  onOpenMention,
   onDownloadArtifact,
   onSaveArtifact,
   onSaveSkill,
@@ -331,6 +332,7 @@ export function ChatView({
   onRetry?: (messageId: string) => void;
   onVariant?: (messageId: string, dir: -1 | 1) => void;
   onOpenArtifact?: (a: ArtifactData) => void;
+  onOpenMention?: (mention: ArtifactMention) => void;
   onDownloadArtifact?: (a: ArtifactData) => void;
   onSaveArtifact?: (a: ArtifactData) => void;
   onSaveSkill?: (s: SkillDraftData) => void;
@@ -441,7 +443,7 @@ export function ChatView({
             const enter = !history?.has(m.id);
             const node =
               m.role === "user" ? (
-                <UserMessage message={m} enter={enter} />
+                <UserMessage message={m} enter={enter} onOpenArtifact={onOpenMention} />
               ) : (
                 <AssistantMessage
                   message={m}

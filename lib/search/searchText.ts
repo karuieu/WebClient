@@ -8,7 +8,6 @@ import { parseSkillDrafts } from "@/lib/chat/skills";
 import { parseQuestions } from "@/lib/messages/questions";
 import { parseMessageBlocks, splitQuote } from "@/lib/messages/messageBlocks";
 import { parseMessageContent } from "@/lib/messages/vision";
-import { artifactMentionText } from "@/lib/messages/artifactReference";
 
 export type TextRange = readonly [number, number];
 export type MarkedText = { text: string; ranges: TextRange[] };
@@ -75,7 +74,7 @@ export function snippet(text: string, terms: string[], folded = fold(text)): Mar
 export function messageSearchText(role: "user" | "assistant", content: string): string {
   if (role === "user") {
     const parsed = parseMessageContent(content);
-    return [splitQuote(parsed.text).text, artifactMentionText(parsed.artifacts), ...parsed.files.map((f) => f.name)].filter(Boolean).join("\n");
+    return [splitQuote(parsed.text).text, ...parsed.files.map((f) => f.name)].filter(Boolean).join("\n");
   }
   const { artifacts, text } = parseArtifacts(content);
   const { drafts, text: withoutDrafts } = parseSkillDrafts(parseMessageBlocks(text).answer);

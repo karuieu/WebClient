@@ -10,6 +10,7 @@ import {
   invalidateSummaryForMessage,
   MessageSaveError,
   NotFoundError,
+  readReferencedArtifact,
   setChatMemory,
   type Message,
   type ModelType,
@@ -41,14 +42,14 @@ import {
   updateSkill,
   type Skill,
 } from "@/lib/chat/skills";
-import type { ArtifactData, SkillDraftData } from "@/components/app/chat/Messages";
+import type { ArtifactData, ArtifactMention, SkillDraftData } from "@/components/app/chat/Messages";
 import { useTabTitle } from "@/lib/ui/tabTitle";
 import { useToast } from "@/components/Toast";
 import { ChatView, type HeaderProject } from "@/components/app/chat/ChatView";
 import { DropOverlay } from "@/components/app/DropOverlay";
 import { useComposer } from "./useComposer";
 import { LibraryContext } from "./useLibrary";
-import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, useFollowNewVersions, type Streaming } from "./messageView";
+import { artifactPanelOf, enclaveFor, errorText, pendingQuestions, resetTime, toViewData, useFollowNewVersions, type ShownArtifact, type Streaming } from "./messageView";
 import type { ProjectLibrary } from "./ProjectScreen";
 import { useGoogleDocsExport } from "./useGoogleDocsExport";
 
@@ -80,6 +81,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
   const [gate, setGate] = React.useState<{ required: boolean; quota: CompressionQuota | null }>({ required: false, quota: null });
   const [compressing, setCompressing] = React.useState(false);
   const [openArtifact, setOpenArtifact] = React.useState<string | null>(null);
+  const [mentioned, setMentioned] = React.useState<{ id: string; artifact: ShownArtifact } | null>(null);
   const [memoryOn, setMemoryOn] = React.useState(true);
   const [loadedProjectId, setLoadedProjectId] = React.useState<string | undefined>();
   // The send path reads memory_enabled from the server, so a message sent right
@@ -330,9 +332,24 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
     }
   };
 
-  const current = openArtifact ? artifacts.get(openArtifact) : undefined;
+  const current = openArtifact ? (mentioned?.id === openArtifact ? mentioned.artifact : artifacts.get(openArtifact)) : undefined;
   const googleDocsExport = useGoogleDocsExport(openArtifact, current);
   useFollowNewVersions(current, setOpenArtifact);
+
+  // An artifact of this chat opens at its latest card, with its versions; one from elsewhere opens as read now.
+  const openMention = async ({ chatId: source, path, label, type }: ArtifactMention) => {
+    const card = source === chatId ? [...artifacts.values()].find((a) => a.file?.path === path)?.file?.latestCard : undefined;
+    if (card) return setOpenArtifact(card);
+    const id = `mention:${source}:${path}`;
+    try {
+      const { reference, current } = await readReferencedArtifact({ chatId: source, path, title: label, type });
+      if (!current) throw new Error("unavailable");
+      setMentioned({ id, artifact: { title: reference.title, type: reference.type, content: current.content, path } });
+      setOpenArtifact(id);
+    } catch {
+      showError(`Couldn't open “${label}”.`);
+    }
+  };
 
   // An artifact in the Library opens there, at its latest version; one that isn't opens from the message.
   const openArtifactData = (a: ArtifactData) => {
@@ -468,6 +485,7 @@ export function ChatScreen({ chatId, project }: { chatId: string; project?: Chat
         focusMessageId={focus?.messageId}
         onFocusShown={onFocusShown}
         onOpenArtifact={openArtifactData}
+        onOpenMention={(mention) => void openMention(mention)}
         onDownloadArtifact={(a) => {
           const art = artifacts.get(a.id);
           if (art) downloadArtifact(art);

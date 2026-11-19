@@ -66,6 +66,7 @@ export type MessageStep =
   | { kind: "tool"; connector: string; tool: string; status: "ok" | "error" | "declined" }
   | { kind: "skills"; names: string[] }
   | { kind: "files"; paths: string[] }
+  | { kind: "artifacts"; titles: string[] }
   | { kind: "version"; path: string; status: "ok" | "error" };
 
 type Notice = { reason: string; providerName: string; e2e: boolean };
@@ -110,7 +111,7 @@ function thoughtOf(inner: string): { text: string; rest: string | null } {
 }
 
 const BLOCKS =
-  /<reasoning>([\s\S]*?)<\/reasoning>|<search>([\s\S]*?)<\/search>|<vision>([\s\S]*?)<\/vision>|<notice>([\s\S]*?)<\/notice>|<memory_write>([\s\S]*?)<\/memory_write>|<memory_read>([\s\S]*?)<\/memory_read>|<tool>([\s\S]*?)<\/tool>|<library>([\s\S]*?)<\/library>|<skills_used>([\s\S]*?)<\/skills_used>|<fetched_page>([\s\S]*?)<\/fetched_page>|<kept_version>([\s\S]*?)<\/kept_version>|<\/?keep_version\b[^>]*>/g;
+  /<reasoning>([\s\S]*?)<\/reasoning>|<search>([\s\S]*?)<\/search>|<vision>([\s\S]*?)<\/vision>|<notice>([\s\S]*?)<\/notice>|<memory_write>([\s\S]*?)<\/memory_write>|<memory_read>([\s\S]*?)<\/memory_read>|<tool>([\s\S]*?)<\/tool>|<library>([\s\S]*?)<\/library>|<skills_used>([\s\S]*?)<\/skills_used>|<fetched_page>([\s\S]*?)<\/fetched_page>|<kept_version>([\s\S]*?)<\/kept_version>|<artifacts_read>([\s\S]*?)<\/artifacts_read>|<\/?keep_version\b[^>]*>/g;
 
 function parseBlocks(content: string): { steps: MessageStep[]; answer: string } {
   const steps: MessageStep[] = [];
@@ -118,7 +119,7 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
   // writes it again correctly; the notices of those attempts are dropped once a call runs.
   let failedCalls: MessageStep[] = [];
 
-  let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, memoryRead?: string, tool?: string, library?: string, skills?: string, page?: string, kept?: string) => {
+  let answer = content.replace(BLOCKS, (_, reasoning?: string, search?: string, vision?: string, notice?: string, memory?: string, memoryRead?: string, tool?: string, library?: string, skills?: string, page?: string, kept?: string, artifactsRead?: string) => {
     if (reasoning !== undefined) {
       const { text, rest } = thoughtOf(reasoning);
       if (text) steps.push({ kind: "thought", text });
@@ -208,6 +209,10 @@ function parseBlocks(content: string): { steps: MessageStep[]; answer: string } 
       } else if (kept !== undefined) {
         const d = JSON.parse(kept);
         if (d && typeof d.path === "string") steps.push({ kind: "version", path: d.path, status: d.status === "ok" ? "ok" : "error" });
+      } else if (artifactsRead !== undefined) {
+        const d = JSON.parse(artifactsRead);
+        const titles = Array.isArray(d?.titles) ? d.titles.filter((t: unknown): t is string => typeof t === "string") : [];
+        if (titles.length > 0) steps.push({ kind: "artifacts", titles });
       }
     } catch {
     }

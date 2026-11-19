@@ -117,6 +117,7 @@ export function stripNoticeBlocks(content: string): string {
     .replace(/<tool>[\s\S]*?<\/tool>/g, "")
     .replace(/<library>[\s\S]*?<\/library>/g, "")
     .replace(/<skills_used>[\s\S]*?<\/skills_used>/g, "")
+    .replace(/<artifacts_read>[\s\S]*?<\/artifacts_read>/g, "")
     .replace(/<memory_read>[\s\S]*?<\/memory_read>/g, "")
     .replace(/<helper_message>[\s\S]*?(?:<\/helper_message>|$)/g, "");
 }
@@ -545,15 +546,22 @@ async function memoryFilesFor(chat: Chat | null): ReturnType<typeof getMemoryFil
   return getMemoryFilesForChat();
 }
 
+const artifactSources = {
+  messages: getMessages,
+  projectId: async (chatId: string) => (await getChat(chatId)).project_id,
+};
+
+export async function readReferencedArtifact(reference: ArtifactReference): Promise<ReferencedArtifact> {
+  const [artifact] = await readReferencedArtifacts([reference], artifactSources);
+  return artifact;
+}
+
 // Fetched at once: one after another they added ~0.3 s before every answer.
 async function referencedArtifactsFor(history: HistoryMessage[], selected?: ArtifactReference[]): Promise<ReferencedArtifact[]> {
   const earlier = selected ? undefined : history.findLast((message) => message.role === "user" && parseMessageContent(message.content).artifacts);
   const artifacts = selected ?? (earlier && parseMessageContent(earlier.content).artifacts);
   if (!artifacts?.length) return [];
-  const resolved = await readReferencedArtifacts(artifacts, {
-    messages: getMessages,
-    projectId: async (chatId) => (await getChat(chatId)).project_id,
-  });
+  const resolved = await readReferencedArtifacts(artifacts, artifactSources);
   const missing = selected && resolved.find((artifact) => !artifact.current);
   if (missing) throw new Error(`Couldn't load “${missing.reference.title}”. Try again or remove the artifact from your message.`);
   return resolved;

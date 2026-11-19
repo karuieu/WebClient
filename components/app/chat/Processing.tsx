@@ -16,6 +16,7 @@ export type ProcessingStep =
   | { kind: "tool"; connector: string; tool: string; status: "ok" | "error" | "declined" }
   | { kind: "skills"; names: string[] }
   | { kind: "files"; paths: string[] }
+  | { kind: "artifacts"; titles: string[] }
   | { kind: "version"; path: string; status: "ok" | "error" };
 
 const spring = { type: "spring", bounce: 0, duration: 0.4 } as const;
@@ -50,6 +51,8 @@ function summarize(steps: ProcessingStep[]): string {
   if (skills) parts.push(skills === 1 ? "1 skill" : `${skills} skills`);
   const files = steps.reduce((n, s) => (s.kind === "files" ? n + s.paths.length : n), 0);
   if (files) parts.push(files === 1 ? "1 file" : `${files} files`);
+  const artifacts = steps.reduce((n, s) => (s.kind === "artifacts" ? n + s.titles.length : n), 0);
+  if (artifacts) parts.push(artifacts === 1 ? "1 artifact" : `${artifacts} artifacts`);
   const kept = steps.filter((s) => s.kind === "version");
   if (kept.some((v) => v.kind === "version" && v.status === "error")) parts.push("Version not kept");
   else if (kept.length) parts.push("Version kept");
@@ -177,6 +180,19 @@ function Step({ step, live }: { step: ProcessingStep; live: boolean }) {
             {step.paths.map((path) => (
               <li key={path} className="truncate font-mono text-[12.5px] text-fg" title={path}>
                 {path}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "artifacts":
+      return (
+        <div>
+          <StepLabel live={live}>{step.titles.length === 1 ? "Read an artifact" : `Read ${step.titles.length} artifacts`}</StepLabel>
+          <ul className="flex flex-col gap-1 pl-3.5">
+            {step.titles.map((title, i) => (
+              <li key={i} className="truncate text-[14px] text-fg/85" title={title}>
+                {title}
               </li>
             ))}
           </ul>

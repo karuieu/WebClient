@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { ComposerArtifact, ComposerArtifacts } from "@/components/app/ComposerCommands";
-import type { ArtifactReference } from "@/lib/messages/artifactReference";
+import type { ComposerArtifact, ComposerArtifacts, SelectedArtifact } from "@/components/app/ComposerCommands";
 import { getSearchIndexState, indexedArtifacts, subscribeSearchIndex, syncSearchIndex } from "@/lib/search/searchIndex";
 import { LibraryContext } from "./useLibrary";
 
@@ -12,11 +11,11 @@ const subscribeIdle = () => () => {};
 
 export function useArtifactMentions(enabled: boolean): {
   props: ComposerArtifacts | undefined;
-  references: ArtifactReference[] | undefined;
-  setSelected: (artifacts: ComposerArtifact[]) => void;
+  selected: SelectedArtifact[];
+  setSelected: (artifacts: SelectedArtifact[]) => void;
 } {
   const { raw, loading } = React.useContext(LibraryContext);
-  const [selected, setSelected] = React.useState<ComposerArtifact[]>([]);
+  const [selected, setSelected] = React.useState<SelectedArtifact[]>([]);
   const [opened, setOpened] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
   const active = enabled && opened;
@@ -47,7 +46,7 @@ export function useArtifactMentions(enabled: boolean): {
 
   return {
     props: enabled ? { catalog, selected, onChange: setSelected, onOpen: open } : undefined,
-    references: enabled && selected.length ? selected.map(({ chatId, path, title, type }) => ({ chatId, path, title, type })) : undefined,
+    selected: enabled ? selected : [],
     setSelected,
   };
 }

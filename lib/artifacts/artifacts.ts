@@ -102,7 +102,8 @@ export function codeLanguageOf(path: string | undefined): CodeLanguage {
 
 const DEFAULT_TITLE = "Document";
 const ARTIFACT_BLOCK = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/g;
-const OPEN_TAG = "<artifact";
+// The whole tag name, so blocks such as <artifacts_read> never read as an unclosed artifact.
+const OPEN_TAG = /<artifact(?!\w)/;
 
 export function tagAttr(raw: string, name: string): string {
   const match = new RegExp(`${name}\\s*=\\s*"([^"]*)"`, "i").exec(raw);
@@ -271,12 +272,12 @@ export function parseArtifacts(content: string): { artifacts: Artifact[]; text: 
     return "";
   });
 
-  const openIdx = text.indexOf(OPEN_TAG);
+  const openIdx = text.search(OPEN_TAG);
   if (openIdx !== -1) {
     const rest = text.slice(openIdx);
     const gt = rest.indexOf(">");
     // Even an incomplete opening tag must be hidden before its title is known.
-    const rawAttrs = gt === -1 ? "" : rest.slice(OPEN_TAG.length, gt);
+    const rawAttrs = gt === -1 ? "" : rest.slice("<artifact".length, gt);
     const inner = gt === -1 ? "" : rest.slice(gt + 1);
     artifacts.push({ ...fromTag(rawAttrs, inner), streaming: true });
     text = text.slice(0, openIdx);

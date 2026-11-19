@@ -354,6 +354,7 @@ export function stripAssistantBlocks(content: string): string {
     .replace(/<vision>[\s\S]*?(<\/vision>|$)/g, "")
     .replace(/<library>[\s\S]*?(<\/library>|$)/g, "")
     .replace(/<skills_used>[\s\S]*?(<\/skills_used>|$)/g, "")
+    .replace(/<artifacts_read>[\s\S]*?(<\/artifacts_read>|$)/g, "")
     .replace(/<helper_message>[\s\S]*?(<\/helper_message>|$)/g, "")
     .replace(/<skill\b[^>]*?name="([^"]*)"[^>]*>[\s\S]*?(<\/skill>|$)/g, "[Skill drafted: $1]")
     .trim();

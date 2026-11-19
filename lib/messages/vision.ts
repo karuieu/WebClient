@@ -1,7 +1,7 @@
 // Images and text attachments in chat. Images are encrypted with the message (a JSON envelope in encrypted_content); models that cannot read images are never sent them.
 
 import { parseSkillReference, type SkillReference } from "@/lib/messages/skillInvocation";
-import { artifactMentionText, parseArtifactReferences, type ArtifactReference } from "@/lib/messages/artifactReference";
+import { parseArtifactReferences, type ArtifactReference } from "@/lib/messages/artifactReference";
 
 export interface ChatImage {
 
@@ -118,9 +118,9 @@ export function turnContentForAI(
   content: string,
   readsImages: boolean
 ): { content: string; images?: string[] } {
-  const { text, images, files, artifacts } = parseMessageContent(content);
+  const { text, images, files } = parseMessageContent(content);
 
-  let out = [artifactMentionText(artifacts), text].filter(Boolean).join("\n\n");
+  let out = text;
   for (const file of files) {
     out += `\n\n<attached_file name="${file.name || "file"}">\n${file.content}\n</attached_file>`;
   }
