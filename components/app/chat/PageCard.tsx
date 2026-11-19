@@ -1,4 +1,4 @@
-import type * as React from "react";
+import * as React from "react";
 import Image from "next/image";
 import {
   Cloud,
@@ -12,6 +12,8 @@ import {
   Moon,
   Sun,
 } from "@/components/kit/icons";
+import { AttachmentViewer, type ViewerAttachment } from "./AttachmentViewer";
+import { cx } from "@/lib/ui/cx";
 import { domainOf } from "./Processing";
 
 const ICONS = {
@@ -37,12 +39,19 @@ export type WeatherData = { icon: CardIcon; temperature: string; condition: stri
 /** A conversion: the amount asked about, what it comes to, and the rate both ways. */
 export type ExchangeData = { amount: string; result: string; rates: string[] };
 
+type CardImage = { state: "loading" } | { state: "shown"; src: string };
+
+/** A picture from the article, named by its caption or, without one, its file. */
+export type CardPhoto = { caption: string; image: CardImage };
+
 /** What a fetched page holds, from its preview tags or its site's own API. */
 export type PageCardData = {
   title: string;
   description?: string;
   /** Absent when the page has no image or it couldn't be loaded. */
-  image?: { state: "loading" } | { state: "shown"; src: string };
+  image?: CardImage;
+  /** An encyclopedia article shows its pictures and a one-line description instead of a summary, which the answer gives anyway. */
+  photos?: CardPhoto[];
   exchange?: ExchangeData;
   weather?: WeatherData;
   /** Who the data comes from, when the page's domain doesn't say it. */
@@ -63,6 +72,7 @@ function CardFrame({
   lead,
   aside,
   children,
+  linkTitleOnly = false,
 }: {
   url: string;
   card: PageCardData;
@@ -70,20 +80,29 @@ function CardFrame({
   lead?: React.ReactNode;
   aside?: React.ReactNode;
   children?: React.ReactNode;
+  /** For an aside with its own buttons, which can't sit inside a link. */
+  linkTitleOnly?: boolean;
 }) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex flex-col justify-between gap-3 rounded-2xl border border-line bg-elevated p-4 transition-colors duration-150 hover:border-line-strong"
-    >
+  const titleClass = "block truncate text-[14.5px] font-medium tracking-[-0.01em]";
+  const content = (
+    <>
       {/* As tall as the weather's day strip, the tallest content, so every kind of card has one height. */}
       <span className="flex min-h-[4.375rem] flex-wrap items-center justify-between gap-x-8 gap-y-4">
         <span className="flex min-w-0 flex-1 basis-56 items-center gap-4">
           {lead}
           <span className="min-w-0">
-            <span className="block truncate text-[14.5px] font-medium tracking-[-0.01em]">{card.title}</span>
+            {linkTitleOnly ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cx(titleClass, "underline decoration-transparent underline-offset-[3px] transition-colors duration-150 hover:decoration-line-strong")}
+              >
+                {card.title}
+              </a>
+            ) : (
+              <span className={titleClass}>{card.title}</span>
+            )}
             {children}
           </span>
         </span>
@@ -92,6 +111,13 @@ function CardFrame({
       <span className="block truncate font-mono text-[11.5px] text-muted">
         {[card.source ?? domainOf(url), card.asOf].filter(Boolean).join(" · ")}
       </span>
+    </>
+  );
+  const frame = "flex flex-col justify-between gap-3 rounded-2xl border border-line bg-elevated p-4";
+  if (linkTitleOnly) return <div className={frame}>{content}</div>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className={cx(frame, "transition-colors duration-150 hover:border-line-strong")}>
+      {content}
     </a>
   );
 }
@@ -137,8 +163,43 @@ function PageImage({ image }: { image: NonNullable<PageCardData["image"]> }) {
   );
 }
 
+function Photos({ photos }: { photos: CardPhoto[] }) {
+  const [open, setOpen] = React.useState<number | null>(null);
+  const viewable: ViewerAttachment[] = photos.flatMap(({ caption, image }) => (image.state === "shown" ? [{ kind: "image" as const, name: caption, src: image.src }] : []));
+  let shown = 0;
+  return (
+    // Four pictures are wider than a phone's card, so the row scrolls there.
+    <span className="-m-1 flex max-w-full gap-2 overflow-x-auto p-1 [scrollbar-width:none]">
+      {photos.map(({ caption, image }, i) => {
+        if (image.state !== "shown") return <span key={i} aria-hidden="true" className="size-[4.375rem] shrink-0 rounded-lg border border-line bg-surface" />;
+        const index = shown++;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setOpen(index)}
+            aria-label={`Open ${caption}`}
+            title={caption}
+            className="relative size-[4.375rem] shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line bg-surface transition-[filter] duration-150 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          >
+            <Image src={image.src} alt="" fill unoptimized className="object-cover" />
+          </button>
+        );
+      })}
+      <AttachmentViewer attachments={viewable} index={open} onIndexChange={setOpen} onClose={() => setOpen(null)} />
+    </span>
+  );
+}
+
 export function PageCard({ url, card }: { url: string; card: PageCardData }) {
-  const { weather, exchange, image } = card;
+  const { weather, exchange, image, photos } = card;
+  if (photos?.length) {
+    return (
+      <CardFrame url={url} card={card} aside={<Photos photos={photos} />} linkTitleOnly>
+        {card.description && <span className="mt-0.5 block truncate text-[13.5px] text-muted">{card.description}</span>}
+      </CardFrame>
+    );
+  }
   if (weather) {
     const Now = ICONS[weather.icon];
     return (

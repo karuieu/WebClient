@@ -12,6 +12,8 @@ export type PageCard = {
   description?: string;
   /** An http(s) address, loaded only through the enclave (fetchCardImage). */
   image?: string;
+  /** An encyclopedia article's pictures, with addresses loaded the same way. */
+  photos?: { caption: string; image: string }[];
   weather?: { icon: WeatherIcon; temperature: number; condition: string; days: WeatherDay[] };
   exchange?: { amount: string; result: string; rates: string[] };
   source?: string;
@@ -22,6 +24,7 @@ export type PageCard = {
 const MAX_TEXT = 400;
 const MAX_DAYS = 7;
 const MAX_RATES = 4;
+const MAX_PHOTOS = 4;
 
 type Fields = Record<string, unknown>;
 
@@ -72,6 +75,17 @@ function exchange(value: unknown): PageCard["exchange"] {
   return { amount, result, rates: rates.filter((r): r is string => !!r) };
 }
 
+function photos(value: unknown): PageCard["photos"] {
+  if (!Array.isArray(value)) return undefined;
+  const list = value.slice(0, MAX_PHOTOS).flatMap((photo) => {
+    if (!isFields(photo)) return [];
+    const caption = text(photo.caption);
+    const image = webAddress(photo.image);
+    return caption && image ? [{ caption, image }] : [];
+  });
+  return list.length ? list : undefined;
+}
+
 /** The card in an enclave response or a saved block, or undefined when it has no usable title. */
 export function parsePageCard(value: unknown): PageCard | undefined {
   if (!isFields(value)) return undefined;
@@ -80,12 +94,14 @@ export function parsePageCard(value: unknown): PageCard | undefined {
   const card: PageCard = { title };
   const description = text(value.description);
   const image = webAddress(value.image);
+  const pictures = photos(value.photos);
   const weatherCard = weather(value.weather);
   const exchangeCard = exchange(value.exchange);
   const source = text(value.source);
   const asOf = text(value.as_of);
   if (description) card.description = description;
   if (image) card.image = image;
+  if (pictures) card.photos = pictures;
   if (weatherCard) card.weather = weatherCard;
   if (exchangeCard) card.exchange = exchangeCard;
   if (source) card.source = source;

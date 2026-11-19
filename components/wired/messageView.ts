@@ -214,6 +214,10 @@ export function pageCardView(card: PageCard, images: CardImages): PageCardData {
     title: card.title,
     description: card.description,
     image: cardImageView(card.image, images),
+    photos: card.photos?.flatMap(({ caption, image }) => {
+      const view = cardImageView(image, images);
+      return view ? [{ caption, image: view }] : [];
+    }),
     source: card.source,
     asOf: card.asOf && (asOfLabel(card.asOf) || undefined),
     exchange,
@@ -269,7 +273,9 @@ export function toAssistant(
       ...extra,
     },
     artifacts,
-    cardImages: steps.flatMap((step) => (step.kind === "page" && step.card?.image ? [step.card.image] : [])),
+    cardImages: steps.flatMap((step) => (step.kind === "page" && step.card
+      ? [...(step.card.image ? [step.card.image] : []), ...(step.card.photos ?? []).map(({ image }) => image)]
+      : [])),
   };
 }
 
