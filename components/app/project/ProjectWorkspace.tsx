@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Lock } from "@/components/kit/icons";
+import { ResizeHandle } from "@/components/kit/ResizeHandle";
 import { cx } from "@/lib/ui/cx";
 import { ChatHeader, type EnclaveState, type HeaderProject } from "../chat/ChatView";
 import { Composer } from "../Composer";
@@ -112,31 +113,6 @@ export function ProjectWorkspace({
     } catch {}
   };
 
-  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    // Without this the drag also selects text, and the browser cancels the pointer to drag that selection.
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = shown;
-    const handle = e.currentTarget;
-    handle.setPointerCapture(e.pointerId);
-    setExpanded(false);
-    setDragging(true);
-    let next = startW;
-    const move = (m: PointerEvent) => {
-      next = clampWidth(startW + (startX - m.clientX));
-      setWidth(next);
-    };
-    // Fires after pointerup and pointercancel alike; a cancelled drag sends no pointerup and would leave the panel unclickable.
-    const end = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("lostpointercapture", end);
-      setDragging(false);
-      commit(next);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("lostpointercapture", end);
-  };
-
   React.useEffect(() => {
     if (!drawer) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeDrawer();
@@ -167,30 +143,22 @@ export function ProjectWorkspace({
             transition={reduce || dragging || following ? { duration: 0 } : spring}
             className="relative hidden shrink-0 overflow-hidden md:flex"
           >
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize project panel"
-              aria-valuenow={shown}
-              aria-valuemin={MIN_WIDTH}
-              aria-valuemax={maxWidth}
-              tabIndex={0}
-              title="Drag to resize · double-click to reset"
-              onPointerDown={startDrag}
-              onDoubleClick={() => commit(DEFAULT_WIDTH)}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowLeft") commit(shown + 24);
-                if (e.key === "ArrowRight") commit(shown - 24);
+            <ResizeHandle
+              label="Resize project panel"
+              edge="left"
+              width={shown}
+              min={MIN_WIDTH}
+              max={maxWidth}
+              defaultWidth={DEFAULT_WIDTH}
+              dragging={dragging}
+              onDraggingChange={(d) => {
+                setDragging(d);
+                if (d) setExpanded(false);
               }}
-              className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none"
-            >
-              <span
-                className={cx(
-                  "absolute inset-y-0 left-0 w-px transition-[background-color,width] duration-150",
-                  dragging ? "w-0.5 bg-fg/40" : "group-hover:w-0.5 group-hover:bg-fg/25 group-focus-visible:bg-fg/40",
-                )}
-              />
-            </div>
+              onResize={setWidth}
+              onCommit={commit}
+              className="left-0"
+            />
             <div className={cx("flex h-full", dragging && "pointer-events-none select-none")}>
               <ProjectPanel
                 {...panel}

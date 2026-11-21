@@ -9,7 +9,6 @@ import { Spinner } from "@/components/kit/Spinner";
 import { Enter, cascade } from "@/components/kit/Enter";
 import { cx } from "@/lib/ui/cx";
 import { Composer } from "../Composer";
-import { ShellContext } from "../AppShell";
 import { ArtifactPanel } from "./ArtifactPanel";
 import { AssistantMessage, UserMessage, type ArtifactData, type MessageData, type SkillDraftData } from "./Messages";
 import { QuestionCard, type QuestionsData } from "./Questions";
@@ -77,7 +76,6 @@ export function ChatHeader({
   /** The Halloween event's costume, shown only in an incognito chat. */
   halloween?: Costume;
 }) {
-  const { sidebarHidden } = React.useContext(ShellContext);
   const CostumeIcon = halloween && incognitoCostumes[halloween];
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(title);
@@ -113,10 +111,7 @@ export function ChatHeader({
 
   return (
     <header
-      className={cx(
-        "@container sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-4 bg-bg/80 pr-3 backdrop-blur-xl backdrop-saturate-150 transition-[padding] duration-300 [mask-image:linear-gradient(to_bottom,black_75%,transparent)] md:pr-4",
-        sidebarHidden ? "pl-3 md:pl-14" : "pl-3 md:pl-4",
-      )}
+      className="@container sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-4 bg-bg/80 pl-3 pr-3 backdrop-blur-xl backdrop-saturate-150 [mask-image:linear-gradient(to_bottom,black_75%,transparent)] md:pl-4 md:pr-4"
     >
       <div className="flex min-w-0 items-center">
         {project &&

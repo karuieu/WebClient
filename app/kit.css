@@ -124,11 +124,16 @@ body {
   width: 28px;
   height: 28px;
 }
+.rail-button {
+  width: 40px;
+  height: 40px;
+}
 @media (pointer: coarse) {
   .sidebar-row {
     min-height: 44px;
   }
-  .sidebar-icon-button {
+  .sidebar-icon-button,
+  .rail-button {
     width: 44px;
     height: 44px;
   }

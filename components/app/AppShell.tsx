@@ -4,95 +4,31 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { PanelLeft, Plus } from "@/components/kit/icons";
+import { Plus } from "@/components/kit/icons";
 import { LogoMark } from "@/components/kit/Logo";
+import { ResizeHandle } from "@/components/kit/ResizeHandle";
 import { Tooltip } from "@/components/kit/Tooltip";
-import { Sidebar, type SidebarProps } from "./Sidebar";
+import { PANEL_WIDTH, Sidebar, type SidebarProps } from "./Sidebar";
 
 const HIDDEN_KEY = "karui-sidebar-hidden";
+const WIDTH_KEY = "karui-sidebar-width";
 
-export const ShellContext = React.createContext({ sidebarHidden: false });
-const spring = { type: "spring", bounce: 0, duration: 0.35 } as const;
-
-function usePeek() {
-  const [peek, setPeek] = React.useState(false);
-  const over = React.useRef(false);
-  const menus = React.useRef(0);
-  const armed = React.useRef(true);
-  const panel = React.useRef<HTMLDivElement>(null);
-  const timer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const open = React.useCallback(() => {
-    clearTimeout(timer.current);
-    setPeek(true);
-  }, []);
-
-  const scheduleClose = React.useCallback(() => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      const editing = panel.current?.contains(document.activeElement) && document.activeElement?.tagName === "INPUT";
-      if (!over.current && menus.current === 0 && !editing) setPeek(false);
-    }, 200);
-  }, []);
-
-  const close = React.useCallback(() => {
-    clearTimeout(timer.current);
-    menus.current = 0;
-    setPeek(false);
-  }, []);
-
-  // Right after hiding, the cursor sits exactly where the show button appears; ignore it until it leaves.
-  const disarm = React.useCallback(() => {
-    armed.current = false;
-  }, []);
-
-  React.useEffect(() => () => clearTimeout(timer.current), []);
-
-  return {
-    peek,
-    panel,
-    open,
-    close,
-    disarm,
-    triggerProps: {
-      onPointerEnter: () => {
-        over.current = true;
-        if (armed.current) open();
-      },
-      onPointerLeave: () => {
-        over.current = false;
-        armed.current = true;
-        scheduleClose();
-      },
-    },
-    hoverProps: {
-      onPointerEnter: () => {
-        over.current = true;
-        open();
-      },
-      onPointerLeave: () => {
-        over.current = false;
-        scheduleClose();
-      },
-    },
-    onMenuOpenChange: (o: boolean) => {
-      menus.current = Math.max(0, menus.current + (o ? 1 : -1));
-      if (!o) scheduleClose();
-    },
-  };
-}
+const clampPanelWidth = (w: number) => Math.min(Math.max(w, PANEL_WIDTH.min), PANEL_WIDTH.max);
 
 export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps; banner?: React.ReactNode; children: React.ReactNode }) {
   const reduce = useReducedMotion();
   const router = useRouter();
   const [hidden, setHidden] = React.useState(false);
+  const [panelWidth, setPanelWidth] = React.useState<number>(PANEL_WIDTH.default);
+  const [resizing, setResizing] = React.useState(false);
   const [drawer, setDrawer] = React.useState(false);
-  const peek = usePeek();
   const drawerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     try {
       setHidden(localStorage.getItem(HIDDEN_KEY) === "1");
+      const savedWidth = Number(localStorage.getItem(WIDTH_KEY));
+      if (savedWidth) setPanelWidth(clampPanelWidth(savedWidth));
     } catch {}
   }, []);
 
@@ -133,10 +69,15 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
 
   const setHiddenPersist = (h: boolean) => {
     setHidden(h);
-    peek.close();
-    if (h) peek.disarm();
     try {
       localStorage.setItem(HIDDEN_KEY, h ? "1" : "0");
+    } catch {}
+  };
+
+  const commitPanelWidth = (w: number) => {
+    setPanelWidth(w);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(w));
     } catch {}
   };
 
@@ -175,59 +116,31 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
         Skip to content
       </a>
 
-      <AnimatePresence initial={false}>
+      <div className="relative hidden shrink-0 md:flex">
+        <Sidebar
+          {...sidebar}
+          variant="docked"
+          panelOpen={!hidden}
+          panelWidth={panelWidth}
+          resizing={resizing}
+          onHeaderAction={() => setHiddenPersist(!hidden)}
+        />
         {!hidden && (
-          <motion.div
-            key="docked"
-            initial={{ width: 0 }}
-            animate={{ width: 280 }}
-            exit={{ width: 0 }}
-            transition={reduce ? { duration: 0 } : spring}
-            className="hidden shrink-0 overflow-hidden md:flex"
-          >
-            <Sidebar {...sidebar} variant="docked" onHeaderAction={() => setHiddenPersist(true)} />
-          </motion.div>
+          <ResizeHandle
+            label="Resize sidebar"
+            edge="right"
+            width={panelWidth}
+            min={PANEL_WIDTH.min}
+            max={PANEL_WIDTH.max}
+            defaultWidth={PANEL_WIDTH.default}
+            dragging={resizing}
+            onDraggingChange={setResizing}
+            onResize={setPanelWidth}
+            onCommit={commitPanelWidth}
+            className="-right-1"
+          />
         )}
-      </AnimatePresence>
-
-      {hidden && (
-        <>
-          <div aria-hidden="true" className="fixed inset-y-0 left-0 z-30 hidden w-2 md:block" {...peek.triggerProps} />
-          <button
-            type="button"
-            aria-label="Show sidebar"
-            title="Show sidebar"
-            onClick={() => setHiddenPersist(false)}
-            {...peek.triggerProps}
-            className="fixed left-3 top-2.5 z-40 hidden size-9 cursor-pointer place-items-center rounded-full text-muted transition-[background-color,color,transform] duration-150 hover:bg-surface hover:text-fg active:scale-[0.94] md:grid"
-          >
-            <PanelLeft className="size-[18px]" />
-          </button>
-
-          <AnimatePresence>
-            {peek.peek && (
-              <motion.div
-                key="peek"
-                ref={peek.panel}
-                initial={reduce ? { opacity: 0 } : { opacity: 0, x: -14 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={reduce ? { opacity: 0 } : { opacity: 0, x: -10, transition: { duration: 0.16 } }}
-                transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-                className="fixed inset-y-0 left-0 z-50 hidden md:flex"
-                {...peek.hoverProps}
-              >
-                <Sidebar
-                  {...sidebar}
-                  variant="peek"
-                  onHeaderAction={() => setHiddenPersist(false)}
-                  onNavigate={peek.close}
-                  onMenuOpenChange={peek.onMenuOpenChange}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </>
-      )}
+      </div>
 
       <AnimatePresence>
         {drawer && (
@@ -257,6 +170,8 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
               <Sidebar
                 {...sidebar}
                 variant="drawer"
+                panelOpen
+                panelWidth={PANEL_WIDTH.default}
                 onHeaderAction={() => setDrawer(false)}
                 onNavigate={() => setDrawer(false)}
               />
@@ -293,17 +208,15 @@ export function AppShell({ sidebar, banner, children }: { sidebar: SidebarProps;
           </Tooltip>
         </header>
 
-        <ShellContext.Provider value={{ sidebarHidden: hidden }}>
-          {banner}
-          {/* Keeps the scrollbar's space, so a short page (Connectors with few rows) doesn't shift sideways.
-              Views that scroll their own container (data-own-scroll) would leave that space empty. */}
-          <main
-            id="main"
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] has-[[data-own-scroll]]:[scrollbar-gutter:auto]"
-          >
-            {children}
-          </main>
-        </ShellContext.Provider>
+        {banner}
+        {/* Keeps the scrollbar's space, so a short page (Connectors with few rows) doesn't shift sideways.
+            Views that scroll their own container (data-own-scroll) would leave that space empty. */}
+        <main
+          id="main"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable] has-[[data-own-scroll]]:[scrollbar-gutter:auto]"
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

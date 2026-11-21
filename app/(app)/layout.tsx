@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { PRICING_URL } from "@/app/siteUrl";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/Toast";
 import { logout } from "@/lib/account/auth";
@@ -21,8 +21,10 @@ import { StatusView } from "@/components/auth/StatusView";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const params = useSearchParams();
   const { user } = useSession();
   const library = useLibrary();
+  const view = library.active.section === "artifacts" ? params.get("type") : library.active.section === "workspace" ? params.get("tab") : null;
   const { announcement, open: announcementOpen, dismiss: dismissAnnouncement } = useAnnouncement();
   const [searchOpen, setSearchOpen] = useState(false);
   const isFree = (user?.tier ?? "free") === "free";
@@ -37,7 +39,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           loading: library.loading,
           error: library.error,
           onRetry: library.retry,
-          active: library.active,
+          active: { ...library.active, view },
           workspace: { label: WORKSPACE_NAME, href: WORKSPACE_PATH },
           user: {
             name: user?.display_name || null,
@@ -90,7 +92,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Shell>{children}</Shell>
+      <Suspense fallback={null}>
+        <Shell>{children}</Shell>
+      </Suspense>
       <Suspense fallback={null}>
         <SettingsOverlay />
       </Suspense>

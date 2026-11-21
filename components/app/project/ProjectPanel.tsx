@@ -36,7 +36,6 @@ import { artifactTypeOf, codeLanguageOf, composeSite, pageNonce, siteFiles, toDo
 import { cx } from "@/lib/ui/cx";
 import { exactStamp, groupOf, stamp } from "../ChatsView";
 import { DocumentPaper, RunningSite, SlideDeck } from "../chat/ArtifactPanel";
-import { ShellContext } from "../AppShell";
 import { DropOverlay } from "../DropOverlay";
 import { NumberedTextArea } from "../NumberedTextArea";
 import { VersionPaper, VersionPicker, versionMenuItems, type FileVersionsProps } from "./FileVersions";
@@ -645,7 +644,6 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
 
   const rootRef = React.useRef<HTMLDivElement>(null);
   const compact = useNarrow(rootRef, COMPACT_HEADER);
-  const { sidebarHidden } = React.useContext(ShellContext);
   const now = useNow();
   const toolbar = type !== null && loaded;
   const menuItems: MenuItem[] = [
@@ -697,9 +695,8 @@ function LibraryEditor({ item, p }: { item: OpenLibraryItem; p: Internal }) {
       <div
         className={cx(
           "flex shrink-0 items-center gap-1 border-line pl-2 pr-3 md:pr-4",
-          // Over the chat: the chat header's height, and room for the floating button of a hidden sidebar.
+          // Over the chat it takes the chat header's height.
           p.expanded ? "h-14 border-b" : "h-12 border-y",
-          p.expanded && sidebarHidden && "md:pl-14",
         )}
       >
         <button

@@ -4,11 +4,11 @@ import * as React from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Download, Ellipsis, Expand, Presentation, Printer, RotateCcw, Shrink, X } from "@/components/kit/icons";
 import { Menu, type MenuItem } from "@/components/kit/Menu";
+import { ResizeHandle } from "@/components/kit/ResizeHandle";
 import { Segmented } from "@/components/kit/Segmented";
 import { useNarrow, useNow } from "@/components/kit/useMounted";
 import { codeLanguageOf, composeSite, pageNonce, siteFiles, slideCount, toDocument, withSiteFile, type ArtifactType, type SiteFile } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
-import { ShellContext } from "../AppShell";
 import { exactStamp } from "../ChatsView";
 import { NumberedTextArea } from "../NumberedTextArea";
 import { VersionPicker, versionMenuItems, type FileVersionItem, type FileVersionsProps } from "../project/FileVersions";
@@ -227,7 +227,6 @@ function PanelBody({
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const compact = useNarrow(rootRef, COMPACT_HEADER);
-  const { sidebarHidden } = React.useContext(ShellContext);
   const now = useNow();
 
   const ready = !artifact.streaming;
@@ -361,7 +360,7 @@ function PanelBody({
         }
       }}
     >
-      <div className={cx("flex h-14 shrink-0 items-center gap-1 border-b border-line pl-5 pr-2", expanded && sidebarHidden && "md:pl-14")}>
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-line pl-5 pr-2">
         <div className="mr-2 min-w-0 flex-1">
           <p className="truncate text-[14px] font-medium tracking-[-0.01em]">{artifact.title}</p>
           <p className={cx("truncate font-mono text-[11px] text-muted", artifact.streaming && "text-shimmer")}>{subtitle}</p>
@@ -553,30 +552,6 @@ export function ArtifactPanel({
     } catch {}
   };
 
-  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    // Without this the drag also selects chat text, and the browser cancels the pointer to drag that selection.
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = width;
-    const handle = e.currentTarget;
-    handle.setPointerCapture(e.pointerId);
-    setDragging(true);
-    let next = startW;
-    const move = (m: PointerEvent) => {
-      next = Math.min(Math.max(startW + (startX - m.clientX), MIN), maxWidth());
-      setWidth(next);
-    };
-    // Fires after pointerup and pointercancel alike; a cancelled drag sends no pointerup and would leave the page unclickable.
-    const end = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("lostpointercapture", end);
-      setDragging(false);
-      commit(next);
-    };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("lostpointercapture", end);
-  };
-
   const common = artifact && {
     artifact,
     edits: edits[artifact.id],
@@ -611,29 +586,19 @@ export function ArtifactPanel({
             className={cx("relative h-full shrink-0 overflow-hidden", !expanded && "border-l border-line")}
           >
             {!expanded && (
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize document panel"
-                aria-valuenow={width}
-                aria-valuemin={MIN}
-                tabIndex={0}
-                title="Drag to resize · double-click to reset"
-                onPointerDown={startDrag}
-                onDoubleClick={() => commit(DEFAULT)}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowLeft") commit(width + 32);
-                  if (e.key === "ArrowRight") commit(width - 32);
-                }}
-                className="group absolute inset-y-0 left-0 z-10 w-2 -translate-x-1 cursor-col-resize touch-none"
-              >
-                <span
-                  className={cx(
-                    "absolute inset-y-0 left-1 w-px transition-[background-color,width] duration-150",
-                    dragging ? "w-0.5 bg-fg/40" : "group-hover:w-0.5 group-hover:bg-fg/25 group-focus-visible:bg-fg/40",
-                  )}
-                />
-              </div>
+              <ResizeHandle
+                label="Resize document panel"
+                edge="left"
+                width={width}
+                min={MIN}
+                max={maxWidth()}
+                defaultWidth={DEFAULT}
+                dragging={dragging}
+                onDraggingChange={setDragging}
+                onResize={setWidth}
+                onCommit={commit}
+                className="-left-1"
+              />
             )}
             <div className={cx("h-full", dragging && "pointer-events-none select-none")} style={{ width: expanded ? "100%" : width }}>
               <PanelBody key={`${common.artifact.id}:${common.artifact.openAt}`} {...common} expanded={expanded} onToggleExpand={() => setExpanded((x) => !x)} />

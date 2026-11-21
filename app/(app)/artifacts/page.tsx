@@ -1,20 +1,33 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArtifactsView, type ArtifactFilter } from "@/components/app/ArtifactsView";
-import type { ArtifactItem } from "@/components/app/artifacts/ArtifactGallery";
+import { ARTIFACT_TYPES, type ArtifactItem } from "@/components/app/artifacts/ArtifactGallery";
 import { LibraryContext } from "@/components/wired/useLibrary";
 import { setPendingFocus } from "@/lib/search/searchFocus";
 import { getSearchIndexState, indexedArtifacts, subscribeSearchIndex, syncSearchIndex, type IndexedArtifact } from "@/lib/search/searchIndex";
 
 const keyOf = (a: IndexedArtifact): string => `${a.chatId}:${a.path}`;
 
-export default function ArtifactsPage() {
+// The type filter lives in the URL (?type=), so the sidebar's type rows can open it.
+function filterOf(type: string | null): ArtifactFilter {
+  return ARTIFACT_TYPES.find((t) => t.id === type)?.id ?? "all";
+}
+
+export default function Artifacts() {
+  return (
+    <Suspense fallback={null}>
+      <ArtifactsPage />
+    </Suspense>
+  );
+}
+
+function ArtifactsPage() {
   const router = useRouter();
+  const filter = filterOf(useSearchParams().get("type"));
   const { raw, loading } = useContext(LibraryContext);
   const index = useSyncExternalStore(subscribeSearchIndex, getSearchIndexState, getSearchIndexState);
-  const [filter, setFilter] = useState<ArtifactFilter>("all");
   const [query, setQuery] = useState("");
   const [retries, setRetries] = useState(0);
 
@@ -67,7 +80,7 @@ export default function ArtifactsPage() {
       error={!syncing && index.progress?.paused && items.length === 0}
       onRetry={() => setRetries((n) => n + 1)}
       filter={filter}
-      onFilter={setFilter}
+      onFilter={(f) => router.replace(f === "all" ? "/artifacts" : `/artifacts?type=${f}`, { scroll: false })}
       query={query}
       onQuery={setQuery}
       onOpen={open}

@@ -6,12 +6,14 @@ export function Tooltip({
   label,
   keys,
   align = "start",
+  side = "bottom",
   className,
   children,
 }: {
   label?: string;
   keys?: Keys;
   align?: "start" | "center" | "end";
+  side?: "bottom" | "right";
   className?: string;
   children: React.ReactNode;
 }) {
@@ -22,9 +24,11 @@ export function Tooltip({
         <span
           aria-hidden="true"
           className={cx(
-            "pointer-events-none absolute top-full z-50 mt-2 flex items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-[12px] tracking-[-0.01em] text-fg shadow-soft",
+            "pointer-events-none absolute z-50 flex items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-[12px] tracking-[-0.01em] text-fg shadow-soft",
             "opacity-0 transition-opacity duration-150 group-hover/tip:opacity-100 group-hover/tip:delay-500 group-active/tip:opacity-0 group-has-[:focus-visible]/tip:opacity-100",
-            align === "start" ? "left-0" : align === "end" ? "right-0" : "left-1/2 -translate-x-1/2",
+            side === "right"
+              ? "left-full top-1/2 ml-2 -translate-y-1/2"
+              : cx("top-full mt-2", align === "start" ? "left-0" : align === "end" ? "right-0" : "left-1/2 -translate-x-1/2"),
           )}
         >
           {label}
