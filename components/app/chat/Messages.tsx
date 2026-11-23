@@ -18,6 +18,8 @@ import { LogoMark } from "@/components/kit/Logo";
 import { Spinner } from "@/components/kit/Spinner";
 import { codeLanguageOf, type ArtifactType } from "@/lib/artifacts/artifacts";
 import { cx } from "@/lib/ui/cx";
+import { composerCodeBlocks } from "@/lib/ui/composerCode";
+import { composerListItems } from "@/lib/ui/composerLists";
 import { webLinks } from "@/lib/ui/webLinks";
 import { AttachmentViewer, FileTile, type ViewerAttachment } from "./AttachmentViewer";
 import { Markdown, MessageLink } from "./Markdown";
@@ -154,6 +156,30 @@ function linkMessageText(text: string): React.ReactNode {
   return parts;
 }
 
+/** Shows the list items the composer formats the way the composer and the answers show lists. */
+function userMessageText(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let offset = 0;
+  for (const { start, markerStart, markerEnd, end } of composerListItems(text, composerCodeBlocks(text))) {
+    const marker = text.slice(markerStart, markerEnd).trimEnd();
+    const bullet = /^[-*+]/.test(marker);
+    parts.push(
+      <React.Fragment key={`text-${offset}`}>{linkMessageText(text.slice(offset, start))}</React.Fragment>,
+      <span key={`item-${start}`} className="flex [&+&]:mt-1.5">
+        <span className="shrink-0 whitespace-pre">{text.slice(start, markerStart)}</span>
+        <span className="min-w-6 shrink-0 whitespace-pre pr-1.5 text-right text-muted">
+          {bullet ? <><span className="text-subtle">•</span>{marker.slice(1)}</> : <span className="font-mono text-[0.85em]">{marker}</span>}
+        </span>
+        <span className="min-w-0">{linkMessageText(text.slice(markerEnd, end))}</span>
+      </span>,
+    );
+    offset = end + (text[end] === "\n" ? 1 : 0);
+  }
+  if (parts.length === 0) return linkMessageText(text);
+  parts.push(<React.Fragment key={`text-${offset}`}>{linkMessageText(text.slice(offset))}</React.Fragment>);
+  return parts;
+}
+
 export function UserMessage({ message, enter = true }: { message: UserMessageData; enter?: boolean }) {
   const reduce = useReducedMotion();
   const [previewed, setPreviewed] = React.useState<number | null>(null);
@@ -203,7 +229,7 @@ export function UserMessage({ message, enter = true }: { message: UserMessageDat
               {message.quote && (
                 <p className="mb-2 line-clamp-3 border-l-2 border-line-strong pl-3 text-[13.5px] text-muted">{message.quote}</p>
               )}
-              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{linkMessageText(message.text)}</p>
+              <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{userMessageText(message.text)}</p>
             </>
           )}
         </div>

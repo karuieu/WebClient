@@ -7,6 +7,7 @@ import {
   composerCodeBlocks, composerCodeExit, composerFenceEdit, composerLanguage, composerLanguageEdit, type ComposerCodeBlock, type ComposerEdit,
 } from "@/lib/ui/composerCode";
 import { composerLinks } from "@/lib/ui/composerLinks";
+import { composerListBreak, composerListItems, composerListJoin, composerListUnmark, type ComposerListItem } from "@/lib/ui/composerLists";
 import type { WebLink } from "@/lib/ui/webLinks";
 import { cx } from "@/lib/ui/cx";
 import { skillCommandName } from "@/lib/messages/skillInvocation";
@@ -20,7 +21,9 @@ export type ComposerInputHandle = {
 
 type Caret = { at: number; afterToken: boolean };
 type Snapshot = { text: string; selected: SelectedSkill | null; caret: Caret };
-type Contents = { text: string; tokenId: string | null; tokenAt: number; codeBlocks: ComposerCodeBlock[]; links: WebLink[] };
+type Contents = {
+  text: string; tokenId: string | null; tokenAt: number; codeBlocks: ComposerCodeBlock[]; links: WebLink[]; listItems: Pick<ComposerListItem, "start" | "markerEnd" | "end">[];
+};
 
 function closingFence(block: HTMLElement, hasBody: boolean): string {
   const closing = block.dataset.codeClose ?? "";
@@ -28,7 +31,7 @@ function closingFence(block: HTMLElement, hasBody: boolean): string {
 }
 
 function readContents(root: Node, partialCodeBlock = false): Contents {
-  const result: Contents = { text: "", tokenId: null, tokenAt: 0, codeBlocks: [], links: [] };
+  const result: Contents = { text: "", tokenId: null, tokenAt: 0, codeBlocks: [], links: [], listItems: [] };
   const visit = (node: Node): void => {
     if (node instanceof HTMLElement && node.dataset.skillId) {
       result.tokenId = node.dataset.skillId;
@@ -43,6 +46,12 @@ function readContents(root: Node, partialCodeBlock = false): Contents {
       if (complete) result.text += closingFence(node, bodyEnd > bodyStart);
       result.codeBlocks.push({ start, bodyStart, bodyEnd, end: result.text.length });
       if (complete && node.hasAttribute("data-code-separator")) result.text += "\n";
+    } else if (node instanceof HTMLElement && node.dataset.listItem !== undefined) {
+      if (result.text && !result.text.endsWith("\n")) result.text += "\n";
+      const start = result.text.length;
+      node.childNodes.forEach(visit);
+      result.listItems.push({ start, markerEnd: start + Number(node.dataset.listItem), end: result.text.length });
+      if (node.nextSibling) result.text += "\n";
     } else if (node instanceof HTMLAnchorElement && node.dataset.draftLink !== undefined) {
       const start = result.text.length;
       node.childNodes.forEach(visit);
@@ -95,18 +104,61 @@ function atCodeEdge(selection: Selection, element: HTMLElement, down: boolean): 
   return !!edge && caret.height > 0 && Math.abs(caret.top - edge.top) <= 1;
 }
 
-function placeTextCaret(range: Range, element: HTMLElement, offset: number): void {
+function textPoint(element: HTMLElement, offset: number): [Node, number] {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const length = node.textContent?.length ?? 0;
-    if (offset <= length) {
-      range.setStart(node, offset);
-      return;
-    }
+    if (offset <= length) return [node, offset];
     offset -= length;
   }
-  range.selectNodeContents(element);
-  range.collapse(false);
+  return [element, element.childNodes.length];
+}
+
+function textWidth(element: HTMLElement, length: number): number {
+  const range = document.createRange();
+  range.setStart(element, 0);
+  range.setEnd(...textPoint(element, length));
+  return range.getBoundingClientRect().width;
+}
+
+function canHighlight(): boolean {
+  return typeof Highlight !== "undefined" && !!CSS.highlights;
+}
+
+/** Mutes list markers and hides the bullet character under the dot the item draws in its place. */
+function highlightListMarkers(root: HTMLElement): () => void {
+  const applied: { key: string; range: Range }[] = [];
+  for (const item of root.querySelectorAll<HTMLElement>(":scope > div[data-list-item]")) {
+    const indent = Number(item.dataset.listIndent);
+    const bullet = item.dataset.listBullet !== undefined;
+    const marks: [string, number, number][] = bullet
+      ? [["karui-composer-list-bullet", indent, indent + 1], ["karui-composer-list-marker", indent + 1, Number(item.dataset.listItem)]]
+      : [["karui-composer-list-marker", indent, Number(item.dataset.listItem)]];
+    for (const [key, from, to] of marks) {
+      const range = document.createRange();
+      range.setStart(...textPoint(item, from));
+      range.setEnd(...textPoint(item, to));
+      let highlight = CSS.highlights.get(key);
+      if (!highlight) {
+        highlight = new Highlight();
+        CSS.highlights.set(key, highlight);
+      }
+      highlight.add(range);
+      applied.push({ key, range });
+    }
+  }
+  return () => {
+    for (const { key, range } of applied) {
+      const highlight = CSS.highlights.get(key);
+      if (!highlight) continue;
+      highlight.delete(range);
+      if (highlight.size === 0) CSS.highlights.delete(key);
+    }
+  };
+}
+
+function placeTextCaret(range: Range, element: HTMLElement, offset: number): void {
+  range.setStart(...textPoint(element, offset));
 }
 
 function placeCaret(root: HTMLElement, caret: Caret): void {
@@ -139,6 +191,13 @@ function placeCaret(root: HTMLElement, caret: Caret): void {
         range.setStartAfter(node);
         break;
       }
+    } else if (node instanceof HTMLElement && node.dataset.listItem !== undefined) {
+      const length = node.textContent?.length ?? 0;
+      if (left <= length) {
+        placeTextCaret(range, node, left);
+        break;
+      }
+      left -= length + (node.nextSibling ? 1 : 0);
     } else if (node instanceof HTMLAnchorElement && node.dataset.draftLink !== undefined) {
       const length = node.textContent.length;
       if (left <= length) {
@@ -162,7 +221,7 @@ function placeCaret(root: HTMLElement, caret: Caret): void {
 
 function writeContents(
   root: HTMLElement, text: string, selected: SelectedSkill | null, descriptionId: string,
-  blocks: ComposerCodeBlock[], links: WebLink[],
+  blocks: ComposerCodeBlock[], links: WebLink[], listItems: ComposerListItem[],
 ): void {
   const fragment = document.createDocumentFragment();
   let token: HTMLSpanElement | undefined;
@@ -180,7 +239,7 @@ function writeContents(
 
   let nextLink = 0;
   const appendRange = (parent: DocumentFragment | HTMLElement, from: number, to: number): void => {
-    if (parent instanceof DocumentFragment) {
+    if (!(parent instanceof HTMLPreElement)) {
       for (let link = links[nextLink]; link && link.start < to; link = links[++nextLink]) {
         parent.append(document.createTextNode(text.slice(from, link.start)));
         const anchor = document.createElement("a");
@@ -210,8 +269,7 @@ function writeContents(
   };
 
   let position = 0;
-  for (const { start, bodyStart, bodyEnd, end } of blocks) {
-    appendText(fragment, position, start);
+  const appendCode = ({ start, bodyStart, bodyEnd, end }: ComposerCodeBlock): void => {
     const block = document.createElement("pre");
     block.dataset.codeOpen = text.slice(start, bodyStart);
     block.dataset.codeClose = text.slice(bodyEnd, end);
@@ -224,8 +282,27 @@ function writeContents(
       block.dataset.codeSeparator = "";
       position++;
     }
+  };
+  const appendListItem = ({ start, markerStart, markerEnd, end }: ComposerListItem): void => {
+    const line = document.createElement("div");
+    line.dataset.listItem = String(markerEnd - start);
+    line.dataset.listIndent = String(markerStart - start);
+    if (canHighlight() && /[-*+]/.test(text[markerStart])) line.dataset.listBullet = "";
+    line.className = "relative [[data-list-item]+&]:mt-1.5 data-[list-bullet]:before:absolute data-[list-bullet]:before:left-[var(--list-bullet)] data-[list-bullet]:before:top-[calc(0.5lh-2.5px)] data-[list-bullet]:before:size-[5px] data-[list-bullet]:before:-translate-x-1/2 data-[list-bullet]:before:rounded-full data-[list-bullet]:before:bg-subtle data-[list-bullet]:before:content-['']";
+    appendText(line, start, end);
+    fragment.append(line);
+    position = end + (text[end] === "\n" ? 1 : 0);
+  };
+  const segments = [
+    ...blocks.map((block) => ({ start: block.start, append: () => appendCode(block) })),
+    ...listItems.map((item) => ({ start: item.start, append: () => appendListItem(item) })),
+  ].sort((a, b) => a.start - b.start);
+  for (const segment of segments) {
+    appendText(fragment, position, segment.start);
+    segment.append();
   }
-  appendText(fragment, position, text.length);
+  // A list item renders the newline after it only when a sibling follows, so the end gets no empty text node.
+  if (position < text.length || token) appendText(fragment, position, text.length);
   root.replaceChildren(fragment);
 }
 
@@ -321,6 +398,18 @@ export function ComposerInput({
     return true;
   };
 
+  const listEdit = (root: HTMLElement, inputType: string): ComposerEdit | undefined => {
+    if (composition.current || !window.getSelection()?.isCollapsed || codeAtCaret(root)) return;
+    const { text, selected } = current.current;
+    const items = composerListItems(text, composerCodeBlocks(text), selected?.at);
+    if (!items.length) return;
+    const { at } = readCaret(root);
+    if (inputType === "insertParagraph" || inputType === "insertLineBreak") return composerListBreak(text, at, items);
+    if (inputType === "deleteContentBackward") return composerListUnmark(at, items) ?? composerListJoin(text, at - 1, items);
+    if (inputType === "deleteContentForward") return composerListJoin(text, at, items);
+    return undefined;
+  };
+
   const readInput = (typedFence = false): void => {
     const root = rootRef.current;
     if (!root) return;
@@ -406,9 +495,17 @@ export function ComposerInput({
       const rendered = contents.links[index];
       return start === rendered.start && end === rendered.end && href === rendered.href;
     });
-    if (contents.text !== value || contents.tokenId !== (selected?.skill.id ?? null) || (selected && contents.tokenAt !== selected.at) || !sameBlocks || (!composition.current && !sameLinks)) {
+    const listItems = composerListItems(value, blocks, selected?.at);
+    const sameListItems = listItems.length === contents.listItems.length && listItems.every(({ start, markerEnd, end }, index) => {
+      const rendered = contents.listItems[index];
+      return start === rendered.start && markerEnd === rendered.markerEnd && end === rendered.end;
+    });
+    if (
+      contents.text !== value || contents.tokenId !== (selected?.skill.id ?? null) || (selected && contents.tokenAt !== selected.at) || !sameBlocks
+      || (!composition.current && (!sameLinks || !sameListItems))
+    ) {
       const focused = root.contains(document.activeElement);
-      writeContents(root, value, selected, descriptionId, blocks, links);
+      writeContents(root, value, selected, descriptionId, blocks, links, listItems);
       if (focused && !pendingCaret.current) pendingCaret.current = current.current.caret;
     }
     const addTrailingLine = (parent: HTMLElement, needed: boolean): void => {
@@ -431,6 +528,17 @@ export function ComposerInput({
       if (language) block.dataset.codeLanguage = language;
       else delete block.dataset.codeLanguage;
       addTrailingLine(block, !body || body.endsWith("\n"));
+    }
+    for (const item of root.querySelectorAll<HTMLElement>(":scope > div[data-list-item]")) {
+      const indentLength = Number(item.dataset.listIndent);
+      const indent = textWidth(item, indentLength);
+      const marker = textWidth(item, Number(item.dataset.listItem));
+      // Like the lists in answers: the marker hangs in a gutter of at least 1.5rem, right against the text.
+      const column = indent + Math.max(marker - indent, 1.5 * parseFloat(getComputedStyle(root).fontSize));
+      item.style.paddingLeft = `${column}px`;
+      item.style.textIndent = `-${marker}px`;
+      const bulletCenter = column - marker + (indent + textWidth(item, indentLength + 1)) / 2;
+      item.style.setProperty("--list-bullet", `${bulletCenter}px`);
     }
     if (pendingCaret.current !== null) {
       placeCaret(root, pendingCaret.current);
@@ -460,6 +568,12 @@ export function ComposerInput({
   }, [value, selected?.at, selected?.skill.id]);
 
   React.useEffect(() => {
+    const root = rootRef.current;
+    if (!root || !canHighlight()) return;
+    return highlightListMarkers(root);
+  }, [value, selected?.at, selected?.skill.id]);
+
+  React.useEffect(() => {
     if (!card) return;
     const close = (): void => setCard(null);
     window.addEventListener("scroll", close, true);
@@ -474,7 +588,11 @@ export function ComposerInput({
     const root = rootRef.current;
     if (!root) return;
     const beforeInput = (event: InputEvent): void => {
-      if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
+      const edit = listEdit(root, event.inputType);
+      if (edit) {
+        event.preventDefault();
+        applyEdit(edit);
+      } else if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
         event.preventDefault();
         insertText("\n");
       } else if (event.inputType === "deleteContentBackward" && deleteLineAfterCode(root)) {

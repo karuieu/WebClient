@@ -187,6 +187,8 @@ body {
 ::highlight(karui-composer-function) { color: var(--code-function); }
 ::highlight(karui-composer-type) { color: var(--code-type); }
 ::highlight(karui-composer-comment) { color: color-mix(in oklab, var(--muted) 93%, var(--fg)); }
+::highlight(karui-composer-list-marker) { color: var(--muted); }
+::highlight(karui-composer-list-bullet) { color: transparent; }
 
 :is(input, textarea, button, [tabindex])[data-focus="within"]:focus-visible {
   outline-style: none !important;
