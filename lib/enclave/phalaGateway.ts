@@ -4,7 +4,7 @@ import { toHex } from "./hex";
 // sha256 of the current reviewed app_compose of Phala's gateway, with the gateway commit replaced by {commit}. The commit
 // changes with every release and is checked against the public repo's main instead; any other change (an image, the
 // launch script, routing config) gives a new hash, and Phala stays off until that compose is reviewed and listed.
-const REVIEWED_GATEWAY_COMPOSE = "7516f9a22f46a4e57dc23eb46588e1dde32c7f2fec5257c99383031c0820f305";
+const REVIEWED_GATEWAY_COMPOSE = "d58443c7af37c1e98164d3f805d98c9c58aaae41a807d0ef99928867f9181468";
 
 const COMMIT_VALUE = /PRIVATE_AI_GATEWAY_REPO_COMMIT=([0-9a-f]{40})/g;
 
