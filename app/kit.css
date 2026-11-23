@@ -111,9 +111,11 @@ body {
   color: var(--on-inverse);
 }
 
-.sidebar-scroll {
+.thin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
+}
+.sidebar-scroll {
   scrollbar-gutter: stable;
   scroll-padding-block: 8px;
 }
@@ -136,21 +138,21 @@ body {
     padding-right: 52px;
   }
 }
-.sidebar-scroll::-webkit-scrollbar {
+.thin-scrollbar::-webkit-scrollbar {
   width: 4px;
   height: 0;
 }
-.sidebar-scroll::-webkit-scrollbar-track {
+.thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-.sidebar-scroll::-webkit-scrollbar-thumb {
+.thin-scrollbar::-webkit-scrollbar-thumb {
   background: var(--line-strong);
   border-radius: 999px;
 }
-.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
 }
-.sidebar-scroll::-webkit-scrollbar-corner {
+.thin-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
 

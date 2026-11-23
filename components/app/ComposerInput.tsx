@@ -217,6 +217,23 @@ function placeCaret(root: HTMLElement, caret: Caret): void {
   range.collapse(true);
   window.getSelection()?.removeAllRanges();
   window.getSelection()?.addRange(range);
+  revealCaret(root, range);
+}
+
+/** The browser scrolls to the caret only after its own edits, so a caret placed by code is scrolled to here. */
+function revealCaret(root: HTMLElement, caret: Range): void {
+  let rect = caret.getBoundingClientRect();
+  if (!rect.height) {
+    const { startContainer: container, startOffset: offset } = caret;
+    const near = container.childNodes[offset] ?? container.childNodes[offset - 1] ?? container;
+    rect = (near instanceof Element ? near : near.parentElement ?? root).getBoundingClientRect();
+  }
+  const view = root.getBoundingClientRect();
+  const style = getComputedStyle(root);
+  const below = rect.bottom + parseFloat(style.paddingBottom) - view.bottom;
+  const above = view.top + parseFloat(style.paddingTop) - rect.top;
+  if (below > 0) root.scrollTop += below;
+  else if (above > 0) root.scrollTop -= above;
 }
 
 function writeContents(
@@ -437,6 +454,7 @@ export function ComposerInput({
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
+    revealCaret(root, range);
     readInput();
   };
 
@@ -753,7 +771,7 @@ export function ComposerInput({
           handleCodeKey(event);
           if (!event.defaultPrevented) onKeyDown(event);
         }}
-        className="max-h-[40vh] min-h-[3.5rem] overflow-y-auto whitespace-pre-wrap break-words px-5 pb-2 pt-4 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none [overflow-wrap:anywhere] data-[empty=true]:before:pointer-events-none data-[empty=true]:before:text-muted data-[empty=true]:before:content-[attr(data-placeholder)]"
+        className="thin-scrollbar mr-1.5 mt-2 max-h-[40vh] min-h-12 overflow-y-auto whitespace-pre-wrap break-words pb-2 pl-5 pr-3.5 pt-2 text-[1.0625rem] leading-relaxed tracking-[-0.01em] text-fg outline-none [overflow-wrap:anywhere] data-[empty=true]:before:pointer-events-none data-[empty=true]:before:text-muted data-[empty=true]:before:content-[attr(data-placeholder)]"
       />
       {selected && <span id={descriptionId} hidden>{selected.skill.description} Press Backspace to remove.</span>}
       {card && selected && createPortal(

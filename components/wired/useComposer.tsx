@@ -13,7 +13,7 @@ import {
 } from "@/lib/models/reasoning";
 import { getMemorySettings } from "@/lib/chat/memory";
 import { IMAGES_UNSUPPORTED_NOTE, MAX_IMAGES_PER_MESSAGE, MAX_TEXT_FILES_PER_MESSAGE, modelSupportsImages } from "@/lib/messages/vision";
-import { TEXT_FILE_ACCEPT, useFileDrop, useImageAttachments, useTextFileAttachments } from "@/lib/ui/attachments";
+import { pastedTextFile, TEXT_FILE_ACCEPT, useFileDrop, useImageAttachments, useTextFileAttachments } from "@/lib/ui/attachments";
 import { useToast } from "@/components/Toast";
 import type { Composer, ComposerAttachment } from "@/components/app/Composer";
 import type { ModelOption } from "@/components/app/ModelPicker";
@@ -176,9 +176,12 @@ export function useComposer({ onSubmit, fixedModel, skillsEnabled = false, proje
     },
     onPaste: (e) => {
       const files = Array.from(e.clipboardData?.files ?? []);
-      if (files.length) {
+      const pasted = files.length === 0 && docs.files.length < MAX_TEXT_FILES_PER_MESSAGE
+        ? pastedTextFile(e.clipboardData.getData("text/plain"))
+        : undefined;
+      if (files.length || pasted) {
         e.preventDefault();
-        addAny(files);
+        addAny(pasted ? [pasted] : files);
       }
     },
     webSearch: { on: webSearch, onToggle: () => setWebSearch((w) => !w) },

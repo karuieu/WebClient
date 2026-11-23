@@ -55,6 +55,16 @@ export function useImageAttachments(onError: (message: string) => void, allowed:
   return { images, isProcessing, addFiles, removeImage, clearImages };
 }
 
+const PASTE_FILE_CHARS = 4000;
+const PASTE_FILE_LINES = 80;
+
+/** A paste this long goes in as a text file instead of filling the composer. */
+export function pastedTextFile(text: string): File | undefined {
+  const lines = text.split("\n").length;
+  if (text.length < PASTE_FILE_CHARS && lines < PASTE_FILE_LINES) return undefined;
+  return new File([text], "Pasted.txt", { type: "text/plain" });
+}
+
 export function useTextFileAttachments(onError: (message: string) => void) {
   const [files, setFiles] = useState<ChatTextFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);

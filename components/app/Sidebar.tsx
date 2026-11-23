@@ -433,7 +433,7 @@ export function Sidebar(p: Internal): React.JSX.Element {
         </Link>
       </div>
 
-      <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
+      <div className="sidebar-scroll thin-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
         <nav aria-label="Library" className="flex shrink-0 flex-col gap-0.5 px-3 pb-3 pt-2">
           <NavRow href="/new" label="New chat" icon={<Plus className="size-4" />} active={active?.section === "new"} pillId={pillId} shortcut={["Mod", "Shift", "O"]} onNavigate={p.onNavigate} />
           {p.onOpenSearch && (
