@@ -878,16 +878,17 @@ export async function retryMessage(
 }
 
 export interface BillingStatus {
-  tier: string;
-  tokens_used: number;
-  tokens_limit: number;
-  window_hours: number;
+  tier: "free" | "pro";
+  used_usd_nanos: number;
+  limit_usd_nanos: number;
   window_reset_at?: string;
-  week_tokens_used?: number;
-  week_tokens_limit?: number;
+  week_used_usd_nanos: number;
+  week_limit_usd_nanos?: number;
   week_reset_at?: string;
+  input_usd_nanos_per_million: number;
+  output_usd_nanos_per_million: number;
 }
 
-export async function getBillingStatus(): Promise<BillingStatus> {
-  return apiCall<BillingStatus>("/api/billing/status", { method: "GET" });
+export async function getBillingStatus(signal?: AbortSignal): Promise<BillingStatus> {
+  return apiCall<BillingStatus>("/api/billing/status", { method: "GET", signal });
 }

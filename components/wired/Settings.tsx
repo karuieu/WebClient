@@ -126,38 +126,50 @@ function GeneralSection({ onOpenInstructions }: { onOpenInstructions: () => void
 }
 
 function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
-  const { user } = useSession();
-  const [billing, setBilling] = React.useState<BillingStatus | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [billing, setBilling] = React.useState<BillingStatus | null>();
 
   React.useEffect(() => {
-    getBillingStatus()
-      .then(setBilling)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const request = new AbortController();
+    void getBillingStatus(request.signal).then(
+      (status) => {
+        if (!request.signal.aborted) setBilling(status);
+      },
+      () => {
+        if (!request.signal.aborted) setBilling(null);
+      }
+    );
+    return () => request.abort();
   }, []);
 
-  const pro = (user?.tier ?? billing?.tier ?? "free") === "pro";
+  if (!billing?.limit_usd_nanos) {
+    return (
+      <p className="text-[14px] text-muted" role="status">
+        {billing === undefined ? "Loading usage…" : "Usage is temporarily unavailable."}
+      </p>
+    );
+  }
+
   return (
     <UsageSettings
-      plan={pro ? "pro" : "free"}
+      plan={billing.tier}
       window={{
-        label: pro ? "This 5-hour window" : "Today",
-        used: billing?.tokens_used ?? 0,
-        limit: billing?.tokens_limit ?? (pro ? 800_000 : 10_000),
-        resetAt: billing?.window_reset_at ?? null,
+        label: billing.tier === "pro" ? "5-hour window" : "24-hour window",
+        used: billing.used_usd_nanos,
+        limit: billing.limit_usd_nanos,
+        resetAt: billing.window_reset_at,
       }}
       week={
-        pro
+        billing.week_limit_usd_nanos
           ? {
-              label: "This week",
-              used: billing?.week_tokens_used ?? 0,
-              limit: billing?.week_tokens_limit ?? 3_200_000,
-              resetAt: billing?.week_reset_at ?? null,
+              label: "7-day window",
+              used: billing.week_used_usd_nanos,
+              limit: billing.week_limit_usd_nanos,
+              resetAt: billing.week_reset_at,
             }
           : undefined
       }
-      loading={loading}
+      inputRate={billing.input_usd_nanos_per_million}
+      outputRate={billing.output_usd_nanos_per_million}
       onUpgrade={onUpgrade}
     />
   );
