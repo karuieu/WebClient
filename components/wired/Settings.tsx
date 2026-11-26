@@ -153,21 +153,12 @@ function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
     <UsageSettings
       plan={billing.tier}
       window={{
-        label: billing.tier === "pro" ? "5-hour window" : "24-hour window",
+        label: billing.tier === "pro" ? "Current billing period" : "24-hour window",
         used: billing.used_usd_nanos,
         limit: billing.limit_usd_nanos,
         resetAt: billing.window_reset_at,
       }}
-      week={
-        billing.week_limit_usd_nanos
-          ? {
-              label: "7-day window",
-              used: billing.week_used_usd_nanos,
-              limit: billing.week_limit_usd_nanos,
-              resetAt: billing.week_reset_at,
-            }
-          : undefined
-      }
+      renewalPending={billing.renewal_pending}
       onUpgrade={onUpgrade}
     />
   );

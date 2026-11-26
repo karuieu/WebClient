@@ -882,9 +882,7 @@ export interface BillingStatus {
   used_usd_nanos: number;
   limit_usd_nanos: number;
   window_reset_at?: string;
-  week_used_usd_nanos: number;
-  week_limit_usd_nanos?: number;
-  week_reset_at?: string;
+  renewal_pending?: boolean;
 }
 
 export async function getBillingStatus(signal?: AbortSignal): Promise<BillingStatus> {

@@ -15,7 +15,7 @@ export type UsageWindow = {
 export type UsageSettingsProps = {
   plan: "free" | "pro";
   window: UsageWindow;
-  week?: UsageWindow;
+  renewalPending?: boolean;
   onUpgrade?: () => void;
 };
 
@@ -40,7 +40,7 @@ function formatUSD(nanos: number): string {
   return usd.format(nanos / 1_000_000_000);
 }
 
-function UsageCard({ plan, window: w }: { plan: "free" | "pro"; window: UsageWindow }) {
+function UsageCard({ plan, window: w, renewalPending }: Omit<UsageSettingsProps, "onUpgrade">) {
   const reduce = useReducedMotion();
   const [now, setNow] = React.useState<number | null>(null);
   const pct = w.limit > 0 ? Math.min(100, Math.round((w.used / w.limit) * 100)) : 0;
@@ -87,17 +87,15 @@ function UsageCard({ plan, window: w }: { plan: "free" | "pro"; window: UsageWin
         </span>
         {w.resetAt && now !== null && <span>Resets in {countdown(w.resetAt, now)}</span>}
       </div>
+      {renewalPending && <p role="status" className="mt-3 text-[13px] text-muted">Your allowance resets when your subscription renews.</p>}
     </section>
   );
 }
 
-export function UsageSettings({ plan, window: w, week, onUpgrade }: UsageSettingsProps) {
+export function UsageSettings({ plan, window: w, renewalPending, onUpgrade }: UsageSettingsProps) {
   return (
     <>
-      <div className="flex flex-col gap-3">
-        <UsageCard plan={plan} window={w} />
-        {week && <UsageCard plan={plan} window={week} />}
-      </div>
+      <UsageCard plan={plan} window={w} renewalPending={renewalPending} />
 
       {plan === "free" && onUpgrade && (
         <Group className="mt-6">
