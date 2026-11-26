@@ -885,8 +885,6 @@ export interface BillingStatus {
   week_used_usd_nanos: number;
   week_limit_usd_nanos?: number;
   week_reset_at?: string;
-  input_usd_nanos_per_million: number;
-  output_usd_nanos_per_million: number;
 }
 
 export async function getBillingStatus(signal?: AbortSignal): Promise<BillingStatus> {

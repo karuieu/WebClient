@@ -16,8 +16,6 @@ export type UsageSettingsProps = {
   plan: "free" | "pro";
   window: UsageWindow;
   week?: UsageWindow;
-  inputRate: number;
-  outputRate: number;
   onUpgrade?: () => void;
 };
 
@@ -93,7 +91,7 @@ function UsageCard({ plan, window: w }: { plan: "free" | "pro"; window: UsageWin
   );
 }
 
-export function UsageSettings({ plan, window: w, week, inputRate, outputRate, onUpgrade }: UsageSettingsProps) {
+export function UsageSettings({ plan, window: w, week, onUpgrade }: UsageSettingsProps) {
   return (
     <>
       <div className="flex flex-col gap-3">
@@ -121,7 +119,7 @@ export function UsageSettings({ plan, window: w, week, inputRate, outputRate, on
       )}
 
       <SectionIntro>
-        Every model costs {formatUSD(inputRate)} per million input tokens and {formatUSD(outputRate)} per million output tokens.
+        Usage rates depend on the model and provider.
       </SectionIntro>
     </>
   );

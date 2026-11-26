@@ -168,8 +168,6 @@ function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
             }
           : undefined
       }
-      inputRate={billing.input_usd_nanos_per_million}
-      outputRate={billing.output_usd_nanos_per_million}
       onUpgrade={onUpgrade}
     />
   );
