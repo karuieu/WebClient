@@ -25,7 +25,7 @@ import { BRIEF_CLOSE, BRIEF_OPEN, TITLE_CLOSE, TITLE_OPEN, createTagFilter, stri
 import { resolveReasoningEffort } from "@/lib/models/reasoning";
 import { streamE2EChat, contextBudgetFor, ensureModelAvailable, type E2EStreamOptions } from "./inference";
 import { type AnswerActivity } from "./answerTools";
-import { getModelProvider, type ProviderId } from "@/lib/models/providers";
+import { ALL_PROVIDERS, HELPER_PROVIDER, getModelProvider, type ProviderId } from "@/lib/models/providers";
 import {
   maybeCompressChat,
   clearChatSummary,
@@ -883,8 +883,42 @@ export interface BillingStatus {
   limit_usd_nanos: number;
   window_reset_at?: string;
   renewal_pending?: boolean;
+  credits_usd_nanos: number;
+  credit_min_usd: number;
+  credit_max_usd: number;
 }
 
 export async function getBillingStatus(signal?: AbortSignal): Promise<BillingStatus> {
   return apiCall<BillingStatus>("/api/billing/status", { method: "GET", signal });
+}
+
+/** USD nanos per token, which reads as thousandths of a dollar per 1M tokens. */
+export interface TokenRates {
+  input: number;
+  cached_input: number;
+  output: number;
+}
+
+export interface ModelRate {
+  model: string;
+  provider: ProviderId;
+  helper: boolean;
+  rates: TokenRates;
+}
+
+// The rates the backend charges for the chat models of the user's plan and for the helper that runs memory and summaries.
+export async function getModelRates(signal?: AbortSignal): Promise<ModelRate[]> {
+  const [catalog, helpers] = await Promise.all([
+    apiCall<{ models: { id: string; provider_rates?: Partial<Record<ProviderId, TokenRates>> }[] }>("/api/ai/models", { method: "GET", signal }),
+    apiCall<{ models: Partial<Record<ProviderId, { model: string; rates: TokenRates }>> }>("/api/ai/helper-models", { method: "GET", signal }),
+  ]);
+  const rates: ModelRate[] = catalog.models.flatMap((m) =>
+    ALL_PROVIDERS.flatMap((provider) => {
+      const r = m.provider_rates?.[provider];
+      return r ? [{ model: m.id, provider, helper: false, rates: r }] : [];
+    })
+  );
+  const helper = helpers.models[HELPER_PROVIDER];
+  if (helper) rates.push({ model: helper.model, provider: HELPER_PROVIDER, helper: true, rates: helper.rates });
+  return rates;
 }

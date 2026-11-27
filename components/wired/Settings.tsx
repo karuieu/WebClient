@@ -28,7 +28,8 @@ import {
   type RecoveryStatus,
   type TwoFactorStatus,
 } from "@/lib/account/auth";
-import { getBillingStatus, type BillingStatus } from "@/lib/chat/chat";
+import { getBillingStatus, getModelRates, type BillingStatus, type ModelRate } from "@/lib/chat/chat";
+import { modelName } from "@/lib/messages/messageBlocks";
 import { getChatTitleMode, setChatTitleMode, type ChatTitleMode } from "@/lib/chat/chatTitle";
 import { getArtifactsEnabled, setArtifactsEnabled } from "@/lib/artifacts/artifacts";
 import { getTabNamesEnabled, setTabNamesEnabled } from "@/lib/ui/tabTitle";
@@ -45,7 +46,7 @@ import { closedSettingsHref, isSettingsTab, setSettingsUrl, settingsHref, SETTIN
 import { SettingsDialog, type SettingsTab } from "@/components/app/settings/SettingsDialog";
 import { workspaceHref } from "@/components/wired/Workspace";
 import { GeneralSettings } from "@/components/app/settings/General";
-import { UsageSettings } from "@/components/app/settings/Usage";
+import { UsageSettings, type RateRow, type RatesState } from "@/components/app/settings/Usage";
 import { MemorySettings } from "@/components/app/settings/Memory";
 import { ProvidersSettings } from "@/components/app/settings/Providers";
 import { BillingSettings } from "@/components/app/settings/Billing";
@@ -65,8 +66,8 @@ const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || undefined;
 const COMMIT = process.env.NEXT_PUBLIC_COMMIT;
 const BUILD_COMMIT = COMMIT ? { hash: COMMIT.slice(0, 7), url: `https://github.com/karuieu/WebClient/commit/${COMMIT}` } : undefined;
 
-async function billingCall<T>(path: string, method: "GET" | "POST" = "GET"): Promise<T> {
-  const resp = await apiFetch(`${API_URL}${path}`, { method, headers: JSON_HEADERS });
+async function billingCall<T>(path: string, method: "GET" | "POST" = "GET", body?: object): Promise<T> {
+  const resp = await apiFetch(`${API_URL}${path}`, { method, headers: JSON_HEADERS, body: body && JSON.stringify(body) });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(data.error || "Something went wrong. Please try again.");
   return data as T;
@@ -125,8 +126,52 @@ function GeneralSection({ onOpenInstructions }: { onOpenInstructions: () => void
   );
 }
 
+const CREDIT_AMOUNTS = [5, 10, 25, 50] as const;
+
+const TIER_NAMES: Record<string, string> = { fast: "Light", smart: "Heavy" };
+
+function rateRow({ model, provider, helper, rates }: ModelRate): RateRow {
+  const role = helper ? "Memory and summaries" : TIER_NAMES[model];
+  return {
+    key: `${helper ? "helper" : "chat"}:${model}:${provider}`,
+    name: modelName(model, provider),
+    meta: [role, PROVIDERS[provider].name].filter(Boolean).join(" · "),
+    input: rates.input,
+    cachedInput: rates.cached_input,
+    output: rates.output,
+  };
+}
+
 function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
+  const { showSuccess, showError } = useToast();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const [billing, setBilling] = React.useState<BillingStatus | null>();
+  const [rates, setRates] = React.useState<RatesState>({ state: "loading" });
+  const [buying, setBuying] = React.useState(false);
+
+  React.useEffect(() => {
+    if (params.get("credits") !== "paid") return;
+    showSuccess("Payment received. Your credits appear as soon as Polar confirms it.");
+    const rest = new URLSearchParams(params.toString());
+    rest.delete("credits");
+    setSettingsUrl(`${pathname}?${rest.toString()}`, "replace");
+  }, [params, pathname, showSuccess]);
+
+  const buyCredits = async (amountUSD: number) => {
+    setBuying(true);
+    try {
+      const { checkout_url } = await billingCall<{ checkout_url?: string }>("/api/billing/credits/checkout", "POST", {
+        amount_usd: amountUSD,
+        start_now: true,
+      });
+      if (!checkout_url) throw new Error("Couldn't open the payment page. Please try again.");
+      window.location.href = checkout_url;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Couldn't open the payment page. Please try again.");
+      setBuying(false);
+    }
+  };
 
   React.useEffect(() => {
     const request = new AbortController();
@@ -136,6 +181,14 @@ function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
       },
       () => {
         if (!request.signal.aborted) setBilling(null);
+      }
+    );
+    void getModelRates(request.signal).then(
+      (list) => {
+        if (!request.signal.aborted) setRates({ state: "ready", rows: list.map(rateRow) });
+      },
+      () => {
+        if (!request.signal.aborted) setRates({ state: "error" });
       }
     );
     return () => request.abort();
@@ -160,6 +213,12 @@ function UsageSection({ onUpgrade }: { onUpgrade: () => void }) {
       }}
       renewalPending={billing.renewal_pending}
       onUpgrade={onUpgrade}
+      credits={billing.credits_usd_nanos}
+      creditAmounts={CREDIT_AMOUNTS}
+      creditRange={{ min: billing.credit_min_usd, max: billing.credit_max_usd }}
+      onBuyCredits={buyCredits}
+      buyingCredits={buying}
+      rates={rates}
     />
   );
 }

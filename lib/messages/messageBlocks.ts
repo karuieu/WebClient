@@ -296,7 +296,8 @@ const EXTRA_NAMES: Record<string, string> = {
   "qwen3-8-27b": "Qwen 3.8 27B",
   "glm-flash": "GLM 5.3 Flash",
   "glm-5-3-flash": "GLM 5.3 Flash",
-  "glm-5-3": "GLM 5.3"
+  "glm-5-3": "GLM 5.3",
+  "gemma-helper": "Gemma 4 31B",
 };
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -304,15 +305,17 @@ const PROVIDER_NAMES: Record<string, string> = {
   phala: "Phala",
 };
 
+export function modelName(model: string, provider?: string): string {
+  const name = EXTRA_NAMES[model];
+  if (name || (model !== "fast" && model !== "smart")) return name ?? model;
+  const tier = model === "fast" ? "light" : "heavy";
+  const info = provider ? PROVIDERS[provider as ProviderId] : undefined;
+  return info?.models.find((m) => m.tier === tier)?.name ?? (tier === "light" ? "Light" : "Heavy");
+}
+
 export function modelLabel(model?: string, provider?: string): string | undefined {
   if (!model) return undefined;
-  let name = EXTRA_NAMES[model];
-  if (!name && (model === "fast" || model === "smart")) {
-    const tier = model === "fast" ? "light" : "heavy";
-    const info = provider ? PROVIDERS[provider as ProviderId] : undefined;
-    name = info?.models.find((m) => m.tier === tier)?.name ?? (tier === "light" ? "Light" : "Heavy");
-  }
-  name ??= model;
+  const name = modelName(model, provider);
   const p = provider ? (PROVIDER_NAMES[provider] ?? provider) : "";
   return p ? `${name} · ${p}` : name;
 }

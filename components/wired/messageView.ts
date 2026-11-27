@@ -33,8 +33,10 @@ export function errorText(error: unknown, fallback: string): string {
   const limit = limitOf(error);
   const at = resetTime(limit.resetAt);
   const reset = at ? ` It resets at ${at}.` : "";
-  if (limit.code === "free_token_limit") return `You've used today's free allowance.${reset}`;
-  if (limit.code === "pro_token_limit") return `You've reached the Pro limit for now.${reset}`;
+  const buy = " Buy credits in Settings to keep going.";
+  if (limit.code === "free_token_limit") return `You've used today's free allowance.${reset}${buy}`;
+  if (limit.code === "pro_token_limit") return `You've used this billing period's Pro allowance.${buy}`;
+  if (limit.code === "pro_renewal_pending") return `Your Pro allowance resets when your subscription renews.${buy}`;
   const status = statusOf(error);
   if (status === 400) return "That request didn't go through. Please try again.";
   if (status === 401 || msg.includes("unauthorized")) return SESSION_EXPIRED_MESSAGE;

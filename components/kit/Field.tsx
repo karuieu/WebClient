@@ -57,8 +57,8 @@ export function Field({ id, label, hint, error, labelAside, type = "text", class
         )}
       </div>
 
-      <AnimatePresence initial={false}>
-        {error && (
+      <AnimatePresence initial={false} mode="wait">
+        {error ? (
           <motion.p
             key="error"
             id={errorId}
@@ -72,14 +72,22 @@ export function Field({ id, label, hint, error, labelAside, type = "text", class
             <AlertCircle className="mt-px size-3.5" />
             {error}
           </motion.p>
+        ) : (
+          hintId && (
+            <motion.p
+              key="hint"
+              id={hintId}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.2 }}
+              className="text-[0.8125rem] leading-snug text-muted"
+            >
+              {hint}
+            </motion.p>
+          )
         )}
       </AnimatePresence>
-
-      {hintId && (
-        <p id={hintId} className="text-[0.8125rem] leading-snug text-muted">
-          {hint}
-        </p>
-      )}
     </div>
   );
 }
@@ -96,7 +104,7 @@ export function Checkbox({
         <input
           id={id}
           type="checkbox"
-          className="peer absolute inset-0 cursor-pointer appearance-none rounded-[6px] border border-line-strong bg-bg transition-colors duration-150 checked:border-inverse checked:bg-inverse"
+          className="peer absolute inset-0 cursor-pointer appearance-none rounded-[6px] border border-line-strong bg-bg transition-colors duration-150 aria-[invalid=true]:border-danger checked:border-inverse checked:bg-inverse"
           {...props}
         />
         <svg
